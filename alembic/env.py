@@ -7,7 +7,7 @@ from sqlalchemy import pool
 
 from alembic import context
 from backend.app.core.base import Base
-
+from backend.app.models.conversation_history import ConversationHistory
 from backend.app.models.user import User
 from backend.app.models.destination import Destination
 from backend.app.models.hotel import Hotel
@@ -20,6 +20,7 @@ from backend.app.models.itinerary import Itinerary
 from backend.app.models.itinerary_day import ItineraryDay
 from backend.app.models.itinerary_day_item import ItineraryDayItem
 from backend.app.models.planning_session import PlanningSession
+from backend.app.models.feedback import Feedback
 from backend.app.models.agent_execution_trace import AgentExecutionTrace
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
