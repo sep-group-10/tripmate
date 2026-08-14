@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from backend.app.core.database import get_db
 
 app = FastAPI(
     title="AI Tourism Planning System",
@@ -23,3 +27,8 @@ def health_check():
     return {
         "status": "ok"
     }
+
+@app.get("/db-test")
+def database_test(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "database connection successful"}
