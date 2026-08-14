@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import axios from 'axios'
+import api from '../services/api'
 
 function Home() {
   const [status, setStatus] = useState('idle')
@@ -12,7 +12,7 @@ function Home() {
     setErrorMessage('')
 
     try {
-      const response = await axios.get('http://localhost:8000/health')
+      const response = await api.get('/health')
       setResult(response.data)
       setStatus('success')
     } catch (error) {
