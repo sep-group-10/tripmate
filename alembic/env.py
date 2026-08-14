@@ -6,7 +6,15 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from backend.app.core.base import Base
 
+from backend.app.models.user import User
+from backend.app.models.destination import Destination
+from backend.app.models.hotel import Hotel
+from backend.app.models.attraction import Attraction
+from backend.app.models.restaurant import Restaurant
+from backend.app.models.local_event import LocalEvent
+from backend.app.models.transport_rate import TransportRate
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -31,7 +39,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
