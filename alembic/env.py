@@ -15,6 +15,12 @@ from backend.app.models.attraction import Attraction
 from backend.app.models.restaurant import Restaurant
 from backend.app.models.local_event import LocalEvent
 from backend.app.models.transport_rate import TransportRate
+from backend.app.models.trip import Trip
+from backend.app.models.itinerary import Itinerary
+from backend.app.models.itinerary_day import ItineraryDay
+from backend.app.models.itinerary_day_item import ItineraryDayItem
+from backend.app.models.planning_session import PlanningSession
+from backend.app.models.agent_execution_trace import AgentExecutionTrace
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
