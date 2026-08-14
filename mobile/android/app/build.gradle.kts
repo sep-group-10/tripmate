@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.example.mobile"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage requires compileSdk 37 or higher.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
