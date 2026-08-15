@@ -1,0 +1,30 @@
+repos:
+  # Backend Python checks
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        name: Ruff lint
+        args: [--fix]
+        files: ^backend/
+
+      - id: ruff-format
+        name: Ruff format
+        files: ^backend/
+
+  # Web React checks
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint
+        entry: npm --prefix web run lint
+        language: system
+        files: ^web/
+        pass_filenames: false
+
+      - id: prettier
+        name: Prettier format
+        entry: npm --prefix web run format
+        language: system
+        files: ^web/
+        pass_filenames: false
