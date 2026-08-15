@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,20 @@ class Attraction(Base):
         ForeignKey("destinations.id"),
         nullable=False,
     )
+    name: Mapped[str] = mapped_column(
+    String(255),
+    nullable=False,
+)
+
+    description: Mapped[str | None] = mapped_column(
+    Text,
+    nullable=True,
+)
+
+    rating: Mapped[Decimal | None] = mapped_column(
+    Numeric(2, 1),
+    nullable=True,
+)
 
     category: Mapped[str] = mapped_column(
         String(100),

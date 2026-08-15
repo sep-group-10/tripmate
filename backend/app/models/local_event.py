@@ -6,6 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.core.base import Base
 
+from decimal import Decimal
+
+from sqlalchemy import ForeignKey, Numeric, String
 
 class LocalEvent(Base):
     __tablename__ = "local_events"
@@ -21,6 +24,22 @@ class LocalEvent(Base):
         ForeignKey("destinations.id"),
         nullable=False,
     )
+    name: Mapped[str] = mapped_column(
+    String(255),
+    nullable=False,
+)
+
+    category: Mapped[str] = mapped_column(
+    String(100),
+    nullable=False,
+)
+
+    entry_fee: Mapped[Decimal] = mapped_column(
+    Numeric(10, 2),
+    nullable=False,
+    default=Decimal("0.00"),
+)
+
 
     event_schedule: Mapped[dict] = mapped_column(
         JSONB,
