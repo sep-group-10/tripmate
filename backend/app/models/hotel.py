@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.core.base import Base
+from app.core.base import Base
 
 
 class Hotel(Base):

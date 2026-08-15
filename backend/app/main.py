@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.app.core.database import get_db
+from app.core.database import get_db
 
 app = FastAPI(
     title="AI Tourism Planning System",

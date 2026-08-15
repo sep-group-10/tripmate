@@ -1,5 +1,5 @@
-from backend.app.core.database import SessionLocal
-from backend.app.models.destination import Destination
+from app.core.database import SessionLocal
+from app.models.destination import Destination
 
 
 DESTINATIONS = [
