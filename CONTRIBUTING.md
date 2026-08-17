@@ -17,6 +17,26 @@ This guide describes the team's development and contribution workflow.
 4. Copy `.env.example` to `.env` and fill in the required keys (Gemini API,
    Google Maps, database, and so on).
 
+### Pre-commit Hooks
+
+The project uses pre-commit hooks to automatically check code quality before creating commits.
+
+Install pre-commit:
+
+```bash
+pip install pre-commit
+```
+Enable the hooks for the repository:
+
+```bash
+pre-commit install
+```
+
+Run the checks manually:
+```bash
+pre-commit run
+```
+
 ## Branch Naming
 
 Choose clear, lowercase names separated by hyphens.
@@ -79,6 +99,33 @@ Open a PR against `main` when the work is ready for review.
 - Clearly describe the change and its motivation.
 - Reference every related issue (for example, `fixes #12` or `relates to #12`).
 - State the testing performed.
+
+## Continuous Integration
+
+The project uses GitHub Actions to automatically validate Pull Requests before merging.
+
+CI checks are executed when a Pull Request is created or updated.
+
+### Backend CI
+
+The backend workflow performs:
+
+- Dependency installation
+- Ruff lint check
+- Ruff formatting check
+- Backend tests using pytest
+
+### Web CI
+
+The web workflow performs:
+
+- Dependency installation
+- ESLint check
+- Prettier formatting check
+- Frontend tests using Vitest
+- Production build verification
+
+A Pull Request must pass the required CI checks before it can be merged.
 
 ## Code Review
 
