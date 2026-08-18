@@ -33,9 +33,16 @@ repos:
   # Mobile Flutter checks
   - repo: local
     hooks:
+      - id: dart-fix
+        name: Dart fix
+        entry: bash -c 'cd mobile && dart fix --apply'
+        language: system
+        files: ^mobile/.*\.dart$
+        pass_filenames: false
+
       - id: dart-format
         name: Dart format
-        entry: bash -c 'cd mobile && dart format --output=none --set-exit-if-changed .'
+        entry: bash -c 'cd mobile && dart format .'
         language: system
         files: ^mobile/.*\.dart$
         pass_filenames: false
