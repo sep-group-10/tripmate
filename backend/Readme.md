@@ -192,6 +192,21 @@ docker compose exec backend alembic downgrade <revision_id>
 
 ---
 
+# Database Seeding
+
+Seed scripts populate the database with initial reference data.
+
+Run a seed script inside the running `backend` container:
+
+```bash
+docker compose exec backend python -m app.core.seed
+docker compose exec backend python -m app.core.seed_tourism
+```
+
+The `backend` container already has `DATABASE_URL` configured, so seeding runs against the dockerized PostgreSQL database directly.
+
+---
+
 # Testing
 
 Backend tests use:
