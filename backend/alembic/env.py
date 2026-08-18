@@ -2,26 +2,25 @@ import os
 from logging.config import fileConfig
 
 from dotenv import load_dotenv
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from app.core.base import Base
-from app.models.conversation_history import ConversationHistory
-from app.models.user import User
-from app.models.destination import Destination
-from app.models.hotel import Hotel
+from app.models.agent_execution_trace import AgentExecutionTrace
 from app.models.attraction import Attraction
-from app.models.restaurant import Restaurant
-from app.models.local_event import LocalEvent
-from app.models.transport_rate import TransportRate
-from app.models.trip import Trip
+from app.models.conversation_history import ConversationHistory
+from app.models.destination import Destination
+from app.models.feedback import Feedback
+from app.models.hotel import Hotel
 from app.models.itinerary import Itinerary
 from app.models.itinerary_day import ItineraryDay
 from app.models.itinerary_day_item import ItineraryDayItem
+from app.models.local_event import LocalEvent
 from app.models.planning_session import PlanningSession
-from app.models.feedback import Feedback
-from app.models.agent_execution_trace import AgentExecutionTrace
+from app.models.restaurant import Restaurant
+from app.models.transport_rate import TransportRate
+from app.models.trip import Trip
+from app.models.user import User
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

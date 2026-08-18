@@ -1,13 +1,11 @@
 import uuid
+from decimal import Decimal
 
+from sqlalchemy import ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
-
-from decimal import Decimal
-
-from sqlalchemy import ForeignKey, Numeric, String
 
 
 class LocalEvent(Base):
@@ -18,7 +16,6 @@ class LocalEvent(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    # noqa: F401
     destination_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("destinations.id"),

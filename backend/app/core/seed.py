@@ -1,7 +1,6 @@
 from app.core.database import SessionLocal
 from app.models.destination import Destination
 
-
 DESTINATIONS = [
     {
         "name": "Kandy",

@@ -1,12 +1,11 @@
 from decimal import Decimal
 
 from app.core.database import SessionLocal
+from app.models.attraction import Attraction
 from app.models.destination import Destination
 from app.models.hotel import Hotel
-from app.models.attraction import Attraction
-from app.models.restaurant import Restaurant
 from app.models.local_event import LocalEvent
-
+from app.models.restaurant import Restaurant
 
 HOTELS = {
     "Kandy": [
