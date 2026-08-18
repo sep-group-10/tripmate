@@ -53,9 +53,7 @@ class ApiClient {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(
-        'Request failed with status ${response.statusCode}.',
-      );
+      throw ApiException('Request failed with status ${response.statusCode}.');
     }
 
     if (response.body.isEmpty) {

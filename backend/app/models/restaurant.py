@@ -23,19 +23,19 @@ class Restaurant(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(
-    String(255),
-    nullable=False,
-)
+        String(255),
+        nullable=False,
+    )
 
     operating_hours: Mapped[dict | None] = mapped_column(
-    JSONB,
-    nullable=True,
-)
+        JSONB,
+        nullable=True,
+    )
 
     rating: Mapped[Decimal | None] = mapped_column(
-    Numeric(2, 1),
-    nullable=True,
-)
+        Numeric(2, 1),
+        nullable=True,
+    )
 
     cuisine_type: Mapped[str] = mapped_column(
         String(100),

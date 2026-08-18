@@ -23,19 +23,19 @@ class Attraction(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(
-    String(255),
-    nullable=False,
-)
+        String(255),
+        nullable=False,
+    )
 
     description: Mapped[str | None] = mapped_column(
-    Text,
-    nullable=True,
-)
+        Text,
+        nullable=True,
+    )
 
     rating: Mapped[Decimal | None] = mapped_column(
-    Numeric(2, 1),
-    nullable=True,
-)
+        Numeric(2, 1),
+        nullable=True,
+    )
 
     category: Mapped[str] = mapped_column(
         String(100),
