@@ -28,3 +28,21 @@ repos:
         language: system
         files: ^web/
         pass_filenames: false
+
+
+  # Mobile Flutter checks
+  - repo: local
+    hooks:
+      - id: dart-format
+        name: Dart format
+        entry: bash -c 'cd mobile && dart format --output=none --set-exit-if-changed .'
+        language: system
+        files: ^mobile/.*\.dart$
+        pass_filenames: false
+
+      - id: flutter-analyze
+        name: Flutter analyze
+        entry: bash -c 'cd mobile && flutter analyze'
+        language: system
+        files: ^mobile/.*\.dart$
+        pass_filenames: false
