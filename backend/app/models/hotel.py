@@ -17,26 +17,31 @@ class Hotel(Base):
         default=uuid.uuid4,
     )
 
-
     destination_id: Mapped[uuid.UUID] = mapped_column(
-            UUID(as_uuid=True),
-            ForeignKey("destinations.id"),
-            nullable=False,
-        )
+        UUID(as_uuid=True),
+        ForeignKey("destinations.id"),
+        nullable=False,
+    )
+
     name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
-        )
+    )
 
     description: Mapped[str | None] = mapped_column(
-            Text,
-            nullable=True,
-        )
+        Text,
+        nullable=True,
+    )
 
-    location: Mapped[str | None] = mapped_column(
-            String(255),
-            nullable=True,
-        )
+    latitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
+    )
+
+    longitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
+    )
 
     price_per_night: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
