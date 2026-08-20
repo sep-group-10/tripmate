@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.core.base import Base
+from app.core.base import Base
 
 
 class Itinerary(Base):

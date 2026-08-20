@@ -1,11 +1,11 @@
 from decimal import Decimal
 
-from backend.app.core.database import SessionLocal
-from backend.app.models.destination import Destination
-from backend.app.models.hotel import Hotel
-from backend.app.models.attraction import Attraction
-from backend.app.models.restaurant import Restaurant
-from backend.app.models.local_event import LocalEvent
+from app.core.database import SessionLocal
+from app.models.destination import Destination
+from app.models.hotel import Hotel
+from app.models.attraction import Attraction
+from app.models.restaurant import Restaurant
+from app.models.local_event import LocalEvent
 
 
 HOTELS = {

@@ -2,11 +2,11 @@ from decimal import Decimal
 
 import bcrypt
 
-from backend.app.core.database import SessionLocal
-from backend.app.models.destination import Destination
-from backend.app.models.transport_rate import TransportRate
-from backend.app.models.user import User
-from backend.app.core.seed_tourism import seed_tourism
+from app.core.database import SessionLocal
+from app.core.seed_tourism import seed_tourism
+from app.models.destination import Destination
+from app.models.transport_rate import TransportRate
+from app.models.user import User
 
 
 DESTINATIONS = [
@@ -18,10 +18,8 @@ DESTINATIONS = [
         ),
         "country": "Sri Lanka",
         "region": "Central Province",
-        "coordinates": {
-            "latitude": 7.2906,
-            "longitude": 80.6337,
-        },
+        "latitude": 7.2906,
+        "longitude": 80.6337,
         "is_active": True,
     },
     {
@@ -32,10 +30,8 @@ DESTINATIONS = [
         ),
         "country": "Sri Lanka",
         "region": "Western Province",
-        "coordinates": {
-            "latitude": 6.9271,
-            "longitude": 79.8612,
-        },
+        "latitude": 6.9271,
+        "longitude": 79.8612,
         "is_active": True,
     },
     {
@@ -46,10 +42,8 @@ DESTINATIONS = [
         ),
         "country": "Sri Lanka",
         "region": "Southern Province",
-        "coordinates": {
-            "latitude": 6.0535,
-            "longitude": 80.2210,
-        },
+        "latitude": 6.0535,
+        "longitude": 80.2210,
         "is_active": True,
     },
 ]

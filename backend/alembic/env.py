@@ -6,22 +6,22 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from backend.app.core.base import Base
-from backend.app.models.conversation_history import ConversationHistory
-from backend.app.models.user import User
-from backend.app.models.destination import Destination
-from backend.app.models.hotel import Hotel
-from backend.app.models.attraction import Attraction
-from backend.app.models.restaurant import Restaurant
-from backend.app.models.local_event import LocalEvent
-from backend.app.models.transport_rate import TransportRate
-from backend.app.models.trip import Trip
-from backend.app.models.itinerary import Itinerary
-from backend.app.models.itinerary_day import ItineraryDay
-from backend.app.models.itinerary_day_item import ItineraryDayItem
-from backend.app.models.planning_session import PlanningSession
-from backend.app.models.feedback import Feedback
-from backend.app.models.agent_execution_trace import AgentExecutionTrace
+from app.core.base import Base
+from app.models.conversation_history import ConversationHistory
+from app.models.user import User
+from app.models.destination import Destination
+from app.models.hotel import Hotel
+from app.models.attraction import Attraction
+from app.models.restaurant import Restaurant
+from app.models.local_event import LocalEvent
+from app.models.transport_rate import TransportRate
+from app.models.trip import Trip
+from app.models.itinerary import Itinerary
+from app.models.itinerary_day import ItineraryDay
+from app.models.itinerary_day_item import ItineraryDayItem
+from app.models.planning_session import PlanningSession
+from app.models.feedback import Feedback
+from app.models.agent_execution_trace import AgentExecutionTrace
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
