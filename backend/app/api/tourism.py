@@ -5,19 +5,39 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.attraction import Attraction
 from app.models.destination import Destination
+from app.models.hotel import Hotel
 from app.schemas.tourism import (
+    AttractionCreate,
+    AttractionResponse,
+    AttractionUpdate,
     DestinationCreate,
     DestinationListData,
     DestinationListResponse,
     DestinationResponse,
     DestinationUpdate,
+    HotelCreate,
+    HotelResponse,
+    HotelUpdate,
+)
+destination_router = APIRouter(
+    prefix="/api/v1/destinations",
+    tags=["Destinations"],
 )
 
-router = APIRouter(prefix="/api/v1/destinations", tags=["Destinations"])
+attraction_router = APIRouter(
+    prefix="/api/v1/attractions",
+    tags=["Attractions"],
+)
+
+hotel_router = APIRouter(
+    prefix="/api/v1/hotels",
+    tags=["Hotels"],
+)
 
 
-@router.post(
+@destination_router.post(
     "",
     response_model=DestinationResponse,
     status_code=status.HTTP_201_CREATED,
@@ -35,7 +55,7 @@ def create_destination(
     return destination
 
 
-@router.get("", response_model=DestinationListResponse)
+@destination_router.get("", response_model=DestinationListResponse)
 def list_destinations(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=50),
@@ -65,7 +85,10 @@ def list_destinations(
     }
 
 
-@router.get("/{destination_id}", response_model=DestinationResponse)
+@destination_router.get(
+    "/{destination_id}",
+    response_model=DestinationResponse,
+)
 def get_destination(
     destination_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -94,7 +117,10 @@ def get_destination(
     return destination
 
 
-@router.patch("/{destination_id}", response_model=DestinationResponse)
+@destination_router.patch(
+    "/{destination_id}",
+    response_model=DestinationResponse,
+)
 def update_destination(
     destination_id: uuid.UUID,
     destination_data: DestinationUpdate,
@@ -132,7 +158,10 @@ def update_destination(
     return destination
 
 
-@router.delete("/{destination_id}", response_model=DestinationResponse)
+@destination_router.delete(
+    "/{destination_id}",
+    response_model=DestinationResponse,
+)
 def delete_destination(
     destination_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -164,3 +193,372 @@ def delete_destination(
     db.refresh(destination)
 
     return destination
+
+
+@attraction_router.post(
+    "",
+    response_model=AttractionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_attraction(
+    attraction_data: AttractionCreate,
+    db: Session = Depends(get_db),
+):
+    destination = (
+        db.query(Destination)
+        .filter(
+            Destination.id == attraction_data.destination_id,
+            Destination.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if destination is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "DESTINATION_NOT_FOUND",
+                    "message": "Destination not found or inactive",
+                },
+            },
+        )
+
+    attraction = Attraction(**attraction_data.model_dump())
+
+    db.add(attraction)
+    db.commit()
+    db.refresh(attraction)
+
+    return attraction
+
+@attraction_router.get("", response_model=list[AttractionResponse])
+def list_attractions(
+    db: Session = Depends(get_db),
+):
+    attractions = (
+        db.query(Attraction)
+        .filter(Attraction.is_active.is_(True))
+        .order_by(Attraction.name.asc())
+        .all()
+    )
+
+    return attractions
+
+@attraction_router.get(
+    "/{attraction_id}",
+    response_model=AttractionResponse,
+)
+def get_attraction(
+    attraction_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    attraction = (
+        db.query(Attraction)
+        .filter(
+            Attraction.id == attraction_id,
+            Attraction.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if attraction is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Attraction not found",
+                },
+            },
+        )
+
+    return attraction
+
+@attraction_router.patch(
+    "/{attraction_id}",
+    response_model=AttractionResponse,
+)
+def update_attraction(
+    attraction_id: uuid.UUID,
+    attraction_data: AttractionUpdate,
+    db: Session = Depends(get_db),
+):
+    attraction = (
+        db.query(Attraction)
+        .filter(
+            Attraction.id == attraction_id,
+            Attraction.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if attraction is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Attraction not found",
+                },
+            },
+        )
+
+    update_data = attraction_data.model_dump(exclude_unset=True)
+
+    if "destination_id" in update_data:
+        destination = (
+            db.query(Destination)
+            .filter(
+                Destination.id == update_data["destination_id"],
+                Destination.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if destination is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "success": False,
+                    "error": {
+                        "code": "DESTINATION_NOT_FOUND",
+                        "message": "Destination not found or inactive",
+                    },
+                },
+            )
+
+    for field, value in update_data.items():
+        setattr(attraction, field, value)
+
+    db.commit()
+    db.refresh(attraction)
+
+    return attraction
+
+
+@attraction_router.delete(
+    "/{attraction_id}",
+    response_model=AttractionResponse,
+)
+def delete_attraction(
+    attraction_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    attraction = (
+        db.query(Attraction)
+        .filter(
+            Attraction.id == attraction_id,
+            Attraction.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if attraction is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Attraction not found",
+                },
+            },
+        )
+
+    attraction.is_active = False
+
+    db.commit()
+    db.refresh(attraction)
+
+    return attraction
+
+@hotel_router.post(
+    "",
+    response_model=HotelResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_hotel(
+    hotel_data: HotelCreate,
+    db: Session = Depends(get_db),
+):
+    destination = (
+        db.query(Destination)
+        .filter(
+            Destination.id == hotel_data.destination_id,
+            Destination.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if destination is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "DESTINATION_NOT_FOUND",
+                    "message": "Destination not found or inactive",
+                },
+            },
+        )
+
+    hotel = Hotel(**hotel_data.model_dump())
+
+    db.add(hotel)
+    db.commit()
+    db.refresh(hotel)
+
+    return hotel
+
+
+@hotel_router.get(
+    "",
+    response_model=list[HotelResponse],
+)
+def list_hotels(
+    db: Session = Depends(get_db),
+):
+    hotels = (
+        db.query(Hotel)
+        .filter(Hotel.is_active.is_(True))
+        .order_by(Hotel.name.asc())
+        .all()
+    )
+
+    return hotels
+
+
+@hotel_router.get(
+    "/{hotel_id}",
+    response_model=HotelResponse,
+)
+def get_hotel(
+    hotel_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    hotel = (
+        db.query(Hotel)
+        .filter(
+            Hotel.id == hotel_id,
+            Hotel.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if hotel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Hotel not found",
+                },
+            },
+        )
+
+    return hotel
+
+
+@hotel_router.patch(
+    "/{hotel_id}",
+    response_model=HotelResponse,
+)
+def update_hotel(
+    hotel_id: uuid.UUID,
+    hotel_data: HotelUpdate,
+    db: Session = Depends(get_db),
+):
+    hotel = (
+        db.query(Hotel)
+        .filter(
+            Hotel.id == hotel_id,
+            Hotel.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if hotel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Hotel not found",
+                },
+            },
+        )
+
+    update_data = hotel_data.model_dump(exclude_unset=True)
+
+    if "destination_id" in update_data:
+        destination = (
+            db.query(Destination)
+            .filter(
+                Destination.id == update_data["destination_id"],
+                Destination.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if destination is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "success": False,
+                    "error": {
+                        "code": "DESTINATION_NOT_FOUND",
+                        "message": "Destination not found or inactive",
+                    },
+                },
+            )
+
+    for field, value in update_data.items():
+        setattr(hotel, field, value)
+
+    db.commit()
+    db.refresh(hotel)
+
+    return hotel
+
+
+@hotel_router.delete(
+    "/{hotel_id}",
+    response_model=HotelResponse,
+)
+def delete_hotel(
+    hotel_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    hotel = (
+        db.query(Hotel)
+        .filter(
+            Hotel.id == hotel_id,
+            Hotel.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if hotel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Hotel not found",
+                },
+            },
+        )
+
+    hotel.is_active = False
+
+    db.commit()
+    db.refresh(hotel)
+
+    return hotel

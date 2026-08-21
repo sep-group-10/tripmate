@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.tourism import router as tourism_router
+from app.api.tourism import attraction_router, destination_router, hotel_router
 from app.core.database import get_db
 
 app = FastAPI(title="AI Tourism Planning System", version="1.0.0")
@@ -18,7 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(tourism_router)
+app.include_router(destination_router)
+app.include_router(attraction_router)
+app.include_router(hotel_router)
 
 @app.get("/health")
 def health_check():

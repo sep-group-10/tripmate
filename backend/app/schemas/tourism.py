@@ -52,3 +52,86 @@ class DestinationListData(BaseModel):
 class DestinationListResponse(BaseModel):
     success: bool = True
     data: DestinationListData
+
+
+class AttractionCreate(BaseModel):
+    destination_id: uuid.UUID
+    name: str = Field(..., max_length=255)
+    description: str | None = None
+    latitude: Decimal
+    longitude: Decimal
+    photo_urls: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    opening_hours: dict | None = None
+    entry_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
+    duration_hours: Decimal | None = Field(default=None, ge=0)
+
+
+class AttractionUpdate(BaseModel):
+    destination_id: uuid.UUID | None = None
+    name: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
+    photo_urls: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    opening_hours: dict | None = None
+    entry_fee: Decimal | None = Field(default=None, ge=0)
+    duration_hours: Decimal | None = Field(default=None, ge=0)
+
+
+class AttractionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    destination_id: uuid.UUID
+    name: str
+    description: str | None
+    latitude: Decimal
+    longitude: Decimal
+    photo_urls: list[str] | None
+    rating: Decimal | None
+    opening_hours: dict | None
+    entry_fee: Decimal
+    duration_hours: Decimal | None
+    is_active: bool
+
+
+class HotelCreate(BaseModel):
+    destination_id: uuid.UUID
+    name: str = Field(..., max_length=255)
+    description: str | None = None
+    latitude: Decimal
+    longitude: Decimal
+    price_per_night: Decimal = Field(..., ge=0)
+    facilities: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    photo_urls: list[str] | None = None
+
+
+class HotelUpdate(BaseModel):
+    destination_id: uuid.UUID | None = None
+    name: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
+    price_per_night: Decimal | None = Field(default=None, ge=0)
+    facilities: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    photo_urls: list[str] | None = None
+
+
+class HotelResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    destination_id: uuid.UUID
+    name: str
+    description: str | None
+    latitude: Decimal
+    longitude: Decimal
+    price_per_night: Decimal
+    facilities: list[str] | None
+    rating: Decimal | None
+    photo_urls: list[str] | None
+    is_active: bool
