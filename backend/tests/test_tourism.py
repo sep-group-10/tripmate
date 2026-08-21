@@ -1,0 +1,672 @@
+def test_create_destination(client):
+    response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Test Destination",
+            "description": "Pytest destination",
+            "country": "Sri Lanka",
+            "region": "Central",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.5,
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["name"] == "Test Destination"
+    assert data["country"] == "Sri Lanka"
+    assert data["rating"] == "4.5"
+
+
+def test_get_destination(client):
+    create_response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Test Get Destination",
+            "country": "Sri Lanka",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+    destination_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/destinations/{destination_id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == destination_id
+    assert response.json()["name"] == "Test Get Destination"
+
+
+def test_update_destination(client):
+    create_response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Destination Before Update",
+            "country": "Sri Lanka",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+    destination_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/destinations/{destination_id}",
+        json={
+            "name": "Destination After Update",
+            "rating": 4.8,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Destination After Update"
+    assert response.json()["rating"] == "4.8"
+
+
+def test_soft_delete_destination(client):
+    create_response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Destination To Delete",
+            "country": "Sri Lanka",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+    destination_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/destinations/{destination_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    get_response = client.get(
+        f"/api/v1/destinations/{destination_id}"
+    )
+
+    assert get_response.status_code == 404
+
+
+def test_invalid_destination_rating(client):
+    response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Invalid Destination",
+            "country": "Sri Lanka",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 6,
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_create_attraction(client):
+    response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Test Attraction",
+            "description": "Pytest attraction",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "photo_urls": [],
+            "rating": 4.5,
+            "opening_hours": {},
+            "entry_fee": 10,
+            "duration_hours": 2,
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["name"] == "Test Attraction"
+    assert data["rating"] == "4.5"
+
+
+def test_get_attraction(client):
+    create_response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Test Get Attraction",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "entry_fee": 10,
+            "duration_hours": 2,
+        },
+    )
+
+    assert create_response.status_code == 201
+    attraction_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/attractions/{attraction_id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == attraction_id
+    assert response.json()["name"] == "Test Get Attraction"
+
+
+def test_update_attraction(client):
+    create_response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Attraction Before Update",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "entry_fee": 10,
+            "duration_hours": 2,
+        },
+    )
+
+    assert create_response.status_code == 201
+    attraction_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/attractions/{attraction_id}",
+        json={
+            "name": "Attraction After Update",
+            "rating": 4.8,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Attraction After Update"
+    assert response.json()["rating"] == "4.8"
+
+
+def test_soft_delete_attraction(client):
+    create_response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Attraction To Delete",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "entry_fee": 10,
+            "duration_hours": 2,
+        },
+    )
+
+    assert create_response.status_code == 201
+    attraction_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/attractions/{attraction_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    get_response = client.get(
+        f"/api/v1/attractions/{attraction_id}"
+    )
+
+    assert get_response.status_code == 404
+
+
+def test_invalid_attraction_rating(client):
+    response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Invalid Attraction",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 6,
+            "entry_fee": 10,
+            "duration_hours": 2,
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_create_hotel(client):
+    response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Test Hotel",
+            "description": "Pytest hotel",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 100,
+            "facilities": ["WiFi", "Pool"],
+            "rating": 4.5,
+            "photo_urls": [],
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["name"] == "Test Hotel"
+    assert data["price_per_night"] == "100.00"
+    assert data["rating"] == "4.5"
+
+
+def test_get_hotel(client):
+    create_response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Test Get Hotel",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 120,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+    hotel_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/hotels/{hotel_id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == hotel_id
+    assert response.json()["name"] == "Test Get Hotel"
+
+
+def test_update_hotel(client):
+    create_response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Hotel Before Update",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 100,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+    hotel_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/hotels/{hotel_id}",
+        json={
+            "name": "Hotel After Update",
+            "price_per_night": 150,
+            "rating": 4.8,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Hotel After Update"
+    assert response.json()["price_per_night"] == "150.00"
+    assert response.json()["rating"] == "4.8"
+
+
+def test_soft_delete_hotel(client):
+    create_response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Hotel To Delete",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 100,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+    hotel_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/hotels/{hotel_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    get_response = client.get(
+        f"/api/v1/hotels/{hotel_id}"
+    )
+
+    assert get_response.status_code == 404
+
+
+def test_invalid_hotel_rating(client):
+    response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Invalid Hotel",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 100,
+            "rating": 6,
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_create_restaurant(client):
+    response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Pytest Restaurant",
+            "description": "Restaurant created during testing",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "photo_urls": [],
+            "operating_hours": {},
+            "rating": 4.5,
+            "cuisine_type": "Sri Lankan",
+            "avg_meal_cost": 15,
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["name"] == "Pytest Restaurant"
+    assert data["cuisine_type"] == "Sri Lankan"
+    assert data["rating"] == "4.5"
+
+def test_get_restaurant(client):
+    create_response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Test Get Restaurant",
+            "description": "Restaurant for GET test",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "cuisine_type": "Chinese",
+            "avg_meal_cost": 20,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    restaurant_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/restaurants/{restaurant_id}"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == restaurant_id
+    assert data["name"] == "Test Get Restaurant"
+
+def test_update_restaurant(client):
+    create_response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Original Restaurant",
+            "description": "Original description",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "cuisine_type": "Sri Lankan",
+            "avg_meal_cost": 15,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    restaurant_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/restaurants/{restaurant_id}",
+        json={
+            "name": "Updated Restaurant",
+            "description": "Updated restaurant description",
+            "rating": 4.8,
+            "avg_meal_cost": 18,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["name"] == "Updated Restaurant"
+    assert data["description"] == "Updated restaurant description"
+    assert data["rating"] == "4.8"
+    assert data["avg_meal_cost"] == "18.00"
+
+def test_soft_delete_restaurant(client):
+    create_response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Restaurant To Delete",
+            "description": "Restaurant for delete test",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "cuisine_type": "Indian",
+            "avg_meal_cost": 12,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    restaurant_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/restaurants/{restaurant_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    get_response = client.get(
+        f"/api/v1/restaurants/{restaurant_id}"
+    )
+
+    assert get_response.status_code == 404
+
+def test_invalid_restaurant_rating(client):
+    response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Invalid Restaurant",
+            "description": "Testing validation",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "photo_urls": [],
+            "operating_hours": {},
+            "rating": 6,
+            "cuisine_type": "Sri Lankan",
+            "avg_meal_cost": 15,
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_create_local_event(client):
+    response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Pytest Local Event",
+            "description": "Local event created during testing",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "photo_urls": [],
+            "rating": 4.5,
+            "opening_hours": {},
+            "duration_hours": 3,
+            "entry_fee": 10,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "21:00",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["name"] == "Pytest Local Event"
+    assert data["rating"] == "4.5"
+
+def test_get_local_event(client):
+    create_response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Test Get Local Event",
+            "description": "Event for GET test",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "duration_hours": 2,
+            "entry_fee": 5,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "20:00",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    event_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/local-events/{event_id}"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == event_id
+    assert data["name"] == "Test Get Local Event"
+
+def test_update_local_event(client):
+    create_response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Original Local Event",
+            "description": "Original description",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "duration_hours": 2,
+            "entry_fee": 5,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "20:00",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    event_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/local-events/{event_id}",
+        json={
+            "name": "Updated Local Event",
+            "description": "Updated event description",
+            "rating": 4.8,
+            "duration_hours": 3.5,
+            "entry_fee": 12,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["name"] == "Updated Local Event"
+    assert data["description"] == "Updated event description"
+    assert data["rating"] == "4.8"
+    assert data["duration_hours"] == "3.50"
+    assert data["entry_fee"] == "12.00"
+
+def test_soft_delete_local_event(client):
+    create_response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Event To Delete",
+            "description": "Event for delete test",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "duration_hours": 2,
+            "entry_fee": 5,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "20:00",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    event_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/local-events/{event_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    get_response = client.get(
+        f"/api/v1/local-events/{event_id}"
+    )
+
+    assert get_response.status_code == 404
+
+def test_invalid_local_event_rating(client):
+    response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Invalid Local Event",
+            "description": "Testing validation",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 6,
+            "duration_hours": 3,
+            "entry_fee": 10,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "21:00",
+            },
+        },
+    )
+
+    assert response.status_code == 422
