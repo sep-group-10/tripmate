@@ -177,3 +177,49 @@ class RestaurantResponse(BaseModel):
     cuisine_type: str
     avg_meal_cost: Decimal
     is_active: bool
+
+
+class LocalEventCreate(BaseModel):
+    destination_id: uuid.UUID
+    name: str = Field(..., max_length=255)
+    description: str | None = None
+    latitude: Decimal
+    longitude: Decimal
+    photo_urls: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    opening_hours: dict | None = None
+    duration_hours: Decimal | None = Field(default=None, ge=0)
+    entry_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
+    event_schedule: dict
+
+
+class LocalEventUpdate(BaseModel):
+    destination_id: uuid.UUID | None = None
+    name: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
+    photo_urls: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    opening_hours: dict | None = None
+    duration_hours: Decimal | None = Field(default=None, ge=0)
+    entry_fee: Decimal | None = Field(default=None, ge=0)
+    event_schedule: dict | None = None
+
+
+class LocalEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    destination_id: uuid.UUID
+    name: str
+    description: str | None
+    latitude: Decimal
+    longitude: Decimal
+    photo_urls: list[str] | None
+    rating: Decimal | None
+    opening_hours: dict | None
+    duration_hours: Decimal | None
+    entry_fee: Decimal
+    event_schedule: dict
+    is_active: bool

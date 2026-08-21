@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.attraction import Attraction
 from app.models.destination import Destination
 from app.models.hotel import Hotel
+from app.models.local_event import LocalEvent
 from app.models.restaurant import Restaurant
 from app.schemas.tourism import (
     AttractionCreate,
@@ -21,6 +22,9 @@ from app.schemas.tourism import (
     HotelCreate,
     HotelResponse,
     HotelUpdate,
+    LocalEventCreate,
+    LocalEventResponse,
+    LocalEventUpdate,
     RestaurantCreate,
     RestaurantResponse,
     RestaurantUpdate,
@@ -46,6 +50,10 @@ restaurant_router = APIRouter(
     tags=["Restaurants"],
 )
 
+local_event_router = APIRouter(
+    prefix="/api/v1/local-events",
+    tags=["Local Events"],
+)
 
 @destination_router.post(
     "",
@@ -755,3 +763,188 @@ def delete_restaurant(
     db.refresh(restaurant)
 
     return restaurant
+
+@local_event_router.post(
+    "",
+    response_model=LocalEventResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_local_event(
+    event_data: LocalEventCreate,
+    db: Session = Depends(get_db),
+):
+    destination = (
+        db.query(Destination)
+        .filter(
+            Destination.id == event_data.destination_id,
+            Destination.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if destination is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "DESTINATION_NOT_FOUND",
+                    "message": "Destination not found or inactive",
+                },
+            },
+        )
+
+    event = LocalEvent(**event_data.model_dump())
+
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    return event
+
+
+@local_event_router.get(
+    "",
+    response_model=list[LocalEventResponse],
+)
+def list_local_events(
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(LocalEvent)
+        .filter(LocalEvent.is_active.is_(True))
+        .order_by(LocalEvent.name.asc())
+        .all()
+    )
+
+
+@local_event_router.get(
+    "/{event_id}",
+    response_model=LocalEventResponse,
+)
+def get_local_event(
+    event_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(LocalEvent)
+        .filter(
+            LocalEvent.id == event_id,
+            LocalEvent.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Local event not found",
+                },
+            },
+        )
+
+    return event
+
+
+@local_event_router.patch(
+    "/{event_id}",
+    response_model=LocalEventResponse,
+)
+def update_local_event(
+    event_id: uuid.UUID,
+    event_data: LocalEventUpdate,
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(LocalEvent)
+        .filter(
+            LocalEvent.id == event_id,
+            LocalEvent.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Local event not found",
+                },
+            },
+        )
+
+    update_data = event_data.model_dump(exclude_unset=True)
+
+    if "destination_id" in update_data:
+        destination = (
+            db.query(Destination)
+            .filter(
+                Destination.id == update_data["destination_id"],
+                Destination.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if destination is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "success": False,
+                    "error": {
+                        "code": "DESTINATION_NOT_FOUND",
+                        "message": "Destination not found or inactive",
+                    },
+                },
+            )
+
+    for field, value in update_data.items():
+        setattr(event, field, value)
+
+    db.commit()
+    db.refresh(event)
+
+    return event
+
+
+@local_event_router.delete(
+    "/{event_id}",
+    response_model=LocalEventResponse,
+)
+def delete_local_event(
+    event_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(LocalEvent)
+        .filter(
+            LocalEvent.id == event_id,
+            LocalEvent.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Local event not found",
+                },
+            },
+        )
+
+    event.is_active = False
+
+    db.commit()
+    db.refresh(event)
+
+    return event

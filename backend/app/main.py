@@ -7,6 +7,7 @@ from app.api.tourism import (
     attraction_router,
     destination_router,
     hotel_router,
+    local_event_router,
     restaurant_router,
 )
 from app.core.database import get_db
@@ -27,6 +28,7 @@ app.include_router(destination_router)
 app.include_router(attraction_router)
 app.include_router(hotel_router)
 app.include_router(restaurant_router)
+app.include_router(local_event_router)
 
 @app.get("/health")
 def health_check():
