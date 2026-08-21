@@ -135,3 +135,45 @@ class HotelResponse(BaseModel):
     rating: Decimal | None
     photo_urls: list[str] | None
     is_active: bool
+
+class RestaurantCreate(BaseModel):
+    destination_id: uuid.UUID
+    name: str = Field(..., max_length=255)
+    description: str | None = None
+    latitude: Decimal
+    longitude: Decimal
+    photo_urls: list[str] | None = None
+    operating_hours: dict | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    cuisine_type: str = Field(..., max_length=100)
+    avg_meal_cost: Decimal = Field(..., ge=0)
+
+
+class RestaurantUpdate(BaseModel):
+    destination_id: uuid.UUID | None = None
+    name: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
+    photo_urls: list[str] | None = None
+    operating_hours: dict | None = None
+    rating: Decimal | None = Field(default=None, ge=0, le=5)
+    cuisine_type: str | None = Field(default=None, max_length=100)
+    avg_meal_cost: Decimal | None = Field(default=None, ge=0)
+
+
+class RestaurantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    destination_id: uuid.UUID
+    name: str
+    description: str | None
+    latitude: Decimal
+    longitude: Decimal
+    photo_urls: list[str] | None
+    operating_hours: dict | None
+    rating: Decimal | None
+    cuisine_type: str
+    avg_meal_cost: Decimal
+    is_active: bool

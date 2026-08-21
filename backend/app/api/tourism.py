@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.attraction import Attraction
 from app.models.destination import Destination
 from app.models.hotel import Hotel
+from app.models.restaurant import Restaurant
 from app.schemas.tourism import (
     AttractionCreate,
     AttractionResponse,
@@ -20,7 +21,11 @@ from app.schemas.tourism import (
     HotelCreate,
     HotelResponse,
     HotelUpdate,
+    RestaurantCreate,
+    RestaurantResponse,
+    RestaurantUpdate,
 )
+
 destination_router = APIRouter(
     prefix="/api/v1/destinations",
     tags=["Destinations"],
@@ -34,6 +39,11 @@ attraction_router = APIRouter(
 hotel_router = APIRouter(
     prefix="/api/v1/hotels",
     tags=["Hotels"],
+)
+
+restaurant_router = APIRouter(
+    prefix="/api/v1/restaurants",
+    tags=["Restaurants"],
 )
 
 
@@ -562,3 +572,186 @@ def delete_hotel(
     db.refresh(hotel)
 
     return hotel
+
+
+@restaurant_router.post(
+    "",
+    response_model=RestaurantResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_restaurant(
+    restaurant_data: RestaurantCreate,
+    db: Session = Depends(get_db),
+):
+    destination = (
+        db.query(Destination)
+        .filter(
+            Destination.id == restaurant_data.destination_id,
+            Destination.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if destination is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "DESTINATION_NOT_FOUND",
+                    "message": "Destination not found or inactive",
+                },
+            },
+        )
+
+    restaurant = Restaurant(**restaurant_data.model_dump())
+
+    db.add(restaurant)
+    db.commit()
+    db.refresh(restaurant)
+
+    return restaurant
+
+
+@restaurant_router.get("", response_model=list[RestaurantResponse])
+def list_restaurants(
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Restaurant)
+        .filter(Restaurant.is_active.is_(True))
+        .order_by(Restaurant.name.asc())
+        .all()
+    )
+
+
+@restaurant_router.get(
+    "/{restaurant_id}",
+    response_model=RestaurantResponse,
+)
+def get_restaurant(
+    restaurant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    restaurant = (
+        db.query(Restaurant)
+        .filter(
+            Restaurant.id == restaurant_id,
+            Restaurant.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if restaurant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Restaurant not found",
+                },
+            },
+        )
+
+    return restaurant
+
+
+@restaurant_router.patch(
+    "/{restaurant_id}",
+    response_model=RestaurantResponse,
+)
+def update_restaurant(
+    restaurant_id: uuid.UUID,
+    restaurant_data: RestaurantUpdate,
+    db: Session = Depends(get_db),
+):
+    restaurant = (
+        db.query(Restaurant)
+        .filter(
+            Restaurant.id == restaurant_id,
+            Restaurant.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if restaurant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Restaurant not found",
+                },
+            },
+        )
+
+    update_data = restaurant_data.model_dump(exclude_unset=True)
+
+    if "destination_id" in update_data:
+        destination = (
+            db.query(Destination)
+            .filter(
+                Destination.id == update_data["destination_id"],
+                Destination.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if destination is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "success": False,
+                    "error": {
+                        "code": "DESTINATION_NOT_FOUND",
+                        "message": "Destination not found or inactive",
+                    },
+                },
+            )
+
+    for field, value in update_data.items():
+        setattr(restaurant, field, value)
+
+    db.commit()
+    db.refresh(restaurant)
+
+    return restaurant
+
+
+@restaurant_router.delete(
+    "/{restaurant_id}",
+    response_model=RestaurantResponse,
+)
+def delete_restaurant(
+    restaurant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    restaurant = (
+        db.query(Restaurant)
+        .filter(
+            Restaurant.id == restaurant_id,
+            Restaurant.is_active.is_(True),
+        )
+        .first()
+    )
+
+    if restaurant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Restaurant not found",
+                },
+            },
+        )
+
+    restaurant.is_active = False
+
+    db.commit()
+    db.refresh(restaurant)
+
+    return restaurant
