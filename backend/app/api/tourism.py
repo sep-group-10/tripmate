@@ -55,6 +55,11 @@ local_event_router = APIRouter(
     tags=["Local Events"],
 )
 
+
+# ============================================================
+# DESTINATIONS
+# ============================================================
+
 @destination_router.post(
     "",
     response_model=DestinationResponse,
@@ -77,9 +82,15 @@ def create_destination(
 def list_destinations(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=50),
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     query = db.query(Destination).filter(Destination.is_active.is_(True))
+
+    if search:
+        query = query.filter(
+            Destination.name.ilike(f"%{search}%")
+        )
 
     total = query.count()
     total_pages = math.ceil(total / limit) if total else 0
@@ -213,6 +224,10 @@ def delete_destination(
     return destination
 
 
+# ============================================================
+# ATTRACTIONS
+# ============================================================
+
 @attraction_router.post(
     "",
     response_model=AttractionResponse,
@@ -251,18 +266,27 @@ def create_attraction(
 
     return attraction
 
-@attraction_router.get("", response_model=list[AttractionResponse])
+
+@attraction_router.get(
+    "",
+    response_model=list[AttractionResponse],
+)
 def list_attractions(
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    attractions = (
+    query = (
         db.query(Attraction)
         .filter(Attraction.is_active.is_(True))
-        .order_by(Attraction.name.asc())
-        .all()
     )
 
-    return attractions
+    if search:
+        query = query.filter(
+            Attraction.name.ilike(f"%{search}%")
+        )
+
+    return query.order_by(Attraction.name.asc()).all()
+
 
 @attraction_router.get(
     "/{attraction_id}",
@@ -294,6 +318,7 @@ def get_attraction(
         )
 
     return attraction
+
 
 @attraction_router.patch(
     "/{attraction_id}",
@@ -394,6 +419,11 @@ def delete_attraction(
 
     return attraction
 
+
+# ============================================================
+# HOTELS
+# ============================================================
+
 @hotel_router.post(
     "",
     response_model=HotelResponse,
@@ -438,16 +468,20 @@ def create_hotel(
     response_model=list[HotelResponse],
 )
 def list_hotels(
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    hotels = (
+    query = (
         db.query(Hotel)
         .filter(Hotel.is_active.is_(True))
-        .order_by(Hotel.name.asc())
-        .all()
     )
 
-    return hotels
+    if search:
+        query = query.filter(
+            Hotel.name.ilike(f"%{search}%")
+        )
+
+    return query.order_by(Hotel.name.asc()).all()
 
 
 @hotel_router.get(
@@ -582,6 +616,10 @@ def delete_hotel(
     return hotel
 
 
+# ============================================================
+# RESTAURANTS
+# ============================================================
+
 @restaurant_router.post(
     "",
     response_model=RestaurantResponse,
@@ -621,16 +659,25 @@ def create_restaurant(
     return restaurant
 
 
-@restaurant_router.get("", response_model=list[RestaurantResponse])
+@restaurant_router.get(
+    "",
+    response_model=list[RestaurantResponse],
+)
 def list_restaurants(
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    return (
+    query = (
         db.query(Restaurant)
         .filter(Restaurant.is_active.is_(True))
-        .order_by(Restaurant.name.asc())
-        .all()
     )
+
+    if search:
+        query = query.filter(
+            Restaurant.name.ilike(f"%{search}%")
+        )
+
+    return query.order_by(Restaurant.name.asc()).all()
 
 
 @restaurant_router.get(
@@ -764,6 +811,11 @@ def delete_restaurant(
 
     return restaurant
 
+
+# ============================================================
+# LOCAL EVENTS
+# ============================================================
+
 @local_event_router.post(
     "",
     response_model=LocalEventResponse,
@@ -808,14 +860,20 @@ def create_local_event(
     response_model=list[LocalEventResponse],
 )
 def list_local_events(
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    return (
+    query = (
         db.query(LocalEvent)
         .filter(LocalEvent.is_active.is_(True))
-        .order_by(LocalEvent.name.asc())
-        .all()
     )
+
+    if search:
+        query = query.filter(
+            LocalEvent.name.ilike(f"%{search}%")
+        )
+
+    return query.order_by(LocalEvent.name.asc()).all()
 
 
 @local_event_router.get(

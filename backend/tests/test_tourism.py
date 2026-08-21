@@ -670,3 +670,54 @@ def test_invalid_local_event_rating(client):
     )
 
     assert response.status_code == 422
+
+def test_search_destinations_case_insensitive_partial(client):
+    response = client.get("/api/v1/destinations?search=KAN")
+
+    assert response.status_code == 200
+
+    data = response.json()["data"]
+    items = data["items"]
+
+    assert items
+    assert all("kan" in item["name"].lower() for item in items)
+
+def test_search_attractions_case_insensitive_partial(client):
+    response = client.get("/api/v1/attractions?search=tem")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert items
+    assert all("tem" in item["name"].lower() for item in items)
+
+def test_search_hotels_case_insensitive_partial(client):
+    response = client.get("/api/v1/hotels?search=hotel")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert items
+    assert all("hotel" in item["name"].lower() for item in items)
+
+def test_search_restaurants_case_insensitive_partial(client):
+    response = client.get("/api/v1/restaurants?search=rest")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert items
+    assert all("rest" in item["name"].lower() for item in items)
+
+def test_search_local_events_case_insensitive_partial(client):
+    response = client.get("/api/v1/local-events?search=event")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert items
+    assert all("event" in item["name"].lower() for item in items)
