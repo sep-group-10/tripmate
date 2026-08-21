@@ -103,10 +103,7 @@ def seed_destinations(db):
         )
 
         if existing:
-            print(
-                f"Destination {destination_data['name']} already exists. "
-                "Skipping."
-            )
+            print(f"Destination {destination_data['name']} already exists. Skipping.")
             continue
 
         db.add(Destination(**destination_data))
@@ -118,10 +115,7 @@ def seed_transport_rates(db):
     for rate_data in TRANSPORT_RATES:
         existing = (
             db.query(TransportRate)
-            .filter(
-                TransportRate.transport_type
-                == rate_data["transport_type"]
-            )
+            .filter(TransportRate.transport_type == rate_data["transport_type"])
             .first()
         )
 
@@ -146,16 +140,10 @@ def hash_password(password):
 
 def seed_demo_users(db):
     for user_data in DEMO_USERS:
-        existing = (
-            db.query(User)
-            .filter(User.email == user_data["email"])
-            .first()
-        )
+        existing = db.query(User).filter(User.email == user_data["email"]).first()
 
         if existing:
-            print(
-                f"User {user_data['email']} already exists. Skipping."
-            )
+            print(f"User {user_data['email']} already exists. Skipping.")
             continue
 
         db.add(
