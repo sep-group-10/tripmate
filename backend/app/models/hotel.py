@@ -27,12 +27,8 @@ class Hotel(Base):
         String(255),
         nullable=False,
     )
-    )
 
     description: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
         Text,
         nullable=True,
     )
