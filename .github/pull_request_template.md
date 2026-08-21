@@ -1,12 +1,9 @@
-## Summary
+## What does this PR do?
 
-Describe the change and its motivation.
+## Related issue
 
-## Testing
+Closes #
 
-Describe how you tested the change.
+## How to test it
 
-## Checklist
-
-- [ ] Tests pass locally
-- [ ] Documentation is updated where needed
+## Anything to flag?

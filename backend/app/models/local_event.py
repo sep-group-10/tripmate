@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from decimal import Decimal
 
 from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -16,7 +17,6 @@ class LocalEvent(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-
     destination_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("destinations.id"),
@@ -24,6 +24,9 @@ class LocalEvent(Base):
     )
 
     name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
         String(255),
         nullable=False,
     )
@@ -64,6 +67,10 @@ class LocalEvent(Base):
     )
 
     entry_fee: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+    )
         Numeric(10, 2),
         nullable=False,
         default=Decimal("0.00"),

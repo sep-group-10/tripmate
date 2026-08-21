@@ -8,7 +8,6 @@ from app.models.destination import Destination
 from app.models.transport_rate import TransportRate
 from app.models.user import User
 
-
 DESTINATIONS = [
     {
         "name": "Kandy",

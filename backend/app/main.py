@@ -1,14 +1,11 @@
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 
-app = FastAPI(
-    title="AI Tourism Planning System",
-    version="1.0.0"
-)
+app = FastAPI(title="AI Tourism Planning System", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,9 +21,8 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "ok"
-    }
+    return {"status": "ok"}
+
 
 @app.get("/db-test")
 def database_test(db: Session = Depends(get_db)):

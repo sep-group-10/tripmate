@@ -24,14 +24,14 @@ class Attraction(Base):
     )
 
     name: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
+            String(255),
+            nullable=False,
+        )
 
     description: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
+            Text,
+            nullable=True,
+        )
 
     latitude: Mapped[Decimal] = mapped_column(
         Numeric(9, 6),
