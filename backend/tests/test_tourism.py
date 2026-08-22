@@ -948,3 +948,364 @@ def test_filter_local_events_by_destination(client):
 
     for event in items:
         assert event["destination_id"] == destination_id
+
+def test_soft_deleted_destination_excluded_from_list(client):
+    create_response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Deleted Test Destination",
+            "description": "Testing soft delete",
+            "country": "Sri Lanka",
+            "region": "Central",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    destination_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/destinations/{destination_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    list_response = client.get(
+        "/api/v1/destinations",
+    )
+
+    assert list_response.status_code == 200
+
+    items = list_response.json()["data"]["items"]
+
+    returned_ids = {
+        destination["id"]
+        for destination in items
+    }
+
+    assert destination_id not in returned_ids
+
+def test_soft_deleted_destination_excluded_from_search(client):
+    create_response = client.post(
+        "/api/v1/destinations",
+        json={
+            "name": "Deleted Search Destination",
+            "description": "Testing soft delete search",
+            "country": "Sri Lanka",
+            "region": "Central",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    destination_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/destinations/{destination_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/destinations",
+        params={"search": "Deleted Search Destination"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()["data"]["items"]
+
+    assert all(item["id"] != destination_id for item in items)
+
+def test_soft_deleted_attraction_excluded_from_list(client):
+    create_response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Test Attraction",
+            "description": "Testing soft delete",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "entry_fee": 10,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    attraction_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/attractions/{attraction_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    response = client.get("/api/v1/attractions")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != attraction_id for item in items)
+
+def test_soft_deleted_attraction_excluded_from_search(client):
+    create_response = client.post(
+        "/api/v1/attractions",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Search Attraction",
+            "description": "Testing soft delete search",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "entry_fee": 10,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    attraction_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/attractions/{attraction_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/attractions",
+        params={"search": "Deleted Search Attraction"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != attraction_id for item in items)
+
+def test_soft_deleted_hotel_excluded_from_list(client):
+    create_response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Test Hotel",
+            "description": "Testing soft delete",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 100,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    hotel_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/hotels/{hotel_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    response = client.get("/api/v1/hotels")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != hotel_id for item in items)
+
+def test_soft_deleted_hotel_excluded_from_search(client):
+    create_response = client.post(
+        "/api/v1/hotels",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Search Hotel",
+            "description": "Testing soft delete search",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "price_per_night": 100,
+            "rating": 4.0,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    hotel_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/hotels/{hotel_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/hotels",
+        params={"search": "Deleted Search Hotel"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != hotel_id for item in items)
+
+def test_soft_deleted_restaurant_excluded_from_list(client):
+    create_response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Test Restaurant",
+            "description": "Testing soft delete",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "cuisine_type": "Sri Lankan",
+            "avg_meal_cost": 15,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    restaurant_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/restaurants/{restaurant_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    response = client.get("/api/v1/restaurants")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != restaurant_id for item in items)
+
+def test_soft_deleted_restaurant_excluded_from_search(client):
+    create_response = client.post(
+        "/api/v1/restaurants",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Search Restaurant",
+            "description": "Testing soft delete search",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "cuisine_type": "Sri Lankan",
+            "avg_meal_cost": 15,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    restaurant_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/restaurants/{restaurant_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/restaurants",
+        params={"search": "Deleted Search Restaurant"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != restaurant_id for item in items)
+
+def test_soft_deleted_local_event_excluded_from_list(client):
+    create_response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Test Local Event",
+            "description": "Testing soft delete",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "duration_hours": 3,
+            "entry_fee": 10,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "21:00",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    event_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/local-events/{event_id}"
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+
+    response = client.get("/api/v1/local-events")
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != event_id for item in items)
+
+def test_soft_deleted_local_event_excluded_from_search(client):
+    create_response = client.post(
+        "/api/v1/local-events",
+        json={
+            "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
+            "name": "Deleted Search Local Event",
+            "description": "Testing soft delete search",
+            "latitude": 7.2906,
+            "longitude": 80.6337,
+            "rating": 4.0,
+            "duration_hours": 3,
+            "entry_fee": 10,
+            "event_schedule": {
+                "date": "2026-08-25",
+                "start_time": "18:00",
+                "end_time": "21:00",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    event_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/local-events/{event_id}"
+    )
+
+    assert delete_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/local-events",
+        params={"search": "Deleted Search Local Event"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert all(item["id"] != event_id for item in items)
