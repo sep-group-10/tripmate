@@ -83,13 +83,21 @@ def list_destinations(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=50),
     search: str | None = Query(default=None),
+    region: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Destination).filter(Destination.is_active.is_(True))
+    query = db.query(Destination).filter(
+        Destination.is_active.is_(True)
+    )
 
     if search:
         query = query.filter(
             Destination.name.ilike(f"%{search}%")
+        )
+
+    if region:
+        query = query.filter(
+            Destination.region.ilike(f"%{region}%")
         )
 
     total = query.count()
@@ -112,7 +120,6 @@ def list_destinations(
             total_pages=total_pages,
         ),
     }
-
 
 @destination_router.get(
     "/{destination_id}",
@@ -273,11 +280,20 @@ def create_attraction(
 )
 def list_attractions(
     search: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    destination_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     query = (
         db.query(Attraction)
-        .filter(Attraction.is_active.is_(True))
+        .join(
+            Destination,
+            Attraction.destination_id == Destination.id,
+        )
+        .filter(
+            Attraction.is_active.is_(True),
+            Destination.is_active.is_(True),
+        )
     )
 
     if search:
@@ -285,8 +301,17 @@ def list_attractions(
             Attraction.name.ilike(f"%{search}%")
         )
 
-    return query.order_by(Attraction.name.asc()).all()
+    if region:
+        query = query.filter(
+            Destination.region.ilike(f"%{region}%")
+        )
 
+    if destination_id:
+        query = query.filter(
+            Attraction.destination_id == destination_id
+        )
+
+    return query.order_by(Attraction.name.asc()).all()
 
 @attraction_router.get(
     "/{attraction_id}",
@@ -469,16 +494,35 @@ def create_hotel(
 )
 def list_hotels(
     search: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    destination_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     query = (
         db.query(Hotel)
-        .filter(Hotel.is_active.is_(True))
+        .join(
+            Destination,
+            Hotel.destination_id == Destination.id,
+        )
+        .filter(
+            Hotel.is_active.is_(True),
+            Destination.is_active.is_(True),
+        )
     )
 
     if search:
         query = query.filter(
             Hotel.name.ilike(f"%{search}%")
+        )
+
+    if region:
+        query = query.filter(
+            Destination.region.ilike(f"%{region}%")
+        )
+
+    if destination_id:
+        query = query.filter(
+            Hotel.destination_id == destination_id
         )
 
     return query.order_by(Hotel.name.asc()).all()
@@ -658,23 +702,41 @@ def create_restaurant(
 
     return restaurant
 
-
 @restaurant_router.get(
     "",
     response_model=list[RestaurantResponse],
 )
 def list_restaurants(
     search: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    destination_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     query = (
         db.query(Restaurant)
-        .filter(Restaurant.is_active.is_(True))
+        .join(
+            Destination,
+            Restaurant.destination_id == Destination.id,
+        )
+        .filter(
+            Restaurant.is_active.is_(True),
+            Destination.is_active.is_(True),
+        )
     )
 
     if search:
         query = query.filter(
             Restaurant.name.ilike(f"%{search}%")
+        )
+
+    if region:
+        query = query.filter(
+            Destination.region.ilike(f"%{region}%")
+        )
+
+    if destination_id:
+        query = query.filter(
+            Restaurant.destination_id == destination_id
         )
 
     return query.order_by(Restaurant.name.asc()).all()
@@ -861,16 +923,35 @@ def create_local_event(
 )
 def list_local_events(
     search: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    destination_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     query = (
         db.query(LocalEvent)
-        .filter(LocalEvent.is_active.is_(True))
+        .join(
+            Destination,
+            LocalEvent.destination_id == Destination.id,
+        )
+        .filter(
+            LocalEvent.is_active.is_(True),
+            Destination.is_active.is_(True),
+        )
     )
 
     if search:
         query = query.filter(
             LocalEvent.name.ilike(f"%{search}%")
+        )
+
+    if region:
+        query = query.filter(
+            Destination.region.ilike(f"%{region}%")
+        )
+
+    if destination_id:
+        query = query.filter(
+            LocalEvent.destination_id == destination_id
         )
 
     return query.order_by(LocalEvent.name.asc()).all()

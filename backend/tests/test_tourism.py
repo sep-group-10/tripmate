@@ -721,3 +721,230 @@ def test_search_local_events_case_insensitive_partial(client):
 
     assert items
     assert all("event" in item["name"].lower() for item in items)
+
+def test_filter_destinations_by_region(client):
+    response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    for destination in data["data"]["items"]:
+        assert "Central" in destination["region"]
+
+def test_filter_attractions_by_region(client):
+    response = client.get(
+        "/api/v1/attractions",
+        params={"region": "Central"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    assert len(items) > 0
+
+    destination_ids = {
+        item["destination_id"]
+        for item in items
+    }
+
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+
+    central_destination_ids = {
+        destination["id"]
+        for destination in destinations
+    }
+
+    assert destination_ids.issubset(central_destination_ids)
+
+
+def test_filter_attractions_by_destination(client):
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    assert len(destinations) > 0
+
+    destination_id = destinations[0]["id"]
+
+    response = client.get(
+        "/api/v1/attractions",
+        params={"destination_id": destination_id},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    for attraction in items:
+        assert attraction["destination_id"] == destination_id
+
+def test_filter_hotels_by_region(client):
+    response = client.get(
+        "/api/v1/hotels",
+        params={"region": "Central"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+    assert len(items) > 0
+
+    destination_ids = {item["destination_id"] for item in items}
+
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    central_destination_ids = {destination["id"] for destination in destinations}
+
+    assert destination_ids.issubset(central_destination_ids)
+
+
+def test_filter_hotels_by_destination(client):
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    assert len(destinations) > 0
+
+    destination_id = destinations[0]["id"]
+
+    response = client.get(
+        "/api/v1/hotels",
+        params={"destination_id": destination_id},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    for hotel in items:
+        assert hotel["destination_id"] == destination_id
+
+
+def test_filter_restaurants_by_region(client):
+    response = client.get(
+        "/api/v1/restaurants",
+        params={"region": "Central"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+    assert len(items) > 0
+
+    destination_ids = {item["destination_id"] for item in items}
+
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    central_destination_ids = {destination["id"] for destination in destinations}
+
+    assert destination_ids.issubset(central_destination_ids)
+
+
+def test_filter_restaurants_by_destination(client):
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    assert len(destinations) > 0
+
+    destination_id = destinations[0]["id"]
+
+    response = client.get(
+        "/api/v1/restaurants",
+        params={"destination_id": destination_id},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    for restaurant in items:
+        assert restaurant["destination_id"] == destination_id
+
+
+def test_filter_local_events_by_region(client):
+    response = client.get(
+        "/api/v1/local-events",
+        params={"region": "Central"},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+    assert len(items) > 0
+
+    destination_ids = {item["destination_id"] for item in items}
+
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    central_destination_ids = {destination["id"] for destination in destinations}
+
+    assert destination_ids.issubset(central_destination_ids)
+
+
+def test_filter_local_events_by_destination(client):
+    destination_response = client.get(
+        "/api/v1/destinations",
+        params={"region": "Central"},
+    )
+
+    assert destination_response.status_code == 200
+
+    destinations = destination_response.json()["data"]["items"]
+    assert len(destinations) > 0
+
+    destination_id = destinations[0]["id"]
+
+    response = client.get(
+        "/api/v1/local-events",
+        params={"destination_id": destination_id},
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()
+
+    for event in items:
+        assert event["destination_id"] == destination_id
