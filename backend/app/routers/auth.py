@@ -13,7 +13,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
-from app.schemas.auth import LoginRequest
+from app.schemas.auth import LoginData, LoginRequest
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest, UserResponse
 
@@ -51,7 +51,7 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
 _DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
 
 
-@router.post("/login", response_model=ApiResponse[UserResponse])
+@router.post("/login", response_model=ApiResponse[LoginData])
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
@@ -70,4 +70,4 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
-    return ApiResponse(data=user)
+    return ApiResponse(data=LoginData(access_token=access_token, user=user))
