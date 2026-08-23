@@ -212,19 +212,43 @@ The `backend` container already has `DATABASE_URL` configured, so seeding runs a
 Backend tests use:
 
 * pytest
-* HTTPX
+* HTTPX (for FastAPI's `TestClient`)
 
-Run tests:
+Tests run against a real PostgreSQL database (the models use Postgres-only
+types like `UUID` and `ARRAY`, so SQLite cannot be used). Each test runs
+inside a database transaction that is rolled back afterward, so tests never
+leave data behind in the database they run against.
+
+## Running tests locally
+
+Make sure the containers are up and built with the latest dependencies:
 
 ```bash
-pytest
+docker compose up -d --build backend
 ```
 
-or inside Docker:
+Run the full suite:
 
 ```bash
-docker compose exec backend pytest
+docker compose exec backend pytest -v
 ```
+
+Run a single test file or test case:
+
+```bash
+docker compose exec backend pytest tests/test_auth_register.py -v
+docker compose exec backend pytest tests/test_auth_register.py::test_register_duplicate_email_returns_conflict -v
+```
+
+By default, tests connect to the same database as the `backend` container
+(`DATABASE_URL`). To point tests at a different database, set
+`TEST_DATABASE_URL`.
+
+## Running tests in CI
+
+The GitHub Actions workflow (`.github/workflows/backend-ci.yml`) spins up its
+own throwaway PostgreSQL service container for every PR — it never touches
+anyone's local database. Tests run automatically on every PR to `main`.
 
 ---
 
