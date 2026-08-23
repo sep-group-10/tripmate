@@ -1,3 +1,6 @@
+"""Tests for POST /auth/register: valid registration, duplicate email,
+and invalid input handling."""
+
 from app.models.user import User
 
 REGISTER_URL = "/api/v1/auth/register"

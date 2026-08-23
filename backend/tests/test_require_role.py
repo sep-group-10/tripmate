@@ -1,3 +1,7 @@
+"""Unit tests for the require_role dependency itself (no HTTP layer),
+covering every combination of required role vs actual role against the
+hierarchy defined in docs/RABC.md."""
+
 import pytest
 
 from app.core.dependencies import require_role
@@ -6,6 +10,8 @@ from app.core.roles import Role
 
 
 class _FakeUser:
+    """Minimal stand-in for a User, since require_role only reads .role."""
+
     def __init__(self, role: str):
         self.role = role
 
@@ -27,6 +33,8 @@ class _FakeUser:
 def test_require_role_matches_rbac_hierarchy(
     required_role, actual_role, should_be_allowed
 ):
+    """A user's role either passes the check and is returned unchanged,
+    or a 403 FORBIDDEN ApiError is raised - never anything else."""
     check = require_role(required_role)
     user = _FakeUser(role=actual_role)
 

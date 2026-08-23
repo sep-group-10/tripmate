@@ -19,6 +19,8 @@ TEST_DATABASE_URL = os.getenv(
 
 @pytest.fixture(scope="session")
 def engine():
+    """SQLAlchemy engine for the test database, created once per test
+    session with all tables in place."""
     engine = create_engine(TEST_DATABASE_URL)
     Base.metadata.create_all(bind=engine)
     yield engine
@@ -51,6 +53,9 @@ def db_session(engine):
 
 @pytest.fixture
 def client(db_session):
+    """FastAPI test client wired to use the isolated db_session instead
+    of a real database connection."""
+
     def override_get_db():
         yield db_session
 
@@ -62,6 +67,8 @@ def client(db_session):
 
 @pytest.fixture
 def existing_user(db_session):
+    """A single pre-created user for tests that need a real account
+    to log in as."""
     user = User(
         full_name="Existing User",
         email="existing@example.com",
@@ -75,6 +82,8 @@ def existing_user(db_session):
 
 @pytest.fixture
 def other_user(db_session):
+    """A second user, distinct from existing_user, for tests that check
+    one user's actions don't affect another user's account."""
     user = User(
         full_name="Other User",
         email="otheruser@example.com",

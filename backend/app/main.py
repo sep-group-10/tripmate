@@ -22,16 +22,19 @@ app.add_middleware(
 
 register_exception_handlers(app)
 
+# All API routes are versioned under /api/v1, per docs/api-contract.md.
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 
 
 @app.get("/health")
 def health_check():
+    """Basic liveness check for the API process."""
     return {"status": "ok"}
 
 
 @app.get("/db-test")
 def database_test(db: Session = Depends(get_db)):
+    """Basic check that the API can reach the database."""
     db.execute(text("SELECT 1"))
     return {"status": "database connection successful"}

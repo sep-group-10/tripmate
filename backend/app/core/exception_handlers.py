@@ -7,6 +7,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.errors import ApiError, ErrorCode
 
+# Maps a raw HTTP status code to the closest matching error code, for
+# framework-raised HTTPExceptions that didn't go through ApiError.
 _STATUS_TO_CODE = {
     401: ErrorCode.UNAUTHORIZED,
     403: ErrorCode.FORBIDDEN,
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 def _error_body(
     code: ErrorCode, message: str, details: list[dict] | None = None
 ) -> dict:
+    """Build the standard {success: false, error: {...}} response body."""
     error: dict = {"code": code.value, "message": message}
     if details is not None:
         error["details"] = details
@@ -26,8 +29,14 @@ def _error_body(
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    """Registers one handler per exception type so every error response -
+    expected ApiErrors, FastAPI validation errors, raw HTTP errors, and
+    anything unhandled - comes back in the same {success, error} shape
+    instead of a framework default."""
+
     @app.exception_handler(ApiError)
     async def api_error_handler(request: Request, exc: ApiError):
+        """Handles errors we raised ourselves via ApiError."""
         return JSONResponse(
             status_code=exc.status_code,
             content=_error_body(exc.code, exc.message, exc.details),
@@ -35,6 +44,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
+        """Handles request body/query validation failures from Pydantic,
+        converting FastAPI's default error list into the field/message
+        details format used by VALIDATION_ERROR."""
         details = [
             {
                 "field": ".".join(str(loc) for loc in error["loc"] if loc != "body"),
@@ -51,6 +63,8 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        """Handles raw framework HTTP errors (e.g. 404 for an unknown
+        route) that never went through ApiError."""
         code = _STATUS_TO_CODE.get(exc.status_code, ErrorCode.INTERNAL_SERVER_ERROR)
         message = (
             exc.detail
@@ -64,6 +78,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
+        """Last-resort handler for anything unexpected. The full
+        traceback goes to server logs only; the client always gets the
+        generic message so internals never leak in a response."""
         logger.exception("Unhandled exception", exc_info=exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

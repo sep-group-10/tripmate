@@ -26,6 +26,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     status_code=status.HTTP_201_CREATED,
 )
 def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user with a hashed password and the default
+    TOURIST role. Rejects the request if the email is already taken."""
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user is not None:
         raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
@@ -39,6 +41,9 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
     try:
         db.commit()
     except IntegrityError as exc:
+        # Backstop for the race where two requests pass the exists-check
+        # above at the same time; the database's unique constraint is
+        # the real guard, this just turns the failure into a clean 409.
         db.rollback()
         raise ApiError(
             ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
@@ -48,15 +53,23 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
     return ApiResponse(data=user)
 
 
+# Hashed once at import time so a login attempt against a nonexistent
+# email still runs a real bcrypt comparison, keeping response time
+# consistent regardless of whether the email exists.
 _DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
 
 
 @router.post("/login", response_model=ApiResponse[LoginData])
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    """Verify email/password, then issue an access token: set as an
+    httpOnly cookie for web clients and also returned in the response
+    body for mobile clients."""
     user = db.query(User).filter(User.email == payload.email).first()
     password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
     password_is_valid = verify_password(payload.password, password_hash)
 
+    # Same generic error for "no such email" and "wrong password" so a
+    # caller can't use this endpoint to find out which emails exist.
     if user is None or not password_is_valid:
         raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password")
 
@@ -78,6 +91,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 @router.post("/logout", response_model=ApiResponse[dict])
 def logout(response: Response):
+    """Clear the access token cookie to end the current web session."""
     response.delete_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,
         httponly=True,

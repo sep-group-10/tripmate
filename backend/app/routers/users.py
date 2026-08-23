@@ -13,6 +13,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("/me", response_model=ApiResponse[UserResponse])
 def get_my_profile(current_user: User = Depends(get_current_user)):
+    """Return the profile of the currently authenticated user."""
     return ApiResponse(data=current_user)
 
 
@@ -22,6 +23,11 @@ def update_my_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Update editable fields on the current user's own profile.
+    Role, email, and account status cannot be changed here (rejected
+    by ProfileUpdateRequest itself)."""
+    # applied_fields() only includes fields the client actually sent, so
+    # an omitted field is left as-is instead of being overwritten with None.
     for field, value in payload.applied_fields().items():
         setattr(current_user, field, value)
 

@@ -1,3 +1,8 @@
+"""Tests proving require_role works through a real HTTP request (login
+-> token -> route), not just as a direct function call. No admin route
+exists in the app yet, so a throwaway one is attached for these tests
+only (see admin_only_test_route below)."""
+
 import pytest
 from fastapi import Depends
 
@@ -38,6 +43,7 @@ def admin_only_test_route():
 
 
 def _create_user_with_role(db_session, email: str, role: str) -> User:
+    """Create and persist a user with a specific role for RBAC tests."""
     user = User(
         full_name="RBAC Test User",
         email=email,
@@ -51,6 +57,7 @@ def _create_user_with_role(db_session, email: str, role: str) -> User:
 
 
 def _login(client, email: str) -> str:
+    """Log in and return just the access token."""
     response = client.post(LOGIN_URL, json={"email": email, "password": TEST_PASSWORD})
     return response.json()["data"]["access_token"]
 

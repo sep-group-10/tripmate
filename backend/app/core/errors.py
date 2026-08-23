@@ -2,6 +2,9 @@ from enum import StrEnum
 
 
 class ErrorCode(StrEnum):
+    """Fixed set of API error codes, per docs/api-contract.md.
+    Clients should branch on these values, never on the message text."""
+
     VALIDATION_ERROR = "VALIDATION_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
     TOKEN_EXPIRED = "TOKEN_EXPIRED"
@@ -15,6 +18,7 @@ class ErrorCode(StrEnum):
     EXTERNAL_SERVICE_UNAVAILABLE = "EXTERNAL_SERVICE_UNAVAILABLE"
 
 
+# Maps each error code to the HTTP status it must always be returned with.
 ERROR_STATUS_CODES: dict[ErrorCode, int] = {
     ErrorCode.VALIDATION_ERROR: 400,
     ErrorCode.UNAUTHORIZED: 401,
@@ -31,6 +35,10 @@ ERROR_STATUS_CODES: dict[ErrorCode, int] = {
 
 
 class ApiError(Exception):
+    """Raise this from route or business logic instead of HTTPException.
+    The global handler in exception_handlers.py catches it and converts
+    it into the standard {success, error} response shape."""
+
     def __init__(
         self, code: ErrorCode, message: str, details: list[dict] | None = None
     ):

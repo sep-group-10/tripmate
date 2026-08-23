@@ -15,15 +15,17 @@ from app.core.security import (
 )
 from app.models.user import User
 
-# auto_error=False: this scheme only exists so Swagger UI shows an
-# "Authorize" button and attaches the header for us. The real
-# extraction/validation (bearer header OR cookie) happens below.
+# auto_error=False so this scheme never blocks a request on its own.
+# It exists only so Swagger UI shows an "Authorize" button and attaches
+# the header for us; the actual extraction/validation happens below.
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def _extract_token(
     request: Request, credentials: HTTPAuthorizationCredentials | None
 ) -> str | None:
+    """Return the access token from the Authorization header if present,
+    otherwise fall back to the access_token cookie."""
     if credentials is not None:
         return credentials.credentials
 
@@ -35,6 +37,10 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """FastAPI dependency that resolves the authenticated user for a
+    request, accepting either a Bearer token or the auth cookie.
+    Raises ApiError (401/403) if the token is missing, invalid,
+    expired, or belongs to a deactivated account."""
     token = _extract_token(request, credentials)
     if token is None:
         raise ApiError(ErrorCode.UNAUTHORIZED, "Authentication required")
@@ -46,6 +52,8 @@ def get_current_user(
     except jwt.InvalidTokenError as exc:
         raise ApiError(ErrorCode.UNAUTHORIZED, "Invalid access token") from exc
 
+    # Only accept access tokens here, so a refresh token can never be
+    # used to authenticate a normal request.
     if payload.get("type") != "access":
         raise ApiError(ErrorCode.UNAUTHORIZED, "Invalid access token")
 
@@ -58,6 +66,8 @@ def get_current_user(
     if user is None:
         raise ApiError(ErrorCode.UNAUTHORIZED, "Invalid access token")
 
+    # Checked on every request (not just at login) so a mid-session
+    # deactivation takes effect immediately on the next call.
     if not user.is_active:
         raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
 
@@ -65,6 +75,10 @@ def get_current_user(
 
 
 def require_role(role: Role):
+    """Dependency factory that builds a FastAPI dependency enforcing a
+    minimum role on a route, e.g. Depends(require_role(Role.ADMIN)).
+    Raises ApiError(FORBIDDEN) if the current user's role does not
+    satisfy the required role (see roles.py for the inheritance rules)."""
     allowed_roles = roles_satisfying(role)
 
     def check_role(current_user: User = Depends(get_current_user)) -> User:

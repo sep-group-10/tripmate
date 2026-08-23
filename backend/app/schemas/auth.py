@@ -4,15 +4,21 @@ from app.schemas.user import UserResponse
 
 
 class LoginRequest(BaseModel):
+    """Request body for POST /auth/login."""
+
     email: EmailStr
     password: str
 
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: str) -> str:
+        """Lowercase the email so login matches registration regardless
+        of how the user types their email's case."""
         return value.lower()
 
 
 class LoginData(BaseModel):
+    """Response data for a successful login."""
+
     access_token: str
     user: UserResponse

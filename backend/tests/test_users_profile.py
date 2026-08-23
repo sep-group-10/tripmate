@@ -1,3 +1,6 @@
+"""Tests for GET/PUT /users/me: fetching and updating a user's own
+profile, and confirming users can't affect or read each other's data."""
+
 from app.models.user import User
 
 LOGIN_URL = "/api/v1/auth/login"
@@ -8,6 +11,8 @@ OTHER_USER_PASSWORD = "otheruserpassword123"
 
 
 def _login(client, email, password):
+    """Log in and return just the access token, for tests that only
+    need an authenticated client."""
     response = client.post(LOGIN_URL, json={"email": email, "password": password})
     return response.json()["data"]["access_token"]
 

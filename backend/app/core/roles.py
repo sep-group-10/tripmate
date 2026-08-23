@@ -2,6 +2,8 @@ from enum import StrEnum
 
 
 class Role(StrEnum):
+    """The three account roles used across the platform."""
+
     TOURIST = "TOURIST"
     ADMIN = "ADMIN"
     SUPER_ADMIN = "SUPER_ADMIN"
@@ -20,4 +22,6 @@ _INHERITED_BY: dict[Role, set[Role]] = {
 
 
 def roles_satisfying(required_role: Role) -> set[Role]:
+    """Return the set of actual roles that satisfy a given requirement,
+    e.g. roles_satisfying(Role.ADMIN) also includes SUPER_ADMIN."""
     return _INHERITED_BY[required_role]

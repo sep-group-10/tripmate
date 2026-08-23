@@ -1,3 +1,7 @@
+"""Tests for POST /auth/login, POST /auth/logout, and access to
+protected routes (cookie or Bearer token), including token edge cases
+like expiry, wrong token type, and deactivated accounts."""
+
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -19,6 +23,8 @@ EXISTING_USER_PASSWORD = "existingpassword123"
 
 
 def _make_token(sub: str, token_type: str = "access", expires_delta=None) -> str:
+    """Hand-craft a JWT for edge-case tests (expired, wrong type, bad
+    subject) that can't be produced through the normal login flow."""
     now = datetime.now(timezone.utc)
     expires_delta = timedelta(minutes=15) if expires_delta is None else expires_delta
     payload = {
