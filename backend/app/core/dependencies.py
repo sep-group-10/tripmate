@@ -2,6 +2,7 @@ import uuid
 
 import jwt
 from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -13,19 +14,27 @@ from app.core.security import (
 )
 from app.models.user import User
 
+# auto_error=False: this scheme only exists so Swagger UI shows an
+# "Authorize" button and attaches the header for us. The real
+# extraction/validation (bearer header OR cookie) happens below.
+_bearer_scheme = HTTPBearer(auto_error=False)
 
-def _extract_token(request: Request) -> str | None:
-    authorization = request.headers.get("Authorization")
-    if authorization is not None:
-        scheme, _, credentials = authorization.partition(" ")
-        if scheme.lower() == "bearer" and credentials:
-            return credentials
+
+def _extract_token(
+    request: Request, credentials: HTTPAuthorizationCredentials | None
+) -> str | None:
+    if credentials is not None:
+        return credentials.credentials
 
     return request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = _extract_token(request)
+def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    token = _extract_token(request, credentials)
     if token is None:
         raise ApiError(ErrorCode.UNAUTHORIZED, "Authentication required")
 
