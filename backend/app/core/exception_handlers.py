@@ -15,6 +15,19 @@ _STATUS_TO_CODE = {
     404: ErrorCode.NOT_FOUND,
 }
 
+
+def _fallback_code_for_status(status_code: int) -> ErrorCode:
+    """Best-effort error code for a status not explicitly mapped above.
+    Bucketed by status class so an unmapped 4xx (e.g. 405 Method Not
+    Allowed) is never reported as an INTERNAL_SERVER_ERROR - that code
+    must only ever mean a real 5xx failure."""
+    if status_code in _STATUS_TO_CODE:
+        return _STATUS_TO_CODE[status_code]
+    if 400 <= status_code < 500:
+        return ErrorCode.VALIDATION_ERROR
+    return ErrorCode.INTERNAL_SERVER_ERROR
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,8 +77,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         """Handles raw framework HTTP errors (e.g. 404 for an unknown
-        route) that never went through ApiError."""
-        code = _STATUS_TO_CODE.get(exc.status_code, ErrorCode.INTERNAL_SERVER_ERROR)
+        route, 405 for a wrong HTTP method) that never went through
+        ApiError."""
+        code = _fallback_code_for_status(exc.status_code)
         message = (
             exc.detail
             if isinstance(exc.detail, str)
