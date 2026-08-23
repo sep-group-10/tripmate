@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.dependencies import get_current_user
 from app.core.errors import ApiError, ErrorCode
 from app.core.security import (
     ACCESS_TOKEN_COOKIE_NAME,
@@ -82,3 +83,8 @@ def logout(response: Response):
         samesite="lax",
     )
     return ApiResponse(data={})
+
+
+@router.get("/me", response_model=ApiResponse[UserResponse])
+def get_me(current_user: User = Depends(get_current_user)):
+    return ApiResponse(data=current_user)
