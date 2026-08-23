@@ -61,6 +61,9 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if user is None or not password_is_valid:
         raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password")
 
+    if not user.is_active:
+        raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
+
     access_token = create_access_token(user.id, user.role)
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,

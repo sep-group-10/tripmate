@@ -55,6 +55,28 @@ def test_register_duplicate_email_returns_conflict(client, existing_user):
     assert body["error"]["code"] == "EMAIL_ALREADY_EXISTS"
 
 
+def test_register_duplicate_email_different_case_returns_conflict(
+    client, existing_user
+):
+    payload = {**VALID_PAYLOAD, "email": existing_user.email.upper()}
+
+    response = client.post(REGISTER_URL, json=payload)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "EMAIL_ALREADY_EXISTS"
+
+
+def test_register_stores_email_normalized_to_lowercase(client, db_session):
+    payload = {**VALID_PAYLOAD, "email": "MixedCase@Example.com"}
+
+    response = client.post(REGISTER_URL, json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["data"]["email"] == "mixedcase@example.com"
+    user = db_session.query(User).filter(User.email == "mixedcase@example.com").first()
+    assert user is not None
+
+
 def test_register_duplicate_email_does_not_create_second_row(
     client, existing_user, db_session
 ):
