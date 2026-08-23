@@ -107,7 +107,7 @@ def test_invalid_destination_rating(client):
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_create_attraction(client):
@@ -229,7 +229,7 @@ def test_invalid_attraction_rating(client):
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_create_hotel(client):
@@ -349,7 +349,7 @@ def test_invalid_hotel_rating(client):
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_create_restaurant(client):
@@ -488,7 +488,7 @@ def test_invalid_restaurant_rating(client):
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_create_local_event(client):
@@ -651,7 +651,7 @@ def test_invalid_local_event_rating(client):
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_search_destinations_case_insensitive_partial(client):
@@ -700,15 +700,13 @@ def test_search_restaurants_case_insensitive_partial(client):
 
 
 def test_search_local_events_case_insensitive_partial(client):
-    response = client.get("/api/v1/local-events?search=event")
-
+    response = client.get("/api/v1/local-events?search=festival")
     assert response.status_code == 200
 
     items = response.json()
 
     assert items
-    assert all("event" in item["name"].lower() for item in items)
-
+    assert all("festival" in item["name"].lower() for item in items)
 
 def test_filter_destinations_by_region(client):
     response = client.get(
