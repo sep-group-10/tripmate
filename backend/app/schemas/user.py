@@ -39,4 +39,8 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     is_email_verified: bool
+    preferred_travel_style: str | None
+    preferred_accommodation: str | None
+    typical_budget_range: str | None
+    interests: list[str] | None
     created_at: UTCTimestamp
