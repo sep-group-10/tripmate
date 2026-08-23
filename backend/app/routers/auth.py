@@ -1,10 +1,17 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.errors import ApiError, ErrorCode
-from app.core.security import hash_password, verify_password
+from app.core.security import (
+    ACCESS_TOKEN_COOKIE_NAME,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    COOKIE_SECURE,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 from app.models.user import User
 from app.schemas.auth import LoginRequest
 from app.schemas.common import ApiResponse
@@ -45,12 +52,22 @@ _DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
 
 
 @router.post("/login", response_model=ApiResponse[UserResponse])
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
     password_is_valid = verify_password(payload.password, password_hash)
 
     if user is None or not password_is_valid:
         raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password")
+
+    access_token = create_access_token(user.id, user.role)
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
     return ApiResponse(data=user)
