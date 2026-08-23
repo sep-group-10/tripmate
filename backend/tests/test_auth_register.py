@@ -1,6 +1,9 @@
 """Tests for POST /auth/register: valid registration, duplicate email,
-and invalid input handling."""
+and invalid input handling. Registration also logs the user in
+immediately (same token issuance as /login), so the response shape
+matches LoginData: {access_token, user}."""
 
+from app.core.security import ACCESS_TOKEN_COOKIE_NAME
 from app.models.user import User
 
 REGISTER_URL = "/api/v1/auth/register"
@@ -20,22 +23,34 @@ def test_register_success_returns_created_user(client, db_session):
     assert body["success"] is True
 
     data = body["data"]
-    assert data["email"] == VALID_PAYLOAD["email"]
-    assert data["full_name"] == VALID_PAYLOAD["full_name"]
-    assert data["role"] == "TOURIST"
-    assert data["is_active"] is True
-    assert data["is_email_verified"] is False
-    assert "id" in data
-    assert "created_at" in data
-    assert data["created_at"].endswith("Z")
+    assert "access_token" in data
+
+    user = data["user"]
+    assert user["email"] == VALID_PAYLOAD["email"]
+    assert user["full_name"] == VALID_PAYLOAD["full_name"]
+    assert user["role"] == "TOURIST"
+    assert user["is_active"] is True
+    assert user["is_email_verified"] is False
+    assert "id" in user
+    assert "created_at" in user
+    assert user["created_at"].endswith("Z")
+
+
+def test_register_success_sets_httponly_cookie(client):
+    response = client.post(REGISTER_URL, json=VALID_PAYLOAD)
+
+    set_cookie = response.headers.get("set-cookie")
+    assert set_cookie is not None
+    assert ACCESS_TOKEN_COOKIE_NAME in set_cookie
+    assert "HttpOnly" in set_cookie
 
 
 def test_register_never_returns_password_fields(client):
     response = client.post(REGISTER_URL, json=VALID_PAYLOAD)
 
-    data = response.json()["data"]
-    assert "password" not in data
-    assert "password_hash" not in data
+    user = response.json()["data"]["user"]
+    assert "password" not in user
+    assert "password_hash" not in user
 
 
 def test_register_persists_hashed_password_not_plaintext(client, db_session):
@@ -75,7 +90,7 @@ def test_register_stores_email_normalized_to_lowercase(client, db_session):
     response = client.post(REGISTER_URL, json=payload)
 
     assert response.status_code == 201
-    assert response.json()["data"]["email"] == "mixedcase@example.com"
+    assert response.json()["data"]["user"]["email"] == "mixedcase@example.com"
     user = db_session.query(User).filter(User.email == "mixedcase@example.com").first()
     assert user is not None
 

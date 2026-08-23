@@ -15,19 +15,35 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.auth import LoginData, LoginRequest
 from app.schemas.common import ApiResponse
-from app.schemas.user import UserRegisterRequest, UserResponse
+from app.schemas.user import UserRegisterRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _issue_access_token_cookie(response: Response, access_token: str) -> None:
+    """Set the access token as an httpOnly cookie for web clients.
+    Shared by register and login so both issue the same cookie."""
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
 @router.post(
     "/register",
-    response_model=ApiResponse[UserResponse],
+    response_model=ApiResponse[LoginData],
     status_code=status.HTTP_201_CREATED,
 )
-def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
+def register(
+    payload: UserRegisterRequest, response: Response, db: Session = Depends(get_db)
+):
     """Register a new user with a hashed password and the default
-    TOURIST role. Rejects the request if the email is already taken."""
+    TOURIST role, then log them in immediately (same token issuance as
+    /login). Rejects the request if the email is already taken."""
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user is not None:
         raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
@@ -50,7 +66,10 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
         ) from exc
     db.refresh(user)
 
-    return ApiResponse(data=user)
+    access_token = create_access_token(user.id, user.role)
+    _issue_access_token_cookie(response, access_token)
+
+    return ApiResponse(data=LoginData(access_token=access_token, user=user))
 
 
 # Hashed once at import time so a login attempt against a nonexistent
@@ -77,14 +96,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
 
     access_token = create_access_token(user.id, user.role)
-    response.set_cookie(
-        key=ACCESS_TOKEN_COOKIE_NAME,
-        value=access_token,
-        httponly=True,
-        secure=COOKIE_SECURE,
-        samesite="lax",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    _issue_access_token_cookie(response, access_token)
 
     return ApiResponse(data=LoginData(access_token=access_token, user=user))
 
