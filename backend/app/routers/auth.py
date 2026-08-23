@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.errors import ApiError, ErrorCode
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.models.user import User
+from app.schemas.auth import LoginRequest
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest, UserResponse
 
@@ -36,5 +37,20 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
             ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
         ) from exc
     db.refresh(user)
+
+    return ApiResponse(data=user)
+
+
+_DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
+
+
+@router.post("/login", response_model=ApiResponse[UserResponse])
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_is_valid = verify_password(payload.password, password_hash)
+
+    if user is None or not password_is_valid:
+        raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password")
 
     return ApiResponse(data=user)
