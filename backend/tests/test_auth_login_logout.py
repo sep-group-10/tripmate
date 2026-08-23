@@ -13,7 +13,7 @@ from app.models.user import User
 
 LOGIN_URL = "/api/v1/auth/login"
 LOGOUT_URL = "/api/v1/auth/logout"
-ME_URL = "/api/v1/auth/me"
+ME_URL = "/api/v1/users/me"
 
 EXISTING_USER_PASSWORD = "existingpassword123"
 

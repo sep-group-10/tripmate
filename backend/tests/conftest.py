@@ -71,3 +71,16 @@ def existing_user(db_session):
     db_session.commit()
     db_session.refresh(user)
     return user
+
+
+@pytest.fixture
+def other_user(db_session):
+    user = User(
+        full_name="Other User",
+        email="otheruser@example.com",
+        password_hash=hash_password("otheruserpassword123"),
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
