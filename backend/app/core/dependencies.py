@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.errors import ApiError, ErrorCode
+from app.core.roles import Role, roles_satisfying
 from app.core.security import (
     ACCESS_TOKEN_COOKIE_NAME,
     JWT_ALGORITHM,
@@ -61,3 +62,17 @@ def get_current_user(
         raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
 
     return user
+
+
+def require_role(role: Role):
+    allowed_roles = roles_satisfying(role)
+
+    def check_role(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in allowed_roles:
+            raise ApiError(
+                ErrorCode.FORBIDDEN,
+                "You do not have permission to access this resource",
+            )
+        return current_user
+
+    return check_role
