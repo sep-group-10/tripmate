@@ -40,8 +40,7 @@ HOTELS = {
         {
             "name": "Royal Hills Kandy",
             "description": (
-                "Upscale hotel offering comfortable rooms and panoramic "
-                "mountain views."
+                "Upscale hotel offering comfortable rooms and panoramic mountain views."
             ),
             "price_per_night": Decimal("165.00"),
             "facilities": ["WiFi", "Pool", "Spa", "Restaurant", "Gym"],
@@ -50,18 +49,17 @@ HOTELS = {
         {
             "name": "Cinnamon Grand Kandy Retreat",
             "description": (
-                "Luxury-style accommodation with premium facilities and "
-                "elegant rooms."
+                "Luxury-style accommodation with premium facilities and elegant rooms."
             ),
             "price_per_night": Decimal("220.00"),
             "facilities": [
-            "WiFi",
-            "Spa",
-            "Pool",
-            "Fine Dining",
-            "Gym",
-            "Airport Transfer",
-        ],
+                "WiFi",
+                "Spa",
+                "Pool",
+                "Fine Dining",
+                "Gym",
+                "Airport Transfer",
+            ],
             "rating": Decimal("4.8"),
         },
     ],
@@ -107,15 +105,15 @@ HOTELS = {
             ),
             "price_per_night": Decimal("260.00"),
             "facilities": [
-    "WiFi",
-    "Spa",
-    "Pool",
-    "Fine Dining",
-    "Gym",
-    "Concierge",
-],
-"rating": Decimal("4.8"),
-},
+                "WiFi",
+                "Spa",
+                "Pool",
+                "Fine Dining",
+                "Gym",
+                "Concierge",
+            ],
+            "rating": Decimal("4.8"),
+        },
     ],
     "Galle": [
         {
@@ -155,20 +153,19 @@ HOTELS = {
         {
             "name": "Galle Fort Luxury Retreat",
             "description": (
-                "Premium accommodation combining colonial character "
-                "with modern luxury."
+                "Premium accommodation combining colonial character with modern luxury."
             ),
             "price_per_night": Decimal("240.00"),
             "facilities": [
-    "WiFi",
-    "Pool",
-    "Spa",
-    "Fine Dining",
-    "Gym",
-    "Concierge",
-],
-"rating": Decimal("4.9"),
-},
+                "WiFi",
+                "Pool",
+                "Spa",
+                "Fine Dining",
+                "Gym",
+                "Concierge",
+            ],
+            "rating": Decimal("4.9"),
+        },
     ],
 }
 

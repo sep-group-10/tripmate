@@ -708,6 +708,7 @@ def test_search_local_events_case_insensitive_partial(client):
     assert items
     assert all("festival" in item["name"].lower() for item in items)
 
+
 def test_filter_destinations_by_region(client):
     response = client.get(
         "/api/v1/destinations",
