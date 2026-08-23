@@ -4,6 +4,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exception_handlers import register_exception_handlers
+from app.routers import auth
 
 app = FastAPI(title="AI Tourism Planning System", version="1.0.0")
 
@@ -17,6 +19,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_exception_handlers(app)
+
+app.include_router(auth.router, prefix="/api/v1")
 
 
 @app.get("/health")
