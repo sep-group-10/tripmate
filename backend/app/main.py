@@ -30,6 +30,7 @@ app.include_router(hotel_router)
 app.include_router(restaurant_router)
 app.include_router(local_event_router)
 
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

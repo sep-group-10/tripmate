@@ -60,6 +60,7 @@ local_event_router = APIRouter(
 # DESTINATIONS
 # ============================================================
 
+
 @destination_router.post(
     "",
     response_model=DestinationResponse,
@@ -86,19 +87,13 @@ def list_destinations(
     region: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Destination).filter(
-        Destination.is_active.is_(True)
-    )
+    query = db.query(Destination).filter(Destination.is_active.is_(True))
 
     if search:
-        query = query.filter(
-            Destination.name.ilike(f"%{search}%")
-        )
+        query = query.filter(Destination.name.ilike(f"%{search}%"))
 
     if region:
-        query = query.filter(
-            Destination.region.ilike(f"%{region}%")
-        )
+        query = query.filter(Destination.region.ilike(f"%{region}%"))
 
     total = query.count()
     total_pages = math.ceil(total / limit) if total else 0
@@ -120,6 +115,7 @@ def list_destinations(
             total_pages=total_pages,
         ),
     }
+
 
 @destination_router.get(
     "/{destination_id}",
@@ -235,6 +231,7 @@ def delete_destination(
 # ATTRACTIONS
 # ============================================================
 
+
 @attraction_router.post(
     "",
     response_model=AttractionResponse,
@@ -297,21 +294,16 @@ def list_attractions(
     )
 
     if search:
-        query = query.filter(
-            Attraction.name.ilike(f"%{search}%")
-        )
+        query = query.filter(Attraction.name.ilike(f"%{search}%"))
 
     if region:
-        query = query.filter(
-            Destination.region.ilike(f"%{region}%")
-        )
+        query = query.filter(Destination.region.ilike(f"%{region}%"))
 
     if destination_id:
-        query = query.filter(
-            Attraction.destination_id == destination_id
-        )
+        query = query.filter(Attraction.destination_id == destination_id)
 
     return query.order_by(Attraction.name.asc()).all()
+
 
 @attraction_router.get(
     "/{attraction_id}",
@@ -449,6 +441,7 @@ def delete_attraction(
 # HOTELS
 # ============================================================
 
+
 @hotel_router.post(
     "",
     response_model=HotelResponse,
@@ -511,19 +504,13 @@ def list_hotels(
     )
 
     if search:
-        query = query.filter(
-            Hotel.name.ilike(f"%{search}%")
-        )
+        query = query.filter(Hotel.name.ilike(f"%{search}%"))
 
     if region:
-        query = query.filter(
-            Destination.region.ilike(f"%{region}%")
-        )
+        query = query.filter(Destination.region.ilike(f"%{region}%"))
 
     if destination_id:
-        query = query.filter(
-            Hotel.destination_id == destination_id
-        )
+        query = query.filter(Hotel.destination_id == destination_id)
 
     return query.order_by(Hotel.name.asc()).all()
 
@@ -664,6 +651,7 @@ def delete_hotel(
 # RESTAURANTS
 # ============================================================
 
+
 @restaurant_router.post(
     "",
     response_model=RestaurantResponse,
@@ -702,6 +690,7 @@ def create_restaurant(
 
     return restaurant
 
+
 @restaurant_router.get(
     "",
     response_model=list[RestaurantResponse],
@@ -725,19 +714,13 @@ def list_restaurants(
     )
 
     if search:
-        query = query.filter(
-            Restaurant.name.ilike(f"%{search}%")
-        )
+        query = query.filter(Restaurant.name.ilike(f"%{search}%"))
 
     if region:
-        query = query.filter(
-            Destination.region.ilike(f"%{region}%")
-        )
+        query = query.filter(Destination.region.ilike(f"%{region}%"))
 
     if destination_id:
-        query = query.filter(
-            Restaurant.destination_id == destination_id
-        )
+        query = query.filter(Restaurant.destination_id == destination_id)
 
     return query.order_by(Restaurant.name.asc()).all()
 
@@ -878,6 +861,7 @@ def delete_restaurant(
 # LOCAL EVENTS
 # ============================================================
 
+
 @local_event_router.post(
     "",
     response_model=LocalEventResponse,
@@ -940,19 +924,13 @@ def list_local_events(
     )
 
     if search:
-        query = query.filter(
-            LocalEvent.name.ilike(f"%{search}%")
-        )
+        query = query.filter(LocalEvent.name.ilike(f"%{search}%"))
 
     if region:
-        query = query.filter(
-            Destination.region.ilike(f"%{region}%")
-        )
+        query = query.filter(Destination.region.ilike(f"%{region}%"))
 
     if destination_id:
-        query = query.filter(
-            LocalEvent.destination_id == destination_id
-        )
+        query = query.filter(LocalEvent.destination_id == destination_id)
 
     return query.order_by(LocalEvent.name.asc()).all()
 

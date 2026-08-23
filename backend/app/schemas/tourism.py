@@ -136,6 +136,7 @@ class HotelResponse(BaseModel):
     photo_urls: list[str] | None
     is_active: bool
 
+
 class RestaurantCreate(BaseModel):
     destination_id: uuid.UUID
     name: str = Field(..., max_length=255)
