@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -27,7 +28,13 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
         password_hash=hash_password(payload.password),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
+        ) from exc
     db.refresh(user)
 
     return ApiResponse(data=user)
