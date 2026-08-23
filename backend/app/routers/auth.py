@@ -71,3 +71,14 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     )
 
     return ApiResponse(data=LoginData(access_token=access_token, user=user))
+
+
+@router.post("/logout", response_model=ApiResponse[dict])
+def logout(response: Response):
+    response.delete_cookie(
+        key=ACCESS_TOKEN_COOKIE_NAME,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+    )
+    return ApiResponse(data={})
