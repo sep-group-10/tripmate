@@ -23,9 +23,7 @@ def calculate_transport_cost(
     )
 
     if rate is None:
-        raise ValueError(
-            f"No transport rate found for {transport_type} in {region}"
-        )
+        raise ValueError(f"No transport rate found for {transport_type} in {region}")
 
     if distance_km < 0:
         raise ValueError("Distance cannot be negative")

@@ -85,16 +85,12 @@ def test_soft_delete_destination(admin_client, client):
     assert create_response.status_code == 201
     destination_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/destinations/{destination_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/destinations/{destination_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
 
-    get_response = client.get(
-        f"/api/v1/destinations/{destination_id}"
-    )
+    get_response = client.get(f"/api/v1/destinations/{destination_id}")
 
     assert get_response.status_code == 404
 
@@ -209,16 +205,12 @@ def test_soft_delete_attraction(admin_client, client):
     assert create_response.status_code == 201
     attraction_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/attractions/{attraction_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/attractions/{attraction_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
 
-    get_response = client.get(
-        f"/api/v1/attractions/{attraction_id}"
-    )
+    get_response = client.get(f"/api/v1/attractions/{attraction_id}")
 
     assert get_response.status_code == 404
 
@@ -334,16 +326,12 @@ def test_soft_delete_hotel(admin_client, client):
     assert create_response.status_code == 201
     hotel_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/hotels/{hotel_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/hotels/{hotel_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
 
-    get_response = client.get(
-        f"/api/v1/hotels/{hotel_id}"
-    )
+    get_response = client.get(f"/api/v1/hotels/{hotel_id}")
 
     assert get_response.status_code == 404
 
@@ -408,9 +396,7 @@ def test_get_restaurant(admin_client, client):
 
     restaurant_id = create_response.json()["id"]
 
-    response = client.get(
-        f"/api/v1/restaurants/{restaurant_id}"
-    )
+    response = client.get(f"/api/v1/restaurants/{restaurant_id}")
 
     assert response.status_code == 200
 
@@ -475,15 +461,11 @@ def test_soft_delete_restaurant(admin_client, client):
 
     restaurant_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/restaurants/{restaurant_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/restaurants/{restaurant_id}")
 
     assert delete_response.status_code == 200
 
-    get_response = client.get(
-        f"/api/v1/restaurants/{restaurant_id}"
-    )
+    get_response = client.get(f"/api/v1/restaurants/{restaurant_id}")
 
     assert get_response.status_code == 404
 
@@ -561,9 +543,7 @@ def test_get_local_event(admin_client, client):
 
     event_id = create_response.json()["id"]
 
-    response = client.get(
-        f"/api/v1/local-events/{event_id}"
-    )
+    response = client.get(f"/api/v1/local-events/{event_id}")
 
     assert response.status_code == 200
 
@@ -641,15 +621,11 @@ def test_soft_delete_local_event(admin_client, client):
 
     event_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/local-events/{event_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/local-events/{event_id}")
 
     assert delete_response.status_code == 200
 
-    get_response = client.get(
-        f"/api/v1/local-events/{event_id}"
-    )
+    get_response = client.get(f"/api/v1/local-events/{event_id}")
 
     assert get_response.status_code == 404
 
@@ -975,9 +951,7 @@ def test_soft_deleted_destination_excluded_from_list(admin_client, client):
 
     destination_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/destinations/{destination_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/destinations/{destination_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1013,9 +987,7 @@ def test_soft_deleted_destination_excluded_from_search(admin_client, client):
 
     destination_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/destinations/{destination_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/destinations/{destination_id}")
 
     assert delete_response.status_code == 200
 
@@ -1049,9 +1021,7 @@ def test_soft_deleted_attraction_excluded_from_list(admin_client, client):
 
     attraction_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/attractions/{attraction_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/attractions/{attraction_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1083,9 +1053,7 @@ def test_soft_deleted_attraction_excluded_from_search(admin_client, client):
 
     attraction_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/attractions/{attraction_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/attractions/{attraction_id}")
 
     assert delete_response.status_code == 200
 
@@ -1119,9 +1087,7 @@ def test_soft_deleted_hotel_excluded_from_list(admin_client, client):
 
     hotel_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/hotels/{hotel_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/hotels/{hotel_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1153,9 +1119,7 @@ def test_soft_deleted_hotel_excluded_from_search(admin_client, client):
 
     hotel_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/hotels/{hotel_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/hotels/{hotel_id}")
 
     assert delete_response.status_code == 200
 
@@ -1190,9 +1154,7 @@ def test_soft_deleted_restaurant_excluded_from_list(admin_client, client):
 
     restaurant_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/restaurants/{restaurant_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/restaurants/{restaurant_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1225,9 +1187,7 @@ def test_soft_deleted_restaurant_excluded_from_search(admin_client, client):
 
     restaurant_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/restaurants/{restaurant_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/restaurants/{restaurant_id}")
 
     assert delete_response.status_code == 200
 
@@ -1267,9 +1227,7 @@ def test_soft_deleted_local_event_excluded_from_list(admin_client, client):
 
     event_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/local-events/{event_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/local-events/{event_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1307,9 +1265,7 @@ def test_soft_deleted_local_event_excluded_from_search(admin_client, client):
 
     event_id = create_response.json()["id"]
 
-    delete_response = admin_client.delete(
-        f"/api/v1/local-events/{event_id}"
-    )
+    delete_response = admin_client.delete(f"/api/v1/local-events/{event_id}")
 
     assert delete_response.status_code == 200
 

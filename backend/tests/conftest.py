@@ -73,6 +73,7 @@ def client(db_session):
 
     app.dependency_overrides.clear()
 
+
 @pytest.fixture
 def admin_client(client, db_session):
     """FastAPI test client authenticated as an Admin user."""
@@ -100,9 +101,7 @@ def admin_client(client, db_session):
 
     token = response.json()["data"]["access_token"]
 
-    client.headers.update(
-        {"Authorization": f"Bearer {token}"}
-    )
+    client.headers.update({"Authorization": f"Bearer {token}"})
 
     return client
 

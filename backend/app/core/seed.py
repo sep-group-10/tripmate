@@ -201,17 +201,15 @@ def seed_destinations(db):
 
 
 def seed_transport_rates(db):
-    required_types = {
-        rate_data["transport_type"] for rate_data in TRANSPORT_RATES
-    }
+    required_types = {rate_data["transport_type"] for rate_data in TRANSPORT_RATES}
 
     db.query(TransportRate).filter(
         TransportRate.transport_type.notin_(required_types)
     ).delete(synchronize_session=False)
 
-    db.query(TransportRate).filter(
-        TransportRate.region == "General"
-    ).delete(synchronize_session=False)
+    db.query(TransportRate).filter(TransportRate.region == "General").delete(
+        synchronize_session=False
+    )
 
     for rate_data in TRANSPORT_RATES:
         existing = (
@@ -233,6 +231,7 @@ def seed_transport_rates(db):
         db.add(TransportRate(**rate_data))
 
     db.commit()
+
 
 def hash_password(password):
     return bcrypt.hashpw(
