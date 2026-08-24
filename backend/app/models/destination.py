@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,8 +38,18 @@ class Destination(Base):
         nullable=True,
     )
 
-    coordinates: Mapped[dict | None] = mapped_column(
-        JSON,
+    latitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
+    )
+
+    longitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
+    )
+
+    rating: Mapped[Decimal | None] = mapped_column(
+        Numeric(2, 1),
         nullable=True,
     )
 

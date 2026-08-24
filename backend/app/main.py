@@ -3,6 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.tourism import (
+    attraction_router,
+    destination_router,
+    hotel_router,
+    local_event_router,
+    restaurant_router,
+)
 from app.core.database import get_db
 from app.core.exception_handlers import register_exception_handlers
 from app.routers import auth, users
@@ -19,6 +26,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(destination_router)
+app.include_router(attraction_router)
+app.include_router(hotel_router)
+app.include_router(restaurant_router)
+app.include_router(local_event_router)
 
 register_exception_handlers(app)
 

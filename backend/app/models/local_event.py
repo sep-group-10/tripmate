@@ -1,8 +1,8 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
@@ -16,19 +16,51 @@ class LocalEvent(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
+
     destination_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("destinations.id"),
         nullable=False,
     )
+
     name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
     )
 
-    category: Mapped[str] = mapped_column(
-        String(100),
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    latitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
         nullable=False,
+    )
+
+    longitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
+    )
+
+    photo_urls: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text),
+        nullable=True,
+    )
+
+    rating: Mapped[Decimal | None] = mapped_column(
+        Numeric(2, 1),
+        nullable=True,
+    )
+
+    opening_hours: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    duration_hours: Mapped[Decimal | None] = mapped_column(
+        Numeric(4, 2),
+        nullable=True,
     )
 
     entry_fee: Mapped[Decimal] = mapped_column(
@@ -40,4 +72,10 @@ class LocalEvent(Base):
     event_schedule: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
     )

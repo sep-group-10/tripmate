@@ -22,6 +22,7 @@ class Hotel(Base):
         ForeignKey("destinations.id"),
         nullable=False,
     )
+
     name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -32,9 +33,14 @@ class Hotel(Base):
         nullable=True,
     )
 
-    location: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
+    latitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
+    )
+
+    longitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
+        nullable=False,
     )
 
     price_per_night: Mapped[Decimal] = mapped_column(

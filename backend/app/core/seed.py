@@ -1,8 +1,17 @@
+import uuid
+from decimal import Decimal
+
+import bcrypt
+
 from app.core.database import SessionLocal
+from app.core.seed_tourism import seed_tourism
 from app.models.destination import Destination
+from app.models.transport_rate import TransportRate
+from app.models.user import User
 
 DESTINATIONS = [
     {
+        "id": uuid.UUID("83f7d353-8731-4663-8e79-1a54d473f6dd"),
         "name": "Kandy",
         "description": (
             "A cultural city in the Central Province, known for the "
@@ -10,10 +19,8 @@ DESTINATIONS = [
         ),
         "country": "Sri Lanka",
         "region": "Central Province",
-        "coordinates": {
-            "latitude": 7.2906,
-            "longitude": 80.6337,
-        },
+        "latitude": 7.2906,
+        "longitude": 80.6337,
         "is_active": True,
     },
     {
@@ -24,10 +31,8 @@ DESTINATIONS = [
         ),
         "country": "Sri Lanka",
         "region": "Western Province",
-        "coordinates": {
-            "latitude": 6.9271,
-            "longitude": 79.8612,
-        },
+        "latitude": 6.9271,
+        "longitude": 79.8612,
         "is_active": True,
     },
     {
@@ -38,35 +43,132 @@ DESTINATIONS = [
         ),
         "country": "Sri Lanka",
         "region": "Southern Province",
-        "coordinates": {
-            "latitude": 6.0535,
-            "longitude": 80.2210,
-        },
+        "latitude": 6.0535,
+        "longitude": 80.2210,
         "is_active": True,
     },
 ]
 
 
-def seed_destinations():
+TRANSPORT_RATES = [
+    {
+        "transport_type": "Taxi",
+        "cost_per_km": Decimal("1.50"),
+        "base_fare": Decimal("2.00"),
+    },
+    {
+        "transport_type": "Bus",
+        "cost_per_km": Decimal("0.30"),
+        "base_fare": Decimal("0.50"),
+    },
+    {
+        "transport_type": "Tuk-tuk",
+        "cost_per_km": Decimal("1.00"),
+        "base_fare": Decimal("1.50"),
+    },
+    {
+        "transport_type": "Train",
+        "cost_per_km": Decimal("0.20"),
+        "base_fare": Decimal("1.00"),
+    },
+]
+
+
+DEMO_USERS = [
+    {
+        "full_name": "Demo Tourist",
+        "email": "tourist@demo.com",
+        "password": "Demo1234",
+        "role": "tourist",
+    },
+    {
+        "full_name": "Demo Admin",
+        "email": "admin@demo.com",
+        "password": "Demo1234",
+        "role": "admin",
+    },
+    {
+        "full_name": "Demo Super Admin",
+        "email": "superadmin@demo.com",
+        "password": "Demo1234",
+        "role": "super_admin",
+    },
+]
+
+
+def seed_destinations(db):
+    for destination_data in DESTINATIONS:
+        existing = (
+            db.query(Destination)
+            .filter(Destination.name == destination_data["name"])
+            .first()
+        )
+
+        if existing:
+            print(f"Destination {destination_data['name']} already exists. Skipping.")
+            continue
+
+        db.add(Destination(**destination_data))
+
+    db.commit()
+
+
+def seed_transport_rates(db):
+    for rate_data in TRANSPORT_RATES:
+        existing = (
+            db.query(TransportRate)
+            .filter(TransportRate.transport_type == rate_data["transport_type"])
+            .first()
+        )
+
+        if existing:
+            print(
+                f"Transport rate {rate_data['transport_type']} "
+                "already exists. Skipping."
+            )
+            continue
+
+        db.add(TransportRate(**rate_data))
+
+    db.commit()
+
+
+def hash_password(password):
+    return bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
+
+
+def seed_demo_users(db):
+    for user_data in DEMO_USERS:
+        existing = db.query(User).filter(User.email == user_data["email"]).first()
+
+        if existing:
+            print(f"User {user_data['email']} already exists. Skipping.")
+            continue
+
+        db.add(
+            User(
+                full_name=user_data["full_name"],
+                email=user_data["email"],
+                password_hash=hash_password(user_data["password"]),
+                role=user_data["role"],
+                is_active=True,
+                is_email_verified=True,
+            )
+        )
+
+    db.commit()
+
+
+def seed_all():
     db = SessionLocal()
 
     try:
-        for destination_data in DESTINATIONS:
-            existing = (
-                db.query(Destination)
-                .filter(Destination.name == destination_data["name"])
-                .first()
-            )
-
-            if existing:
-                print(f"{destination_data['name']} already exists. Skipping.")
-                continue
-
-            destination = Destination(**destination_data)
-            db.add(destination)
-
-        db.commit()
-        print("Destination seeding completed successfully.")
+        seed_destinations(db)
+        seed_transport_rates(db)
+        seed_demo_users(db)
 
     except Exception:
         db.rollback()
@@ -75,6 +177,10 @@ def seed_destinations():
     finally:
         db.close()
 
+    seed_tourism()
+
+    print("Complete database seed finished successfully.")
+
 
 if __name__ == "__main__":
-    seed_destinations()
+    seed_all()
