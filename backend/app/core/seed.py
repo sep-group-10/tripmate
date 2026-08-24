@@ -1,4 +1,5 @@
 from decimal import Decimal
+import uuid
 
 import bcrypt
 
@@ -10,6 +11,7 @@ from app.models.user import User
 
 DESTINATIONS = [
     {
+        "id": uuid.UUID("83f7d353-8731-4663-8e79-1a54d473f6dd"),
         "name": "Kandy",
         "description": (
             "A cultural city in the Central Province, known for the "
