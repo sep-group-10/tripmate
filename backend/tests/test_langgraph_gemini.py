@@ -1,7 +1,15 @@
+import os
+
+import pytest
 from langchain_core.messages import HumanMessage
 
 from app.schemas.langgraph import GeminiResponse
 from app.services.langgraph.gemini_graph import gemini_graph
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("GOOGLE_API_KEY"),
+    reason="GOOGLE_API_KEY is not configured",
+)
 
 
 def test_langgraph_calls_gemini():

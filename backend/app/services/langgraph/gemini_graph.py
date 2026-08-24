@@ -21,25 +21,31 @@ class GeminiState(TypedDict):
     structured_response: GeminiResponse
 
 
-model = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0,
-).bind_tools([get_tripmate_status])
+def get_model():
+    return ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0,
+    ).bind_tools([get_tripmate_status])
 
-structured_model = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0,
-).with_structured_output(GeminiResponse)
+
+def get_structured_model():
+    return ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0,
+    ).with_structured_output(GeminiResponse)
+
 
 tool_node = ToolNode([get_tripmate_status])
 
 
 def call_gemini(state: GeminiState) -> dict:
+    model = get_model()
     response = model.invoke(state["messages"])
     return {"messages": [response]}
 
 
 def create_structured_response(state: GeminiState) -> dict:
+    structured_model = get_structured_model()
     response = structured_model.invoke(state["messages"])
 
     return {
