@@ -129,3 +129,9 @@ logs/
 *.temp
 *.bak
 *~
+
+# ============================================================
+# Design reference (Claude Design scratch material, not source)
+# ============================================================
+
+design-reference/
