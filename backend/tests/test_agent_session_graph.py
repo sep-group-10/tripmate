@@ -58,6 +58,7 @@ def test_agent_session_flows_through_langgraph():
     assert updated_session.iteration_count == 1
     assert updated_session.status == AgentSessionStatus.COMPLETED
 
+
 def test_agent_session_supports_all_terminal_states():
     for status in AgentSessionStatus:
         session = AgentSession(

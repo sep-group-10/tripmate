@@ -8,9 +8,7 @@ def test_langgraph_calls_gemini():
     result = gemini_graph.invoke(
         {
             "messages": [
-                HumanMessage(
-                    content="Reply with exactly: LangGraph Gemini works."
-                )
+                HumanMessage(content="Reply with exactly: LangGraph Gemini works.")
             ]
         }
     )
@@ -39,6 +37,4 @@ def test_gemini_can_call_tool():
     assert isinstance(structured_response, GeminiResponse)
     assert structured_response.status
     assert structured_response.message
-    assert "TripMate LangGraph integration is working." in (
-        structured_response.message
-    )
+    assert "TripMate LangGraph integration is working." in (structured_response.message)
