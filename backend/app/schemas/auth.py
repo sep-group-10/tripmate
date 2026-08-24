@@ -23,3 +23,16 @@ class LoginData(BaseModel):
     access_token: str
     refresh_token: str
     user: UserResponse
+
+
+class RefreshRequest(BaseModel):
+    """Request body for POST /auth/refresh."""
+
+    refresh_token: str
+
+
+class RefreshData(BaseModel):
+    """Response data for a successful token refresh."""
+
+    access_token: str
+    refresh_token: str

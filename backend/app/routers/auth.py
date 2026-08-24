@@ -1,3 +1,7 @@
+import uuid
+from datetime import datetime, timezone
+
+import jwt
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -8,6 +12,8 @@ from app.core.security import (
     ACCESS_TOKEN_COOKIE_NAME,
     ACCESS_TOKEN_EXPIRE_MINUTES,
     COOKIE_SECURE,
+    JWT_ALGORITHM,
+    JWT_SECRET_KEY,
     create_access_token,
     create_refresh_token,
     hash_password,
@@ -15,7 +21,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
-from app.schemas.auth import LoginData, LoginRequest
+from app.schemas.auth import LoginData, LoginRequest, RefreshData, RefreshRequest
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest
 
@@ -23,8 +29,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _issue_access_token_cookie(response: Response, access_token: str) -> None:
-    """Set the access token as an httpOnly cookie for web clients.
-    Shared by register and login so both issue the same cookie."""
+    """Set the access token as an httpOnly cookie so it is inaccessible
+    to client-side scripts."""
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,
         value=access_token,
@@ -35,11 +41,10 @@ def _issue_access_token_cookie(response: Response, access_token: str) -> None:
     )
 
 
-def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
-    """Create an access token + refresh token pair for a user, persist
-    the refresh token (hashed) on the user row, set the access token
-    cookie, and return the data for the response body. Shared by
-    register and login since both log the user in the same way."""
+def _rotate_tokens(user: User, db: Session) -> tuple[str, str]:
+    """Issue a new access/refresh token pair and store only the refresh
+    token's hash, so a database leak cannot be used to authenticate.
+    Overwriting the stored hash invalidates the previous refresh token."""
     access_token = create_access_token(user.id, user.role)
     refresh_token, refresh_token_expiry = create_refresh_token(user.id)
 
@@ -49,8 +54,14 @@ def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
     db.commit()
     db.refresh(user)
 
-    _issue_access_token_cookie(response, access_token)
+    return access_token, refresh_token
 
+
+def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
+    """Issue tokens for a login/register, set the access token cookie,
+    and return the full response data including the user."""
+    access_token, refresh_token = _rotate_tokens(user, db)
+    _issue_access_token_cookie(response, access_token)
     return LoginData(access_token=access_token, refresh_token=refresh_token, user=user)
 
 
@@ -62,9 +73,8 @@ def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
 def register(
     payload: UserRegisterRequest, response: Response, db: Session = Depends(get_db)
 ):
-    """Register a new user with a hashed password and the default
-    TOURIST role, then log them in immediately (same token issuance as
-    /login). Rejects the request if the email is already taken."""
+    """Register a new user with the default role and log them in
+    immediately."""
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user is not None:
         raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
@@ -78,9 +88,8 @@ def register(
     try:
         db.commit()
     except IntegrityError as exc:
-        # Backstop for the race where two requests pass the exists-check
-        # above at the same time; the database's unique constraint is
-        # the real guard, this just turns the failure into a clean 409.
+        # Concurrent duplicate registrations are caught by the unique
+        # constraint, not the check above.
         db.rollback()
         raise ApiError(
             ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
@@ -90,23 +99,19 @@ def register(
     return ApiResponse(data=_issue_tokens(user, response, db))
 
 
-# Hashed once at import time so a login attempt against a nonexistent
-# email still runs a real bcrypt comparison, keeping response time
-# consistent regardless of whether the email exists.
+# Used to keep response time constant when the email does not exist.
 _DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
 
 
 @router.post("/login", response_model=ApiResponse[LoginData])
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    """Verify email/password, then issue an access token: set as an
-    httpOnly cookie for web clients and also returned in the response
-    body for mobile clients."""
+    """Verify credentials and issue tokens for the session."""
     user = db.query(User).filter(User.email == payload.email).first()
     password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
     password_is_valid = verify_password(payload.password, password_hash)
 
-    # Same generic error for "no such email" and "wrong password" so a
-    # caller can't use this endpoint to find out which emails exist.
+    # Same error for unknown email and wrong password, to avoid
+    # revealing which emails are registered.
     if user is None or not password_is_valid:
         raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password")
 
@@ -116,9 +121,62 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     return ApiResponse(data=_issue_tokens(user, response, db))
 
 
+@router.post("/refresh", response_model=ApiResponse[RefreshData])
+def refresh(payload: RefreshRequest, response: Response, db: Session = Depends(get_db)):
+    """Exchange a valid refresh token for a new access/refresh pair.
+    The old refresh token is invalidated in the same call."""
+    try:
+        claims = jwt.decode(
+            payload.refresh_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM]
+        )
+    except jwt.InvalidTokenError as exc:
+        raise ApiError(
+            ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token is invalid or expired"
+        ) from exc
+
+    if claims.get("type") != "refresh":
+        raise ApiError(
+            ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token is invalid or expired"
+        )
+
+    try:
+        user_id = uuid.UUID(claims.get("sub", ""))
+    except ValueError as exc:
+        raise ApiError(
+            ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token is invalid or expired"
+        ) from exc
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    # The stored hash must match and not be past its own expiry, so a
+    # token that was already rotated out (or never issued) is rejected
+    # even though its signature and JWT expiry are still valid.
+    token_hash = hash_refresh_token(payload.refresh_token)
+    is_valid = (
+        user is not None
+        and user.refresh_token == token_hash
+        and user.refresh_token_expiry is not None
+        and user.refresh_token_expiry > datetime.now(timezone.utc)
+    )
+    if not is_valid:
+        raise ApiError(
+            ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token is invalid or expired"
+        )
+
+    if not user.is_active:
+        raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
+
+    access_token, new_refresh_token = _rotate_tokens(user, db)
+    _issue_access_token_cookie(response, access_token)
+
+    return ApiResponse(
+        data=RefreshData(access_token=access_token, refresh_token=new_refresh_token)
+    )
+
+
 @router.post("/logout", response_model=ApiResponse[dict])
 def logout(response: Response):
-    """Clear the access token cookie to end the current web session."""
+    """Clear the access token cookie to end the session."""
     response.delete_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,
         httponly=True,

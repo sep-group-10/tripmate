@@ -1,5 +1,6 @@
 import hashlib
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -52,6 +53,10 @@ def create_refresh_token(user_id: uuid.UUID) -> tuple[str, datetime]:
     payload = {
         "sub": str(user_id),
         "type": "refresh",
+        # Guarantees a distinct token even if issued in the same second
+        # as a previous one, since JWT timestamps have only second
+        # precision and would otherwise collide on rapid rotation.
+        "jti": secrets.token_urlsafe(16),
         "iat": now,
         "exp": expires_at,
     }
