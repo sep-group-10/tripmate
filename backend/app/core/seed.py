@@ -1,9 +1,9 @@
 import uuid
 from decimal import Decimal
 
-import bcrypt
-
 from app.core.database import SessionLocal
+from app.core.roles import Role
+from app.core.security import hash_password
 from app.core.seed_tourism import seed_tourism
 from app.models.destination import Destination
 from app.models.transport_rate import TransportRate
@@ -166,19 +166,19 @@ DEMO_USERS = [
         "full_name": "Demo Tourist",
         "email": "tourist@demo.com",
         "password": "Demo1234",
-        "role": "tourist",
+        "role": Role.TOURIST.value,
     },
     {
         "full_name": "Demo Admin",
         "email": "admin@demo.com",
         "password": "Demo1234",
-        "role": "admin",
+        "role": Role.ADMIN.value,
     },
     {
         "full_name": "Demo Super Admin",
         "email": "superadmin@demo.com",
         "password": "Demo1234",
-        "role": "super_admin",
+        "role": Role.SUPER_ADMIN.value,
     },
 ]
 
@@ -231,13 +231,6 @@ def seed_transport_rates(db):
         db.add(TransportRate(**rate_data))
 
     db.commit()
-
-
-def hash_password(password):
-    return bcrypt.hashpw(
-        password.encode("utf-8"),
-        bcrypt.gensalt(),
-    ).decode("utf-8")
 
 
 def seed_demo_users(db):
