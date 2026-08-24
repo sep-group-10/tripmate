@@ -1,5 +1,5 @@
-def test_create_destination(client):
-    response = client.post(
+def test_create_destination(admin_client):
+    response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Test Destination",
@@ -20,8 +20,8 @@ def test_create_destination(client):
     assert data["rating"] == "4.5"
 
 
-def test_get_destination(client):
-    create_response = client.post(
+def test_get_destination(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Test Get Destination",
@@ -42,8 +42,8 @@ def test_get_destination(client):
     assert response.json()["name"] == "Test Get Destination"
 
 
-def test_update_destination(client):
-    create_response = client.post(
+def test_update_destination(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Destination Before Update",
@@ -57,7 +57,7 @@ def test_update_destination(client):
     assert create_response.status_code == 201
     destination_id = create_response.json()["id"]
 
-    response = client.patch(
+    response = admin_client.patch(
         f"/api/v1/destinations/{destination_id}",
         json={
             "name": "Destination After Update",
@@ -70,8 +70,8 @@ def test_update_destination(client):
     assert response.json()["rating"] == "4.8"
 
 
-def test_soft_delete_destination(client):
-    create_response = client.post(
+def test_soft_delete_destination(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Destination To Delete",
@@ -85,7 +85,7 @@ def test_soft_delete_destination(client):
     assert create_response.status_code == 201
     destination_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/destinations/{destination_id}")
+    delete_response = admin_client.delete(f"/api/v1/destinations/{destination_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -95,8 +95,8 @@ def test_soft_delete_destination(client):
     assert get_response.status_code == 404
 
 
-def test_invalid_destination_rating(client):
-    response = client.post(
+def test_invalid_destination_rating(admin_client):
+    response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Invalid Destination",
@@ -110,8 +110,8 @@ def test_invalid_destination_rating(client):
     assert response.status_code == 400
 
 
-def test_create_attraction(client):
-    response = client.post(
+def test_create_attraction(admin_client):
+    response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -134,8 +134,8 @@ def test_create_attraction(client):
     assert data["rating"] == "4.5"
 
 
-def test_get_attraction(client):
-    create_response = client.post(
+def test_get_attraction(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -158,8 +158,8 @@ def test_get_attraction(client):
     assert response.json()["name"] == "Test Get Attraction"
 
 
-def test_update_attraction(client):
-    create_response = client.post(
+def test_update_attraction(admin_client):
+    create_response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -175,7 +175,7 @@ def test_update_attraction(client):
     assert create_response.status_code == 201
     attraction_id = create_response.json()["id"]
 
-    response = client.patch(
+    response = admin_client.patch(
         f"/api/v1/attractions/{attraction_id}",
         json={
             "name": "Attraction After Update",
@@ -188,8 +188,8 @@ def test_update_attraction(client):
     assert response.json()["rating"] == "4.8"
 
 
-def test_soft_delete_attraction(client):
-    create_response = client.post(
+def test_soft_delete_attraction(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -205,7 +205,7 @@ def test_soft_delete_attraction(client):
     assert create_response.status_code == 201
     attraction_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/attractions/{attraction_id}")
+    delete_response = admin_client.delete(f"/api/v1/attractions/{attraction_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -215,8 +215,8 @@ def test_soft_delete_attraction(client):
     assert get_response.status_code == 404
 
 
-def test_invalid_attraction_rating(client):
-    response = client.post(
+def test_invalid_attraction_rating(admin_client):
+    response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -232,8 +232,8 @@ def test_invalid_attraction_rating(client):
     assert response.status_code == 400
 
 
-def test_create_hotel(client):
-    response = client.post(
+def test_create_hotel(admin_client):
+    response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -256,8 +256,8 @@ def test_create_hotel(client):
     assert data["rating"] == "4.5"
 
 
-def test_get_hotel(client):
-    create_response = client.post(
+def test_get_hotel(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -279,8 +279,8 @@ def test_get_hotel(client):
     assert response.json()["name"] == "Test Get Hotel"
 
 
-def test_update_hotel(client):
-    create_response = client.post(
+def test_update_hotel(admin_client):
+    create_response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -295,7 +295,7 @@ def test_update_hotel(client):
     assert create_response.status_code == 201
     hotel_id = create_response.json()["id"]
 
-    response = client.patch(
+    response = admin_client.patch(
         f"/api/v1/hotels/{hotel_id}",
         json={
             "name": "Hotel After Update",
@@ -310,8 +310,8 @@ def test_update_hotel(client):
     assert response.json()["rating"] == "4.8"
 
 
-def test_soft_delete_hotel(client):
-    create_response = client.post(
+def test_soft_delete_hotel(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -326,7 +326,7 @@ def test_soft_delete_hotel(client):
     assert create_response.status_code == 201
     hotel_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/hotels/{hotel_id}")
+    delete_response = admin_client.delete(f"/api/v1/hotels/{hotel_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -336,8 +336,8 @@ def test_soft_delete_hotel(client):
     assert get_response.status_code == 404
 
 
-def test_invalid_hotel_rating(client):
-    response = client.post(
+def test_invalid_hotel_rating(admin_client):
+    response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -352,8 +352,8 @@ def test_invalid_hotel_rating(client):
     assert response.status_code == 400
 
 
-def test_create_restaurant(client):
-    response = client.post(
+def test_create_restaurant(admin_client):
+    response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -377,8 +377,8 @@ def test_create_restaurant(client):
     assert data["rating"] == "4.5"
 
 
-def test_get_restaurant(client):
-    create_response = client.post(
+def test_get_restaurant(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -405,8 +405,8 @@ def test_get_restaurant(client):
     assert data["name"] == "Test Get Restaurant"
 
 
-def test_update_restaurant(client):
-    create_response = client.post(
+def test_update_restaurant(admin_client):
+    create_response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -421,10 +421,9 @@ def test_update_restaurant(client):
     )
 
     assert create_response.status_code == 201
-
     restaurant_id = create_response.json()["id"]
 
-    response = client.patch(
+    response = admin_client.patch(
         f"/api/v1/restaurants/{restaurant_id}",
         json={
             "name": "Updated Restaurant",
@@ -443,8 +442,8 @@ def test_update_restaurant(client):
     assert data["avg_meal_cost"] == "18.00"
 
 
-def test_soft_delete_restaurant(client):
-    create_response = client.post(
+def test_soft_delete_restaurant(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -462,7 +461,7 @@ def test_soft_delete_restaurant(client):
 
     restaurant_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/restaurants/{restaurant_id}")
+    delete_response = admin_client.delete(f"/api/v1/restaurants/{restaurant_id}")
 
     assert delete_response.status_code == 200
 
@@ -471,8 +470,8 @@ def test_soft_delete_restaurant(client):
     assert get_response.status_code == 404
 
 
-def test_invalid_restaurant_rating(client):
-    response = client.post(
+def test_invalid_restaurant_rating(admin_client):
+    response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -491,8 +490,8 @@ def test_invalid_restaurant_rating(client):
     assert response.status_code == 400
 
 
-def test_create_local_event(client):
-    response = client.post(
+def test_create_local_event(admin_client):
+    response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -520,8 +519,8 @@ def test_create_local_event(client):
     assert data["rating"] == "4.5"
 
 
-def test_get_local_event(client):
-    create_response = client.post(
+def test_get_local_event(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -553,8 +552,8 @@ def test_get_local_event(client):
     assert data["name"] == "Test Get Local Event"
 
 
-def test_update_local_event(client):
-    create_response = client.post(
+def test_update_local_event(admin_client):
+    create_response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -577,7 +576,7 @@ def test_update_local_event(client):
 
     event_id = create_response.json()["id"]
 
-    response = client.patch(
+    response = admin_client.patch(
         f"/api/v1/local-events/{event_id}",
         json={
             "name": "Updated Local Event",
@@ -598,8 +597,8 @@ def test_update_local_event(client):
     assert data["entry_fee"] == "12.00"
 
 
-def test_soft_delete_local_event(client):
-    create_response = client.post(
+def test_soft_delete_local_event(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -622,7 +621,7 @@ def test_soft_delete_local_event(client):
 
     event_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/local-events/{event_id}")
+    delete_response = admin_client.delete(f"/api/v1/local-events/{event_id}")
 
     assert delete_response.status_code == 200
 
@@ -631,8 +630,8 @@ def test_soft_delete_local_event(client):
     assert get_response.status_code == 404
 
 
-def test_invalid_local_event_rating(client):
-    response = client.post(
+def test_invalid_local_event_rating(admin_client):
+    response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -701,6 +700,7 @@ def test_search_restaurants_case_insensitive_partial(client):
 
 def test_search_local_events_case_insensitive_partial(client):
     response = client.get("/api/v1/local-events?search=festival")
+
     assert response.status_code == 200
 
     items = response.json()
@@ -933,8 +933,8 @@ def test_filter_local_events_by_destination(client):
         assert event["destination_id"] == destination_id
 
 
-def test_soft_deleted_destination_excluded_from_list(client):
-    create_response = client.post(
+def test_soft_deleted_destination_excluded_from_list(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Deleted Test Destination",
@@ -951,7 +951,7 @@ def test_soft_deleted_destination_excluded_from_list(client):
 
     destination_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/destinations/{destination_id}")
+    delete_response = admin_client.delete(f"/api/v1/destinations/{destination_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -969,8 +969,8 @@ def test_soft_deleted_destination_excluded_from_list(client):
     assert destination_id not in returned_ids
 
 
-def test_soft_deleted_destination_excluded_from_search(client):
-    create_response = client.post(
+def test_soft_deleted_destination_excluded_from_search(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/destinations",
         json={
             "name": "Deleted Search Destination",
@@ -987,7 +987,7 @@ def test_soft_deleted_destination_excluded_from_search(client):
 
     destination_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/destinations/{destination_id}")
+    delete_response = admin_client.delete(f"/api/v1/destinations/{destination_id}")
 
     assert delete_response.status_code == 200
 
@@ -1003,8 +1003,8 @@ def test_soft_deleted_destination_excluded_from_search(client):
     assert all(item["id"] != destination_id for item in items)
 
 
-def test_soft_deleted_attraction_excluded_from_list(client):
-    create_response = client.post(
+def test_soft_deleted_attraction_excluded_from_list(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1021,7 +1021,7 @@ def test_soft_deleted_attraction_excluded_from_list(client):
 
     attraction_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/attractions/{attraction_id}")
+    delete_response = admin_client.delete(f"/api/v1/attractions/{attraction_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1035,8 +1035,8 @@ def test_soft_deleted_attraction_excluded_from_list(client):
     assert all(item["id"] != attraction_id for item in items)
 
 
-def test_soft_deleted_attraction_excluded_from_search(client):
-    create_response = client.post(
+def test_soft_deleted_attraction_excluded_from_search(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/attractions",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1053,7 +1053,7 @@ def test_soft_deleted_attraction_excluded_from_search(client):
 
     attraction_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/attractions/{attraction_id}")
+    delete_response = admin_client.delete(f"/api/v1/attractions/{attraction_id}")
 
     assert delete_response.status_code == 200
 
@@ -1069,8 +1069,8 @@ def test_soft_deleted_attraction_excluded_from_search(client):
     assert all(item["id"] != attraction_id for item in items)
 
 
-def test_soft_deleted_hotel_excluded_from_list(client):
-    create_response = client.post(
+def test_soft_deleted_hotel_excluded_from_list(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1087,7 +1087,7 @@ def test_soft_deleted_hotel_excluded_from_list(client):
 
     hotel_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/hotels/{hotel_id}")
+    delete_response = admin_client.delete(f"/api/v1/hotels/{hotel_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1101,8 +1101,8 @@ def test_soft_deleted_hotel_excluded_from_list(client):
     assert all(item["id"] != hotel_id for item in items)
 
 
-def test_soft_deleted_hotel_excluded_from_search(client):
-    create_response = client.post(
+def test_soft_deleted_hotel_excluded_from_search(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/hotels",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1119,7 +1119,7 @@ def test_soft_deleted_hotel_excluded_from_search(client):
 
     hotel_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/hotels/{hotel_id}")
+    delete_response = admin_client.delete(f"/api/v1/hotels/{hotel_id}")
 
     assert delete_response.status_code == 200
 
@@ -1135,8 +1135,8 @@ def test_soft_deleted_hotel_excluded_from_search(client):
     assert all(item["id"] != hotel_id for item in items)
 
 
-def test_soft_deleted_restaurant_excluded_from_list(client):
-    create_response = client.post(
+def test_soft_deleted_restaurant_excluded_from_list(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1154,7 +1154,7 @@ def test_soft_deleted_restaurant_excluded_from_list(client):
 
     restaurant_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/restaurants/{restaurant_id}")
+    delete_response = admin_client.delete(f"/api/v1/restaurants/{restaurant_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1168,8 +1168,8 @@ def test_soft_deleted_restaurant_excluded_from_list(client):
     assert all(item["id"] != restaurant_id for item in items)
 
 
-def test_soft_deleted_restaurant_excluded_from_search(client):
-    create_response = client.post(
+def test_soft_deleted_restaurant_excluded_from_search(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/restaurants",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1187,7 +1187,7 @@ def test_soft_deleted_restaurant_excluded_from_search(client):
 
     restaurant_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/restaurants/{restaurant_id}")
+    delete_response = admin_client.delete(f"/api/v1/restaurants/{restaurant_id}")
 
     assert delete_response.status_code == 200
 
@@ -1203,8 +1203,8 @@ def test_soft_deleted_restaurant_excluded_from_search(client):
     assert all(item["id"] != restaurant_id for item in items)
 
 
-def test_soft_deleted_local_event_excluded_from_list(client):
-    create_response = client.post(
+def test_soft_deleted_local_event_excluded_from_list(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1227,7 +1227,7 @@ def test_soft_deleted_local_event_excluded_from_list(client):
 
     event_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/local-events/{event_id}")
+    delete_response = admin_client.delete(f"/api/v1/local-events/{event_id}")
 
     assert delete_response.status_code == 200
     assert delete_response.json()["is_active"] is False
@@ -1241,8 +1241,8 @@ def test_soft_deleted_local_event_excluded_from_list(client):
     assert all(item["id"] != event_id for item in items)
 
 
-def test_soft_deleted_local_event_excluded_from_search(client):
-    create_response = client.post(
+def test_soft_deleted_local_event_excluded_from_search(admin_client, client):
+    create_response = admin_client.post(
         "/api/v1/local-events",
         json={
             "destination_id": "83f7d353-8731-4663-8e79-1a54d473f6dd",
@@ -1265,7 +1265,7 @@ def test_soft_deleted_local_event_excluded_from_search(client):
 
     event_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/api/v1/local-events/{event_id}")
+    delete_response = admin_client.delete(f"/api/v1/local-events/{event_id}")
 
     assert delete_response.status_code == 200
 
