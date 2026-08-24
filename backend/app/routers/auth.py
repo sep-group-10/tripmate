@@ -9,7 +9,9 @@ from app.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     COOKIE_SECURE,
     create_access_token,
+    create_refresh_token,
     hash_password,
+    hash_refresh_token,
     verify_password,
 )
 from app.models.user import User
@@ -31,6 +33,25 @@ def _issue_access_token_cookie(response: Response, access_token: str) -> None:
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
+
+
+def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
+    """Create an access token + refresh token pair for a user, persist
+    the refresh token (hashed) on the user row, set the access token
+    cookie, and return the data for the response body. Shared by
+    register and login since both log the user in the same way."""
+    access_token = create_access_token(user.id, user.role)
+    refresh_token, refresh_token_expiry = create_refresh_token(user.id)
+
+    user.refresh_token = hash_refresh_token(refresh_token)
+    user.refresh_token_expiry = refresh_token_expiry
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    _issue_access_token_cookie(response, access_token)
+
+    return LoginData(access_token=access_token, refresh_token=refresh_token, user=user)
 
 
 @router.post(
@@ -66,10 +87,7 @@ def register(
         ) from exc
     db.refresh(user)
 
-    access_token = create_access_token(user.id, user.role)
-    _issue_access_token_cookie(response, access_token)
-
-    return ApiResponse(data=LoginData(access_token=access_token, user=user))
+    return ApiResponse(data=_issue_tokens(user, response, db))
 
 
 # Hashed once at import time so a login attempt against a nonexistent
@@ -95,10 +113,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if not user.is_active:
         raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
 
-    access_token = create_access_token(user.id, user.role)
-    _issue_access_token_cookie(response, access_token)
-
-    return ApiResponse(data=LoginData(access_token=access_token, user=user))
+    return ApiResponse(data=_issue_tokens(user, response, db))
 
 
 @router.post("/logout", response_model=ApiResponse[dict])

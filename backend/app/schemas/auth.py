@@ -21,4 +21,5 @@ class LoginData(BaseModel):
     """Response data for a successful login."""
 
     access_token: str
+    refresh_token: str
     user: UserResponse
