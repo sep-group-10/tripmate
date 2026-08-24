@@ -73,6 +73,39 @@ def client(db_session):
 
     app.dependency_overrides.clear()
 
+@pytest.fixture
+def admin_client(client, db_session):
+    """FastAPI test client authenticated as an Admin user."""
+
+    admin = User(
+        full_name="Tourism Test Admin",
+        email="tourism-admin@example.com",
+        password_hash=hash_password("adminpassword123"),
+        role="ADMIN",
+    )
+
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": admin.email,
+            "password": "adminpassword123",
+        },
+    )
+
+    assert response.status_code == 200
+
+    token = response.json()["data"]["access_token"]
+
+    client.headers.update(
+        {"Authorization": f"Bearer {token}"}
+    )
+
+    return client
+
 
 @pytest.fixture
 def existing_user(db_session):

@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.dependencies import require_role
+from app.core.roles import Role
 from app.models.attraction import Attraction
 from app.models.destination import Destination
 from app.models.hotel import Hotel
@@ -65,6 +67,7 @@ local_event_router = APIRouter(
     "",
     response_model=DestinationResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def create_destination(
     destination_data: DestinationCreate,
@@ -152,6 +155,7 @@ def get_destination(
 @destination_router.patch(
     "/{destination_id}",
     response_model=DestinationResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def update_destination(
     destination_id: uuid.UUID,
@@ -193,6 +197,7 @@ def update_destination(
 @destination_router.delete(
     "/{destination_id}",
     response_model=DestinationResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def delete_destination(
     destination_id: uuid.UUID,
@@ -236,6 +241,7 @@ def delete_destination(
     "",
     response_model=AttractionResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def create_attraction(
     attraction_data: AttractionCreate,
@@ -340,6 +346,7 @@ def get_attraction(
 @attraction_router.patch(
     "/{attraction_id}",
     response_model=AttractionResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def update_attraction(
     attraction_id: uuid.UUID,
@@ -403,6 +410,7 @@ def update_attraction(
 @attraction_router.delete(
     "/{attraction_id}",
     response_model=AttractionResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def delete_attraction(
     attraction_id: uuid.UUID,
@@ -446,6 +454,7 @@ def delete_attraction(
     "",
     response_model=HotelResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def create_hotel(
     hotel_data: HotelCreate,
@@ -550,6 +559,7 @@ def get_hotel(
 @hotel_router.patch(
     "/{hotel_id}",
     response_model=HotelResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def update_hotel(
     hotel_id: uuid.UUID,
@@ -613,6 +623,7 @@ def update_hotel(
 @hotel_router.delete(
     "/{hotel_id}",
     response_model=HotelResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def delete_hotel(
     hotel_id: uuid.UUID,
@@ -656,6 +667,7 @@ def delete_hotel(
     "",
     response_model=RestaurantResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def create_restaurant(
     restaurant_data: RestaurantCreate,
@@ -760,6 +772,7 @@ def get_restaurant(
 @restaurant_router.patch(
     "/{restaurant_id}",
     response_model=RestaurantResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def update_restaurant(
     restaurant_id: uuid.UUID,
@@ -823,6 +836,7 @@ def update_restaurant(
 @restaurant_router.delete(
     "/{restaurant_id}",
     response_model=RestaurantResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def delete_restaurant(
     restaurant_id: uuid.UUID,
@@ -866,6 +880,7 @@ def delete_restaurant(
     "",
     response_model=LocalEventResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def create_local_event(
     event_data: LocalEventCreate,
@@ -970,6 +985,7 @@ def get_local_event(
 @local_event_router.patch(
     "/{event_id}",
     response_model=LocalEventResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def update_local_event(
     event_id: uuid.UUID,
@@ -1033,6 +1049,7 @@ def update_local_event(
 @local_event_router.delete(
     "/{event_id}",
     response_model=LocalEventResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 def delete_local_event(
     event_id: uuid.UUID,
