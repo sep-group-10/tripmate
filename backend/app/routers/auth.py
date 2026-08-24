@@ -21,7 +21,13 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
-from app.schemas.auth import LoginData, LoginRequest, RefreshData, RefreshRequest
+from app.schemas.auth import (
+    LoginData,
+    LoginRequest,
+    LogoutRequest,
+    RefreshData,
+    RefreshRequest,
+)
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest
 
@@ -175,8 +181,22 @@ def refresh(payload: RefreshRequest, response: Response, db: Session = Depends(g
 
 
 @router.post("/logout", response_model=ApiResponse[dict])
-def logout(response: Response):
-    """Clear the access token cookie to end the session."""
+def logout(
+    response: Response,
+    payload: LogoutRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """Clear the access token cookie and revoke the refresh token, so
+    neither can be used again after logout."""
+    if payload is not None and payload.refresh_token is not None:
+        token_hash = hash_refresh_token(payload.refresh_token)
+        user = db.query(User).filter(User.refresh_token == token_hash).first()
+        if user is not None:
+            user.refresh_token = None
+            user.refresh_token_expiry = None
+            db.add(user)
+            db.commit()
+
     response.delete_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,
         httponly=True,

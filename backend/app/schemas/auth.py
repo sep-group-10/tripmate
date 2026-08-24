@@ -36,3 +36,9 @@ class RefreshData(BaseModel):
 
     access_token: str
     refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Request body for POST /auth/logout."""
+
+    refresh_token: str | None = None
