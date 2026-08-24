@@ -1,3 +1,7 @@
+# This graph verifies the Gemini integration with LangGraph,
+# including Gemini tool calling and structured responses.
+# The main TripMate planning workflow is implemented separately
+# in planning_graph.py.
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -23,14 +27,14 @@ class GeminiState(TypedDict):
 
 def get_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         temperature=0,
     ).bind_tools([get_tripmate_status])
 
 
 def get_structured_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         temperature=0,
     ).with_structured_output(GeminiResponse)
 
@@ -45,8 +49,26 @@ def call_gemini(state: GeminiState) -> dict:
 
 
 def create_structured_response(state: GeminiState) -> dict:
+    # Gemini 3.6 Flash does not support model-prefill.
+    # Send the conversation as context inside a new user message instead.
     structured_model = get_structured_model()
-    response = structured_model.invoke(state["messages"])
+
+    conversation = "\n".join(
+        f"{message.type}: {message.content}" for message in state["messages"]
+    )
+
+    prompt = f"""
+Create the final TripMate response based on the conversation below.
+
+Conversation:
+{conversation}
+
+Return a structured response with:
+- status: a short status value
+- message: the final response for the user
+"""
+
+    response = structured_model.invoke(prompt)
 
     return {
         "structured_response": response,

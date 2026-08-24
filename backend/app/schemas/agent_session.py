@@ -15,5 +15,6 @@ class AgentSession(BaseModel):
     user_request: str
     trip_preferences: dict[str, Any] = Field(default_factory=dict)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
+    tool_execution_order: list[str] = Field(default_factory=list)
     iteration_count: int = 0
     status: AgentSessionStatus | None = None

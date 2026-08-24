@@ -57,3 +57,20 @@ def test_agent_session_can_be_updated():
     assert session.iteration_count == 1
     assert session.status == AgentSessionStatus.COMPLETED
     assert len(session.tool_results) == 1
+
+
+def test_agent_session_stores_tool_execution_order():
+    session = AgentSession(
+        user_request="Plan a trip to Kandy",
+        tool_execution_order=[
+            "preference_processor",
+            "candidate_retriever",
+            "scoring_engine",
+        ],
+    )
+
+    assert session.tool_execution_order == [
+        "preference_processor",
+        "candidate_retriever",
+        "scoring_engine",
+    ]
