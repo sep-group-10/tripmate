@@ -38,6 +38,10 @@ def create_access_token(user_id: uuid.UUID, role: str) -> str:
         "sub": str(user_id),
         "role": role,
         "type": "access",
+        # Guarantees a distinct token even if issued in the same second
+        # as a previous one, since JWT timestamps have only second
+        # precision.
+        "jti": secrets.token_urlsafe(16),
         "iat": now,
         "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     }
