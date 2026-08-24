@@ -5,7 +5,6 @@ import uuid
 from app.core.security import hash_password
 from app.models.user import User
 
-
 TEST_PASSWORD = "testpassword123"
 LOGIN_URL = "/api/v1/auth/login"
 

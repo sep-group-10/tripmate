@@ -10,7 +10,7 @@ def test_calculate_transport_cost_uses_regional_rate(db_session):
         db=db_session,
         transport_type="car",
         region="Western Province",
-        distance_km=Decimal("100"),
+        distance_km=Decimal(100),
     )
 
     assert result["minimum_cost"] == Decimal("136.80")
@@ -22,7 +22,7 @@ def test_calculate_transport_cost_returns_range(db_session):
         db=db_session,
         transport_type="train",
         region="Central Province",
-        distance_km=Decimal("100"),
+        distance_km=Decimal(100),
     )
 
     assert result["minimum_cost"] < result["maximum_cost"]
@@ -36,7 +36,7 @@ def test_calculate_transport_cost_rejects_negative_distance(db_session):
             db=db_session,
             transport_type="car",
             region="Western Province",
-            distance_km=Decimal("-10"),
+            distance_km=Decimal(-10),
         )
 
 
@@ -49,5 +49,5 @@ def test_calculate_transport_cost_requires_matching_region(db_session):
             db=db_session,
             transport_type="car",
             region="Unknown Province",
-            distance_km=Decimal("100"),
+            distance_km=Decimal(100),
         )
