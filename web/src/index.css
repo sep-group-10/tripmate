@@ -1,4 +1,48 @@
+@import url("https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
+
+/* Design tokens from design-reference/_ds/.../styles.css, exposed as Tailwind
+   v4 theme variables so screens use plain utility classes (bg-accent,
+   text-muted-600, rounded-card, ...) instead of hardcoded hex/px values.
+   Custom names (muted, ink, card, control) are used instead of overriding
+   Tailwind's built-in neutral/shadow-lg/etc. keys, since those differ in
+   value from this design system and are unrelated to it. --radius-lg is
+   skipped: Tailwind's stock 8px already matches this design's input radius. */
+@theme {
+  --color-bg: #eceded;
+  --color-surface: #ffffff;
+  --color-ink: #17191a;
+  --color-accent: #e8532b;
+  --color-accent-100: #fdefeb;
+  --color-accent-600: #cf4220;
+  --color-accent-700: #a9331a;
+  --color-border: #e2e4e5;
+  --color-divider: #dfe1e2;
+
+  --color-muted-300: #dfe1e2;
+  --color-muted-400: #c3c7c9;
+  --color-muted-500: #9aa0a3;
+  --color-muted-600: #767c80;
+  --color-muted-700: #565c60;
+  --color-muted-900: #17191a;
+
+  --color-success: #12a26a;
+  --color-success-100: #e7f7f0;
+  --color-danger: #d92d20;
+  --color-danger-100: #fdeceb;
+
+  --font-heading: "Schibsted Grotesk", system-ui, sans-serif;
+  --font-body: "Schibsted Grotesk", system-ui, sans-serif;
+
+  --radius-card: 22px;
+  --radius-pill: 999px;
+
+  --shadow-card:
+    0 4px 8px rgba(23, 25, 26, 0.04), 0 32px 64px -24px rgba(23, 25, 26, 0.22);
+  --shadow-control:
+    0 1px 2px rgba(23, 25, 26, 0.05), 0 2px 8px -4px rgba(23, 25, 26, 0.06);
+  --shadow-inset: inset 0 1px 2px rgba(23, 25, 26, 0.05);
+}
 
 body {
   margin: 0;
