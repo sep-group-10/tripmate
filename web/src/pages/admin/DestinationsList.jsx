@@ -52,10 +52,11 @@ const FORM_FIELDS = [
 ];
 
 function DestinationsList() {
-  const { destinations, addDestination } = useTourismData();
+  const { destinations, addDestination, updateDestination } = useTourismData();
   const [query, setQuery] = useState("");
   const [regionFilter, setRegionFilter] = useState("All");
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -69,9 +70,23 @@ function DestinationsList() {
       );
   }, [destinations, query, regionFilter]);
 
-  const handleAdd = (values) => {
-    addDestination(values);
-    setIsAddOpen(false);
+  const openAddForm = () => {
+    setEditingRecord(null);
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (record) => {
+    setEditingRecord(record);
+    setIsFormOpen(true);
+  };
+
+  const handleSubmit = (values) => {
+    if (editingRecord) {
+      updateDestination(editingRecord.id, values);
+    } else {
+      addDestination(values);
+    }
+    setIsFormOpen(false);
   };
 
   return (
@@ -107,7 +122,7 @@ function DestinationsList() {
         </select>
         <button
           type="button"
-          onClick={() => setIsAddOpen(true)}
+          onClick={openAddForm}
           className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
         >
           ＋ Add Destination
@@ -130,18 +145,24 @@ function DestinationsList() {
               { label: "Region", value: destination.region },
               { label: "Country", value: destination.country },
             ]}
+            onEdit={() => openEditForm(destination)}
           />
         ))}
       </div>
 
-      {isAddOpen && (
+      {isFormOpen && (
         <EntityFormModal
-          title="Add Destination"
-          subtitle="Add a new destination to the tourism database."
-          submitLabel="Save Destination"
+          title={editingRecord ? "Edit Destination" : "Add Destination"}
+          subtitle={
+            editingRecord
+              ? "Update this destination's details."
+              : "Add a new destination to the tourism database."
+          }
+          submitLabel={editingRecord ? "Save changes" : "Save Destination"}
           fields={FORM_FIELDS}
-          onSubmit={handleAdd}
-          onClose={() => setIsAddOpen(false)}
+          initialValues={editingRecord}
+          onSubmit={handleSubmit}
+          onClose={() => setIsFormOpen(false)}
         />
       )}
     </div>

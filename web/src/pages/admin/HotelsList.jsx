@@ -7,11 +7,12 @@ import { useTourismData } from "../../hooks/useTourismData";
 const TIER_OPTIONS = ["Luxury", "Boutique"];
 
 function HotelsList() {
-  const { hotels, destinations, addHotel } = useTourismData();
+  const { hotels, destinations, addHotel, updateHotel } = useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [tierFilter, setTierFilter] = useState("All");
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -80,13 +81,30 @@ function HotelsList() {
     [destinationNames],
   );
 
-  const handleAdd = ({ facilitiesText, ...values }) => {
+  const openAddForm = () => {
+    setEditingRecord(null);
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (record) => {
+    setEditingRecord({
+      ...record,
+      facilitiesText: (record.facilities || []).join(", "),
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleSubmit = ({ facilitiesText, ...values }) => {
     const facilities = facilitiesText
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    addHotel({ ...values, facilities });
-    setIsAddOpen(false);
+    if (editingRecord) {
+      updateHotel(editingRecord.id, { ...values, facilities });
+    } else {
+      addHotel({ ...values, facilities });
+    }
+    setIsFormOpen(false);
   };
 
   return (
@@ -135,7 +153,7 @@ function HotelsList() {
         </select>
         <button
           type="button"
-          onClick={() => setIsAddOpen(true)}
+          onClick={openAddForm}
           className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
         >
           ＋ Add Hotel
@@ -153,18 +171,24 @@ function HotelsList() {
             description={hotel.description}
             metrics={[{ label: "Price / night", value: hotel.pricePerNight }]}
             chips={hotel.facilities}
+            onEdit={() => openEditForm(hotel)}
           />
         ))}
       </div>
 
-      {isAddOpen && (
+      {isFormOpen && (
         <EntityFormModal
-          title="Add Hotel"
-          subtitle="Add a new hotel or stay to the accommodations database."
-          submitLabel="Save Hotel"
+          title={editingRecord ? "Edit Hotel" : "Add Hotel"}
+          subtitle={
+            editingRecord
+              ? "Update this hotel's details."
+              : "Add a new hotel or stay to the accommodations database."
+          }
+          submitLabel={editingRecord ? "Save changes" : "Save Hotel"}
           fields={formFields}
-          onSubmit={handleAdd}
-          onClose={() => setIsAddOpen(false)}
+          initialValues={editingRecord}
+          onSubmit={handleSubmit}
+          onClose={() => setIsFormOpen(false)}
         />
       )}
     </div>

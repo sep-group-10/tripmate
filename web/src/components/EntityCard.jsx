@@ -17,6 +17,7 @@ function EntityCard({
   description,
   metrics = [],
   chips,
+  onEdit,
 }) {
   return (
     <article className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-control">
@@ -75,6 +76,7 @@ function EntityCard({
       <div className="mt-auto flex gap-2 pt-1">
         <button
           type="button"
+          onClick={onEdit}
           className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
         >
           Edit

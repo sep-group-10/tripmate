@@ -8,22 +8,27 @@ const SELECT_CLASSES =
 
 const noValidate = () => "";
 
-/** Config-driven "Add [Entity]" form, shared by all 4 admin entity forms
- * (C3.2) instead of 4 near-identical hand-written forms — the entities'
- * fields differ, but the field TYPES (text/select/textarea) and the
- * required/optional/validate/submit/cancel plumbing are identical. Each
- * field is { name, label, type: 'text'|'select'|'textarea', options?,
- * placeholder?, required? }. */
+/** Config-driven "Add/Edit [Entity]" form, shared by all 4 admin entity
+ * forms (C3.2/C3.3) instead of near-identical hand-written forms per entity
+ * per mode — the entities' fields differ, but the field TYPES
+ * (text/select/textarea) and the required/optional/validate/submit/cancel
+ * plumbing are identical. Each field is { name, label, type:
+ * 'text'|'select'|'textarea', options?, placeholder?, required? }.
+ * Pass `initialValues` (an existing record) to open in edit mode — fields
+ * are pre-filled and the caller's onSubmit decides whether that means
+ * updating that record or creating a new one; this component doesn't know
+ * or care which mode it's in beyond what to pre-fill. */
 function EntityFormModal({
   title,
   subtitle,
   submitLabel,
   fields,
+  initialValues,
   onSubmit,
   onClose,
 }) {
-  const initialValues = Object.fromEntries(
-    fields.map((field) => [field.name, ""]),
+  const defaultValues = Object.fromEntries(
+    fields.map((field) => [field.name, initialValues?.[field.name] ?? ""]),
   );
   const validators = Object.fromEntries(
     fields.map((field) => [
@@ -33,7 +38,7 @@ function EntityFormModal({
   );
 
   const { values, errors, handleChange, handleBlur, validateAll } =
-    useFormValidation(initialValues, validators);
+    useFormValidation(defaultValues, validators);
 
   const handleSubmit = (event) => {
     event.preventDefault();

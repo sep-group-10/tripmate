@@ -14,11 +14,13 @@ const CATEGORY_TONES = {
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_TONES);
 
 function AttractionsList() {
-  const { attractions, destinations, addAttraction } = useTourismData();
+  const { attractions, destinations, addAttraction, updateAttraction } =
+    useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -93,9 +95,23 @@ function AttractionsList() {
     [destinationNames],
   );
 
-  const handleAdd = (values) => {
-    addAttraction(values);
-    setIsAddOpen(false);
+  const openAddForm = () => {
+    setEditingRecord(null);
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (record) => {
+    setEditingRecord(record);
+    setIsFormOpen(true);
+  };
+
+  const handleSubmit = (values) => {
+    if (editingRecord) {
+      updateAttraction(editingRecord.id, values);
+    } else {
+      addAttraction(values);
+    }
+    setIsFormOpen(false);
   };
 
   return (
@@ -144,7 +160,7 @@ function AttractionsList() {
         </select>
         <button
           type="button"
-          onClick={() => setIsAddOpen(true)}
+          onClick={openAddForm}
           className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
         >
           ＋ Add Attraction
@@ -168,18 +184,24 @@ function AttractionsList() {
               { label: "Entry", value: attraction.entry },
               { label: "Duration", value: attraction.duration },
             ]}
+            onEdit={() => openEditForm(attraction)}
           />
         ))}
       </div>
 
-      {isAddOpen && (
+      {isFormOpen && (
         <EntityFormModal
-          title="Add Attraction"
-          subtitle="Add a new attraction to the destination database."
-          submitLabel="Save Attraction"
+          title={editingRecord ? "Edit Attraction" : "Add Attraction"}
+          subtitle={
+            editingRecord
+              ? "Update this attraction's details."
+              : "Add a new attraction to the destination database."
+          }
+          submitLabel={editingRecord ? "Save changes" : "Save Attraction"}
           fields={formFields}
-          onSubmit={handleAdd}
-          onClose={() => setIsAddOpen(false)}
+          initialValues={editingRecord}
+          onSubmit={handleSubmit}
+          onClose={() => setIsFormOpen(false)}
         />
       )}
     </div>

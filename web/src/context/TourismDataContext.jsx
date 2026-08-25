@@ -13,10 +13,18 @@ function makeAdder(setItems, prefix) {
   };
 }
 
+function makeUpdater(setItems) {
+  return (id, fields) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...fields } : item)),
+    );
+  };
+}
+
 /** Holds the 4 admin tourism entities in state (seeded from the mock data
- * files) so records created via the admin "Add" forms actually show up in
+ * files) so records created/edited via the admin forms actually show up in
  * their list, not just get logged. C4 will swap this for real API calls;
- * the add* functions are the seam that work will land on. */
+ * the add/update functions are the seam that work will land on. */
 export function TourismDataProvider({ children }) {
   const [destinations, setDestinations] = useState(initialDestinations);
   const [attractions, setAttractions] = useState(initialAttractions);
@@ -32,6 +40,10 @@ export function TourismDataProvider({ children }) {
     addAttraction: makeAdder(setAttractions, "attr"),
     addHotel: makeAdder(setHotels, "hotel"),
     addRestaurant: makeAdder(setRestaurants, "rest"),
+    updateDestination: makeUpdater(setDestinations),
+    updateAttraction: makeUpdater(setAttractions),
+    updateHotel: makeUpdater(setHotels),
+    updateRestaurant: makeUpdater(setRestaurants),
   };
 
   return (

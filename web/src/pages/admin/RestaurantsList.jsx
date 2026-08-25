@@ -14,11 +14,13 @@ const CUISINE_TONES = {
 const CUISINE_OPTIONS = Object.keys(CUISINE_TONES);
 
 function RestaurantsList() {
-  const { restaurants, destinations, addRestaurant } = useTourismData();
+  const { restaurants, destinations, addRestaurant, updateRestaurant } =
+    useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [cuisineFilter, setCuisineFilter] = useState("All");
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -87,9 +89,23 @@ function RestaurantsList() {
     [destinationNames],
   );
 
-  const handleAdd = (values) => {
-    addRestaurant(values);
-    setIsAddOpen(false);
+  const openAddForm = () => {
+    setEditingRecord(null);
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (record) => {
+    setEditingRecord(record);
+    setIsFormOpen(true);
+  };
+
+  const handleSubmit = (values) => {
+    if (editingRecord) {
+      updateRestaurant(editingRecord.id, values);
+    } else {
+      addRestaurant(values);
+    }
+    setIsFormOpen(false);
   };
 
   return (
@@ -138,7 +154,7 @@ function RestaurantsList() {
         </select>
         <button
           type="button"
-          onClick={() => setIsAddOpen(true)}
+          onClick={openAddForm}
           className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
         >
           ＋ Add Restaurant
@@ -161,18 +177,24 @@ function RestaurantsList() {
               { label: "Hours", value: restaurant.hours },
               { label: "Price range", value: restaurant.priceRange },
             ]}
+            onEdit={() => openEditForm(restaurant)}
           />
         ))}
       </div>
 
-      {isAddOpen && (
+      {isFormOpen && (
         <EntityFormModal
-          title="Add Restaurant"
-          subtitle="Add a new restaurant to the destination database."
-          submitLabel="Save Restaurant"
+          title={editingRecord ? "Edit Restaurant" : "Add Restaurant"}
+          subtitle={
+            editingRecord
+              ? "Update this restaurant's details."
+              : "Add a new restaurant to the destination database."
+          }
+          submitLabel={editingRecord ? "Save changes" : "Save Restaurant"}
           fields={formFields}
-          onSubmit={handleAdd}
-          onClose={() => setIsAddOpen(false)}
+          initialValues={editingRecord}
+          onSubmit={handleSubmit}
+          onClose={() => setIsFormOpen(false)}
         />
       )}
     </div>
