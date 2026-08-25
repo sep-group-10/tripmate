@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { validateFullName } from "../utils/validation";
 import { loadProfile, saveProfile } from "../utils/profileStorage";
+import { useAuth } from "../hooks/useAuth";
+import api from "../services/api";
+import { parseApiError } from "../utils/apiError";
 
 const BUDGET_OPTIONS = ["Budget", "Moderate", "Luxury"];
 const PACE_OPTIONS = ["Relaxed", "Balanced", "Packed"];
@@ -15,10 +19,21 @@ const INTEREST_OPTIONS = [
   "Nightlife",
 ];
 
-// Email is deliberately excluded: the real PUT /users/me contract
-// (backend/app/schemas/profile.py) only allows full_name and preference
-// fields here, with extra="forbid" — sending email would reject the whole
-// request. Email is shown read-only for this reason, not as an oversight.
+// Email is deliberately excluded from the PUT body below: the real
+// PUT /users/me contract (backend/app/schemas/profile.py) only allows
+// full_name and preference fields, with extra="forbid" - sending email
+// would reject the whole request. Email is shown read-only for this
+// reason, not as an oversight.
+//
+// Account Settings (password change, email notifications) has no backend
+// fields at all yet - no password-change endpoint, no notifications
+// column on User - so it stays on the local-only profileStorage behavior
+// below. Travel Preferences partially overlaps the real contract
+// (typical_budget_range and interests both exist on ProfileUpdateRequest)
+// but "pace" has no backend equivalent, and this issue (C4.1) is scoped to
+// register -> login -> profile's Personal Information section only, so
+// full preference wiring is left for a later issue; it also stays
+// local-only for now.
 const personalValidators = { fullName: validateFullName };
 
 function useFlash(duration = 2000) {
@@ -79,31 +94,105 @@ function SavedMessage({ show, text }) {
 }
 
 function ProfilePage() {
-  const [profile, setProfile] = useState(() => loadProfile());
+  const { login, logout, clearSession } = useAuth();
+  const navigate = useNavigate();
+
+  // Personal information comes from the real GET /users/me on mount, kept
+  // separate from the localStorage-backed prefs below.
+  const [email, setEmail] = useState("");
+  const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
+  const [loadError, setLoadError] = useState("");
 
   const {
     values: personalValues,
     errors: personalErrors,
+    setValues: setPersonalValues,
+    setErrors: setPersonalErrors,
     handleChange: handlePersonalChange,
     handleBlur: handlePersonalBlur,
     validateAll: validatePersonalAll,
-  } = useFormValidation({ fullName: profile.fullName }, personalValidators);
+  } = useFormValidation({ fullName: "" }, personalValidators);
   const [savedProfile, flashProfile] = useFlash();
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | error
+  const [saveError, setSaveError] = useState("");
 
-  const handleSaveProfile = (event) => {
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/api/v1/users/me")
+      .then((response) => {
+        if (cancelled) return;
+        const me = response.data.data;
+        setPersonalValues({ fullName: me.full_name });
+        setEmail(me.email);
+        setLoadStatus("ready");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const { code, message } = parseApiError(error);
+        if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+          // See AuthContext's clearSession() comment: no refresh endpoint
+          // exists yet, so this is treated as a full session expiry.
+          // ProtectedRoute redirects to /login once isAuthenticated flips.
+          clearSession();
+          return;
+        }
+        setLoadError(message);
+        setLoadStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSaveProfile = async (event) => {
     event.preventDefault();
     const newErrors = validatePersonalAll();
     if (hasErrors(newErrors)) return;
-    setProfile(saveProfile({ fullName: personalValues.fullName }));
-    flashProfile();
+
+    setSaveStatus("saving");
+    setSaveError("");
+    try {
+      const response = await api.put("/api/v1/users/me", {
+        full_name: personalValues.fullName.trim(),
+      });
+      login(response.data.data);
+      flashProfile();
+      setSaveStatus("idle");
+    } catch (error) {
+      const { code, message, details } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      if (code === "VALIDATION_ERROR" && details.length > 0) {
+        const fieldErrors = {};
+        for (const detail of details) {
+          fieldErrors[
+            detail.field === "full_name" ? "fullName" : detail.field
+          ] = detail.message;
+        }
+        setPersonalErrors((prev) => ({ ...prev, ...fieldErrors }));
+      } else {
+        setSaveError(message);
+      }
+      setSaveStatus("error");
+    }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
+  const [localPrefs, setLocalPrefs] = useState(() => loadProfile());
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [savedPassword, flashPassword] = useFlash();
   const [emailNotifications, setEmailNotifications] = useState(
-    profile.emailNotifications,
+    localPrefs.emailNotifications,
   );
 
   const handleUpdatePassword = (event) => {
@@ -124,13 +213,13 @@ function ProfilePage() {
 
   const handleToggleEmailNotifications = () => {
     const next = saveProfile({ emailNotifications: !emailNotifications });
-    setProfile(next);
+    setLocalPrefs(next);
     setEmailNotifications(next.emailNotifications);
   };
 
-  const [budget, setBudget] = useState(profile.budget);
-  const [pace, setPace] = useState(profile.pace);
-  const [interests, setInterests] = useState(profile.interests);
+  const [budget, setBudget] = useState(localPrefs.budget);
+  const [pace, setPace] = useState(localPrefs.pace);
+  const [interests, setInterests] = useState(localPrefs.interests);
   const [savedPrefs, flashPrefs] = useFlash();
 
   const toggleInterest = (label) => {
@@ -143,7 +232,7 @@ function ProfilePage() {
 
   const handleSavePreferences = (event) => {
     event.preventDefault();
-    setProfile(saveProfile({ budget, pace, interests }));
+    setLocalPrefs(saveProfile({ budget, pace, interests }));
     flashPrefs();
   };
 
@@ -163,15 +252,24 @@ function ProfilePage() {
               preferences.
             </p>
           </div>
-          <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
-            Verified traveller
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
+              Verified traveller
+            </span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
+            >
+              Log out
+            </button>
+          </div>
         </header>
 
         <SectionCard title="Personal information" badge="Account">
           <div className="flex items-center gap-4">
             <span className="flex h-[60px] w-[60px] items-center justify-center rounded-pill bg-accent-100 text-xl font-semibold tracking-wide text-accent-700">
-              {initials(personalValues.fullName || profile.fullName)}
+              {initials(personalValues.fullName)}
             </span>
             <div className="flex flex-col gap-1.5">
               <div className="flex gap-2">
@@ -194,46 +292,65 @@ function ProfilePage() {
             </div>
           </div>
 
-          <form
-            onSubmit={handleSaveProfile}
-            noValidate
-            className="flex flex-col gap-6"
-          >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormInput
-                id="fullName"
-                label="Full name"
-                type="text"
-                value={personalValues.fullName}
-                onChange={handlePersonalChange("fullName")}
-                onBlur={handlePersonalBlur("fullName")}
-                error={personalErrors.fullName}
-              />
-              <div>
-                <FormInput
-                  id="email"
-                  label="Email address"
-                  type="email"
-                  value={profile.email}
-                  disabled
-                  className="opacity-70"
-                />
-                <span className="mt-1.5 block text-helper text-muted-600">
-                  Email address cannot be changed.
-                </span>
-              </div>
-            </div>
+          {loadStatus === "loading" && (
+            <p className="m-0 text-sm text-muted-600">Loading your profile…</p>
+          )}
 
-            <div className="flex items-center justify-end gap-3">
-              <SavedMessage show={savedProfile} text="Saved" />
-              <button
-                type="submit"
-                className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
-              >
-                Save changes
-              </button>
-            </div>
-          </form>
+          {loadStatus === "error" && (
+            <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+              {loadError}
+            </p>
+          )}
+
+          {loadStatus === "ready" && (
+            <form
+              onSubmit={handleSaveProfile}
+              noValidate
+              className="flex flex-col gap-6"
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormInput
+                  id="fullName"
+                  label="Full name"
+                  type="text"
+                  value={personalValues.fullName}
+                  onChange={handlePersonalChange("fullName")}
+                  onBlur={handlePersonalBlur("fullName")}
+                  error={personalErrors.fullName}
+                />
+                <div>
+                  <FormInput
+                    id="email"
+                    label="Email address"
+                    type="email"
+                    value={email}
+                    disabled
+                    className="opacity-70"
+                  />
+                  <span className="mt-1.5 block text-helper text-muted-600">
+                    Email address cannot be changed.
+                  </span>
+                </div>
+              </div>
+
+              {saveError && (
+                <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+                  {saveError}
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-3">
+                <SavedMessage show={savedProfile} text="Saved" />
+                <button
+                  type="submit"
+                  disabled={saveStatus === "saving"}
+                  className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {saveStatus === "saving" ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </form>
+          )}
         </SectionCard>
 
         <SectionCard title="Account settings" badge="Security">

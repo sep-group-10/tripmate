@@ -1,5 +1,6 @@
-import { NavLink, Outlet, Link } from "react-router-dom";
+import { NavLink, Outlet, Link, useNavigate } from "react-router-dom";
 import { MapPin } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", end: true },
@@ -10,6 +11,14 @@ const NAV_ITEMS = [
 ];
 
 function AdminLayout() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <div className="font-body grid min-h-screen grid-cols-[232px_minmax(0,1fr)] bg-bg text-ink">
       <aside className="sticky top-0 flex h-screen flex-col gap-6 p-4">
@@ -45,9 +54,18 @@ function AdminLayout() {
         </nav>
 
         <div className="mt-auto flex flex-col gap-3 border-t border-divider px-2 pt-4">
-          <Link to="/" className="text-left text-label text-muted-700">
-            Exit admin
-          </Link>
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/" className="text-left text-label text-muted-700">
+              Exit admin
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-left text-label text-muted-700"
+            >
+              Log out
+            </button>
+          </div>
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 flex-none items-center justify-center rounded-pill bg-accent-100 text-xs font-semibold text-accent-700">
               SA

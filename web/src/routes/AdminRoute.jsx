@@ -11,7 +11,11 @@ const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN"];
  * them to /login would be confusing since they're already logged in, just
  * not authorized for this section. */
 function AdminRoute({ children }) {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, loading } = useAuth();
+
+  // Wait for AuthContext's initial GET /users/me session-restore check
+  // before deciding - see ProtectedRoute for the same reasoning.
+  if (loading) return null;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

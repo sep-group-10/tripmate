@@ -45,7 +45,16 @@ export function useFormValidation(initialValues, validators) {
     setTouched({});
   };
 
-  return { values, errors, handleChange, handleBlur, validateAll, reset };
+  return {
+    values,
+    errors,
+    setValues,
+    setErrors,
+    handleChange,
+    handleBlur,
+    validateAll,
+    reset,
+  };
 }
 
 export function hasErrors(errorMap) {

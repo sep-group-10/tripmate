@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, MapPin } from "lucide-react";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { loginValidators } from "../utils/validation";
+import { useAuth } from "../hooks/useAuth";
+import api from "../services/api";
+import { parseApiError } from "../utils/apiError";
 
 const initialFormData = { email: "", password: "" };
 
 function LoginPage() {
   const { values, errors, handleChange, handleBlur, validateAll } =
     useFormValidation(initialFormData, loginValidators);
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | submitting | error
   const [submitError, setSubmitError] = useState("");
@@ -29,11 +34,23 @@ function LoginPage() {
 
     setStatus("submitting");
     setSubmitError("");
-    // UI-only for this issue: no real backend yet (that's C4), so every
-    // submission is treated as a failed login to prove the error-state UI.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setSubmitError("Invalid email or password");
-    setStatus("error");
+    try {
+      const response = await api.post("/api/v1/auth/login", {
+        email: values.email.trim(),
+        password: values.password,
+      });
+      login(response.data.data.user);
+      navigate("/profile", { replace: true });
+    } catch (error) {
+      // Covers INVALID_CREDENTIALS, ACCOUNT_DEACTIVATED, and anything else
+      // (network error, unexpected server error) with the backend's own
+      // message - login intentionally never shows field-specific errors,
+      // since email/password ambiguity is deliberate on the backend too
+      // (see auth.py: same generic error either way).
+      const { message } = parseApiError(error);
+      setSubmitError(message);
+      setStatus("error");
+    }
   };
 
   return (

@@ -1,8 +1,10 @@
 const STORAGE_KEY = "tripmate_profile";
 
+// Personal information (full name, email) now comes from the real
+// GET/PUT /api/v1/users/me API - see ProfilePage. This local store only
+// backs Account Settings and Travel Preferences, which don't have a full
+// real backend contract yet (see ProfilePage's header comment).
 export const defaultProfile = {
-  fullName: "Alex Jordan",
-  email: "alex@example.com",
   emailNotifications: true,
   budget: "Moderate",
   pace: "Relaxed",
