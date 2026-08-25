@@ -26,3 +26,13 @@ export const registerValidators = {
   email: validateEmail,
   password: validatePassword,
 };
+
+export function validateLoginPassword(value) {
+  if (!value) return "Password is required";
+  return "";
+}
+
+export const loginValidators = {
+  email: validateEmail,
+  password: validateLoginPassword,
+};
