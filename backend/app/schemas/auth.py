@@ -21,4 +21,24 @@ class LoginData(BaseModel):
     """Response data for a successful login."""
 
     access_token: str
+    refresh_token: str
     user: UserResponse
+
+
+class RefreshRequest(BaseModel):
+    """Request body for POST /auth/refresh."""
+
+    refresh_token: str
+
+
+class RefreshData(BaseModel):
+    """Response data for a successful token refresh."""
+
+    access_token: str
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Request body for POST /auth/logout."""
+
+    refresh_token: str | None = None
