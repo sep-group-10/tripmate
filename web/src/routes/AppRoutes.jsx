@@ -10,6 +10,7 @@ import AttractionsList from "../pages/admin/AttractionsList";
 import HotelsList from "../pages/admin/HotelsList";
 import RestaurantsList from "../pages/admin/RestaurantsList";
 import ProtectedRoute from "./ProtectedRoute";
+import AdminRoute from "./AdminRoute";
 
 function AppRoutes() {
   return (
@@ -28,9 +29,9 @@ function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute>
+          <AdminRoute>
             <AdminLayout />
-          </ProtectedRoute>
+          </AdminRoute>
         }
       >
         <Route index element={<AdminDashboard />} />
