@@ -27,14 +27,14 @@ class GeminiState(TypedDict):
 
 def get_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-2.5-flash",
         temperature=0,
     ).bind_tools([get_tripmate_status])
 
 
 def get_structured_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-2.5-flash",
         temperature=0,
     ).with_structured_output(GeminiResponse)
 

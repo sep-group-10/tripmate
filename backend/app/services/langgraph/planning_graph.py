@@ -1,16 +1,19 @@
 from typing import NotRequired, TypedDict
 
+from langchain_core.messages import BaseMessage
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.planning import CriticDecision, PlannerDecision
+from app.services.preference_processor import process_preferences
 
 
 class PlanningState(TypedDict):
     # Shared state that is passed between all planning nodes.
     session: AgentSession
+    messages: list[BaseMessage]
     max_iterations: NotRequired[int]
     planner_decision: PlannerDecision | None
     critic_decision: CriticDecision | None
@@ -28,7 +31,7 @@ def create_planner_model():
     # Gemini is configured to return our PlannerDecision structure
     # instead of an unstructured text response.
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-2.5-flash",
         temperature=0,
     ).with_structured_output(PlannerDecision)
 
@@ -53,11 +56,18 @@ Tool results collected so far:
 Current iteration:
 {session.iteration_count}
 
-For this initial planning graph, the only available tool is:
-placeholder_tool
+Available tools:
+
+1. preference_processor
+   Use this first to extract structured trip preferences
+   from the conversation.
+
+2. placeholder_tool
+   Temporary tool for testing the planning graph.
 
 Decide what action should happen next.
-Return placeholder_tool when a tool action is needed.
+
+For a new trip request, use preference_processor first.
 """
 
     model = create_planner_model()
@@ -71,14 +81,14 @@ Return placeholder_tool when a tool action is needed.
 
 
 def tool_execution_node(state: PlanningState) -> dict:
-    # Executes the selected tool and records its result and execution order.
+    """Execute the tool selected by the Planner."""
+
     session = state["session"]
     decision = state["planner_decision"]
 
     if decision is None:
         failure = "Planner did not provide a tool decision."
 
-        # Count only consecutive occurrences of the same failure.
         consecutive_failures = (
             state["consecutive_failures"] + 1 if state["last_failure"] == failure else 1
         )
@@ -88,34 +98,53 @@ def tool_execution_node(state: PlanningState) -> dict:
             "consecutive_failures": consecutive_failures,
         }
 
-    if decision.action != "placeholder_tool":
-        failure = f"Unknown tool: {decision.action}"
+    if decision.action == "preference_processor":
+        result = process_preferences(state["messages"])
 
-        # A different failure starts a new consecutive-failure sequence.
-        consecutive_failures = (
-            state["consecutive_failures"] + 1 if state["last_failure"] == failure else 1
+        session.trip_preferences = result.model_dump(exclude={"missing_fields"})
+
+        session.tool_results.append(
+            {
+                "tool": "preference_processor",
+                "result": result.model_dump(),
+            }
         )
 
+        session.tool_execution_order.append("preference_processor")
+
         return {
-            "last_failure": failure,
-            "consecutive_failures": consecutive_failures,
+            "session": session,
+            "last_failure": None,
+            "consecutive_failures": 0,
         }
 
-    result = placeholder_tool.invoke(decision.arguments)
+    if decision.action == "placeholder_tool":
+        result = placeholder_tool.invoke(decision.arguments)
 
-    session.tool_results.append(
-        {
-            "tool": decision.action,
-            "result": result,
+        session.tool_results.append(
+            {
+                "tool": decision.action,
+                "result": result,
+            }
+        )
+
+        session.tool_execution_order.append(decision.action)
+
+        return {
+            "session": session,
+            "last_failure": None,
+            "consecutive_failures": 0,
         }
+
+    failure = f"Unknown tool: {decision.action}"
+
+    consecutive_failures = (
+        state["consecutive_failures"] + 1 if state["last_failure"] == failure else 1
     )
 
-    session.tool_execution_order.append(decision.action)
-
     return {
-        "session": session,
-        "last_failure": None,
-        "consecutive_failures": 0,
+        "last_failure": failure,
+        "consecutive_failures": consecutive_failures,
     }
 
 
@@ -123,7 +152,7 @@ def create_critic_model():
     # Gemini evaluates the current planning state and returns
     # a structured decision for the graph.
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-2.5-flash",
         temperature=0,
     ).with_structured_output(CriticDecision)
 
