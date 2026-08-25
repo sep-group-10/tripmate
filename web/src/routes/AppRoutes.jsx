@@ -3,7 +3,12 @@ import Home from "../pages/Home";
 import RegisterPage from "../pages/RegisterPage";
 import LoginPage from "../pages/LoginPage";
 import ProfilePage from "../pages/ProfilePage";
-import AdminPage from "../pages/AdminPage";
+import AdminLayout from "../pages/admin/AdminLayout";
+import AdminDashboard from "../pages/admin/AdminDashboard";
+import DestinationsList from "../pages/admin/DestinationsList";
+import AttractionsList from "../pages/admin/AttractionsList";
+import HotelsList from "../pages/admin/HotelsList";
+import RestaurantsList from "../pages/admin/RestaurantsList";
 import ProtectedRoute from "./ProtectedRoute";
 
 function AppRoutes() {
@@ -21,13 +26,19 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/admin/*"
+        path="/admin"
         element={
           <ProtectedRoute>
-            <AdminPage />
+            <AdminLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="destinations" element={<DestinationsList />} />
+        <Route path="attractions" element={<AttractionsList />} />
+        <Route path="hotels" element={<HotelsList />} />
+        <Route path="restaurants" element={<RestaurantsList />} />
+      </Route>
     </Routes>
   );
 }

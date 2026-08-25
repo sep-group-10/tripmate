@@ -30,6 +30,10 @@
   --color-success-100: #e7f7f0;
   --color-danger: #d92d20;
   --color-danger-100: #fdeceb;
+  --color-warn: #d68a00;
+  --color-warn-100: #fdf3e0;
+  --color-info: #2f6ff0;
+  --color-info-100: #eef3fe;
 
   --font-heading: "Schibsted Grotesk", system-ui, sans-serif;
   --font-body: "Schibsted Grotesk", system-ui, sans-serif;
