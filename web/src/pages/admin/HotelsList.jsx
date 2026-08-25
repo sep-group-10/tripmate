@@ -69,7 +69,7 @@ function HotelsList() {
         required: true,
       },
       {
-        name: "pricePerNight",
+        name: "price_per_night",
         label: "Price / night",
         type: "text",
         placeholder: "e.g. LKR 28,000–55,000",
@@ -177,7 +177,7 @@ function HotelsList() {
             rating={hotel.rating}
             tag={{ label: hotel.tier, tone: "warn" }}
             description={hotel.description}
-            metrics={[{ label: "Price / night", value: hotel.pricePerNight }]}
+            metrics={[{ label: "Price / night", value: hotel.price_per_night }]}
             chips={hotel.facilities}
             onEdit={() => openEditForm(hotel)}
             onDelete={() => setDeletingRecord(hotel)}

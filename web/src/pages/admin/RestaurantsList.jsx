@@ -41,7 +41,9 @@ function RestaurantsList() {
         (r) =>
           destinationFilter === "All" || r.destination === destinationFilter,
       )
-      .filter((r) => cuisineFilter === "All" || r.cuisine === cuisineFilter)
+      .filter(
+        (r) => cuisineFilter === "All" || r.cuisine_type === cuisineFilter,
+      )
       .filter(
         (r) =>
           !q ||
@@ -67,7 +69,7 @@ function RestaurantsList() {
         required: true,
       },
       {
-        name: "cuisine",
+        name: "cuisine_type",
         label: "Cuisine",
         type: "select",
         options: CUISINE_OPTIONS,
@@ -81,7 +83,7 @@ function RestaurantsList() {
         required: true,
       },
       {
-        name: "hours",
+        name: "operating_hours",
         label: "Hours",
         type: "text",
         placeholder: "e.g. 11:30–23:00",
@@ -181,12 +183,12 @@ function RestaurantsList() {
             location={restaurant.destination}
             rating={restaurant.rating}
             tag={{
-              label: restaurant.cuisine,
-              tone: CUISINE_TONES[restaurant.cuisine] || "accent",
+              label: restaurant.cuisine_type,
+              tone: CUISINE_TONES[restaurant.cuisine_type] || "accent",
             }}
             description={restaurant.description}
             metrics={[
-              { label: "Hours", value: restaurant.hours },
+              { label: "Hours", value: restaurant.operating_hours },
               { label: "Price range", value: restaurant.priceRange },
             ]}
             onEdit={() => openEditForm(restaurant)}

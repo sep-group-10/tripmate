@@ -81,19 +81,19 @@ function AttractionsList() {
         required: true,
       },
       {
-        name: "hours",
+        name: "opening_hours",
         label: "Hours",
         type: "text",
         placeholder: "e.g. 6:00–18:00",
       },
       {
-        name: "entry",
+        name: "entry_fee",
         label: "Entry fee",
         type: "text",
         placeholder: "e.g. LKR 500",
       },
       {
-        name: "duration",
+        name: "duration_hours",
         label: "Duration",
         type: "text",
         placeholder: "e.g. 1–2 hr",
@@ -192,9 +192,9 @@ function AttractionsList() {
             }}
             description={attraction.description}
             metrics={[
-              { label: "Hours", value: attraction.hours },
-              { label: "Entry", value: attraction.entry },
-              { label: "Duration", value: attraction.duration },
+              { label: "Hours", value: attraction.opening_hours },
+              { label: "Entry", value: attraction.entry_fee },
+              { label: "Duration", value: attraction.duration_hours },
             ]}
             onEdit={() => openEditForm(attraction)}
             onDelete={() => setDeletingRecord(attraction)}

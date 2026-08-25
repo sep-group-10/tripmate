@@ -1,6 +1,10 @@
-// Mock data for the admin Destinations list (C3.1). Field names follow
-// backend/app/models/destination.py (name, description, country, region,
-// rating) so this lines up with the real shape once C4 wires up the API.
+// Mock data for the admin Destinations list. Field names match the real
+// backend/app/schemas/tourism.py DestinationResponse (name, description,
+// country, region, rating) as confirmed by the C3.6 field audit. `tag` is
+// a known, flagged gap: no backend field of any name corresponds to it —
+// it's a client-side region taxonomy invented for filtering/display, kept
+// because it drives working, requested UI (filter dropdown, card badge),
+// not because it's contract-accurate.
 const destinations = [
   {
     id: "dest-kandy",
