@@ -4,16 +4,15 @@ import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
+import { parseApiError } from "../../utils/apiError";
+import { validateLatitude, validateLongitude } from "../../utils/validation";
 
-const REGION_TONES = {
-  "Hill Country": "success",
-  "Cultural Triangle": "warn",
-  Coastal: "info",
-  Wildlife: "accent",
-};
-
-const REGION_CATEGORIES = Object.keys(REGION_TONES);
-
+// `region` here is the real backend/app/models/destination.py field (e.g.
+// "Central Province") - filtering by it replaces the old mock-only
+// "category" concept ("Cultural Triangle", "Hill Country", ...), which had
+// no backend equivalent and doesn't make sense against real province names.
+// Options are derived from whatever's actually in the fetched data rather
+// than a hardcoded list, since real regions aren't a fixed enum.
 const FORM_FIELDS = [
   {
     name: "name",
@@ -37,64 +36,117 @@ const FORM_FIELDS = [
     required: true,
   },
   {
-    name: "tag",
-    label: "Category",
-    type: "select",
-    options: REGION_CATEGORIES,
-    required: true,
-  },
-  {
     name: "description",
     label: "Description",
     type: "textarea",
     placeholder: "Brief description shown to travellers…",
     required: true,
   },
+  {
+    name: "latitude",
+    label: "Latitude",
+    type: "number",
+    placeholder: "e.g. 6.9271",
+    required: true,
+    validate: validateLatitude,
+  },
+  {
+    name: "longitude",
+    label: "Longitude",
+    type: "number",
+    placeholder: "e.g. 79.8612",
+    required: true,
+    validate: validateLongitude,
+  },
 ];
 
 function DestinationsList() {
-  const { destinations, addDestination, updateDestination, deleteDestination } =
-    useTourismData();
+  const {
+    destinations,
+    destinationsStatus,
+    destinationsError,
+    addDestination,
+    updateDestination,
+    deleteDestination,
+  } = useTourismData();
   const [query, setQuery] = useState("");
   const [regionFilter, setRegionFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const [deletingRecord, setDeletingRecord] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const regionOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(destinations.map((d) => d.region).filter(Boolean)),
+      ).sort(),
+    [destinations],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return destinations
-      .filter((d) => regionFilter === "All" || d.tag === regionFilter)
+      .filter((d) => regionFilter === "All" || d.region === regionFilter)
       .filter(
         (d) =>
           !q ||
           d.name.toLowerCase().includes(q) ||
-          d.description.toLowerCase().includes(q),
+          (d.description ?? "").toLowerCase().includes(q),
       );
   }, [destinations, query, regionFilter]);
 
   const openAddForm = () => {
     setEditingRecord(null);
+    setFormError("");
     setIsFormOpen(true);
   };
 
   const openEditForm = (record) => {
     setEditingRecord(record);
+    setFormError("");
     setIsFormOpen(true);
   };
 
-  const handleSubmit = (values) => {
-    if (editingRecord) {
-      updateDestination(editingRecord.id, values);
-    } else {
-      addDestination(values);
+  const handleSubmit = async (values) => {
+    setFormSubmitting(true);
+    setFormError("");
+    const payload = {
+      name: values.name.trim(),
+      region: values.region.trim(),
+      country: values.country.trim(),
+      description: values.description.trim(),
+      latitude: Number(values.latitude),
+      longitude: Number(values.longitude),
+    };
+    try {
+      if (editingRecord) {
+        await updateDestination(editingRecord.id, payload);
+      } else {
+        await addDestination(payload);
+      }
+      setIsFormOpen(false);
+    } catch (error) {
+      setFormError(parseApiError(error).message);
+    } finally {
+      setFormSubmitting(false);
     }
-    setIsFormOpen(false);
   };
 
-  const handleConfirmDelete = () => {
-    deleteDestination(deletingRecord.id);
-    setDeletingRecord(null);
+  const handleConfirmDelete = async () => {
+    setDeleteSubmitting(true);
+    setDeleteError("");
+    try {
+      await deleteDestination(deletingRecord.id);
+      setDeletingRecord(null);
+    } catch (error) {
+      setDeleteError(parseApiError(error).message);
+    } finally {
+      setDeleteSubmitting(false);
+    }
   };
 
   return (
@@ -122,7 +174,7 @@ function DestinationsList() {
           className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
           <option value="All">All regions</option>
-          {REGION_CATEGORIES.map((option) => (
+          {regionOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -131,33 +183,45 @@ function DestinationsList() {
         <button
           type="button"
           onClick={openAddForm}
-          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+          disabled={destinationsStatus !== "ready"}
+          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           ＋ Add Destination
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((destination) => (
-          <EntityCard
-            key={destination.id}
-            name={destination.name}
-            location={`${destination.region}, ${destination.country}`}
-            rating={destination.rating}
-            tag={{
-              label: destination.tag,
-              tone: REGION_TONES[destination.tag] || "accent",
-            }}
-            description={destination.description}
-            metrics={[
-              { label: "Region", value: destination.region },
-              { label: "Country", value: destination.country },
-            ]}
-            onEdit={() => openEditForm(destination)}
-            onDelete={() => setDeletingRecord(destination)}
-          />
-        ))}
-      </div>
+      {destinationsStatus === "loading" && (
+        <p className="m-0 text-sm text-muted-600">Loading destinations…</p>
+      )}
+
+      {destinationsStatus === "error" && (
+        <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+          {destinationsError}
+        </p>
+      )}
+
+      {destinationsStatus === "ready" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((destination) => (
+            <EntityCard
+              key={destination.id}
+              name={destination.name}
+              location={`${destination.region}, ${destination.country}`}
+              rating={destination.rating}
+              description={destination.description}
+              metrics={[
+                { label: "Region", value: destination.region },
+                { label: "Country", value: destination.country },
+              ]}
+              onEdit={() => openEditForm(destination)}
+              onDelete={() => {
+                setDeleteError("");
+                setDeletingRecord(destination);
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {isFormOpen && (
         <EntityFormModal
@@ -172,6 +236,8 @@ function DestinationsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          submitting={formSubmitting}
+          submitError={formError}
         />
       )}
 
@@ -180,6 +246,8 @@ function DestinationsList() {
           recordName={deletingRecord.name}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeletingRecord(null)}
+          submitting={deleteSubmitting}
+          submitError={deleteError}
         />
       )}
     </div>

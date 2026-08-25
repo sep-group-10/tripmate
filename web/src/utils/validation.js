@@ -41,3 +41,27 @@ export function validateRequired(label) {
   return (value) =>
     value && value.toString().trim() ? "" : `${label} is required`;
 }
+
+// backend/app/schemas/tourism.py's DestinationCreate/Update require
+// latitude/longitude as Decimals - these mirror the standard geographic
+// range checks (the backend itself doesn't range-check them, but a value
+// outside these bounds is never a real coordinate).
+export function validateLatitude(value) {
+  if (value === "" || value === null || value === undefined) {
+    return "Latitude is required";
+  }
+  const num = Number(value);
+  if (Number.isNaN(num)) return "Latitude must be a number";
+  if (num < -90 || num > 90) return "Latitude must be between -90 and 90";
+  return "";
+}
+
+export function validateLongitude(value) {
+  if (value === "" || value === null || value === undefined) {
+    return "Longitude is required";
+  }
+  const num = Number(value);
+  if (Number.isNaN(num)) return "Longitude must be a number";
+  if (num < -180 || num > 180) return "Longitude must be between -180 and 180";
+  return "";
+}

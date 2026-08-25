@@ -12,13 +12,18 @@ const noValidate = () => "";
 /** Config-driven "Add/Edit [Entity]" form, shared by all 4 admin entity
  * forms (C3.2/C3.3) instead of near-identical hand-written forms per entity
  * per mode — the entities' fields differ, but the field TYPES
- * (text/select/textarea) and the required/optional/validate/submit/cancel
- * plumbing are identical. Each field is { name, label, type:
- * 'text'|'select'|'textarea', options?, placeholder?, required? }.
+ * (text/select/textarea/number) and the required/optional/validate/submit/
+ * cancel plumbing are identical. Each field is { name, label, type:
+ * 'text'|'select'|'textarea'|'number', options?, placeholder?, required?,
+ * validate? } - `validate` overrides the default required/no-op validator
+ * with a custom one (e.g. numeric range checks for lat/long).
  * Pass `initialValues` (an existing record) to open in edit mode — fields
  * are pre-filled and the caller's onSubmit decides whether that means
  * updating that record or creating a new one; this component doesn't know
- * or care which mode it's in beyond what to pre-fill. */
+ * or care which mode it's in beyond what to pre-fill.
+ * `submitting`/`submitError` surface the caller's async onSubmit result -
+ * this component doesn't call the API itself, so it can't know that state
+ * on its own. */
 function EntityFormModal({
   title,
   subtitle,
@@ -27,6 +32,8 @@ function EntityFormModal({
   initialValues,
   onSubmit,
   onClose,
+  submitting = false,
+  submitError = "",
 }) {
   const defaultValues = Object.fromEntries(
     fields.map((field) => [field.name, initialValues?.[field.name] ?? ""]),
@@ -34,7 +41,8 @@ function EntityFormModal({
   const validators = Object.fromEntries(
     fields.map((field) => [
       field.name,
-      field.required ? validateRequired(field.label) : noValidate,
+      field.validate ??
+        (field.required ? validateRequired(field.label) : noValidate),
     ]),
   );
 
@@ -58,16 +66,18 @@ function EntityFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control"
+            disabled={submitting}
+            className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
           >
             Cancel
           </button>
           <button
             type="submit"
             form="entity-form-modal"
-            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+            disabled={submitting}
+            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {submitLabel}
+            {submitting ? "Saving…" : submitLabel}
           </button>
         </>
       }
@@ -78,6 +88,12 @@ function EntityFormModal({
         noValidate
         className="flex flex-col gap-4"
       >
+        {submitError && (
+          <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+            {submitError}
+          </p>
+        )}
+
         {fields.map((field) => {
           if (field.type === "select") {
             return (
@@ -112,6 +128,9 @@ function EntityFormModal({
               key={field.name}
               id={field.name}
               label={field.label}
+              type={
+                field.type === "textarea" ? undefined : (field.type ?? "text")
+              }
               as={field.type === "textarea" ? "textarea" : "input"}
               rows={field.type === "textarea" ? 3 : undefined}
               placeholder={field.placeholder}
