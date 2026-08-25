@@ -6,13 +6,14 @@ import { registerValidators } from "../utils/validation";
 
 const initialFormData = { fullName: "", email: "", password: "" };
 
-// Shaped like the real POST /auth/register response ({access_token, user})
-// per backend/app/schemas/auth.py + user.py, so the mock is realistic even
-// though it's never sent over the network (that's C4). Note password is
-// deliberately absent — the real response never echoes it back either.
+// Shaped like the real POST /auth/register response ({access_token,
+// refresh_token, user}) per docs/api-contract.md, so the mock is realistic
+// even though it's never sent over the network (that's C4). Note password
+// is deliberately absent — the real response never echoes it back either.
 function buildMockRegisterResponse(values) {
   return {
     access_token: `mock.${Math.random().toString(36).slice(2)}.token`,
+    refresh_token: `mock.${Math.random().toString(36).slice(2)}.refresh`,
     user: {
       id: crypto.randomUUID(),
       full_name: values.fullName.trim(),
