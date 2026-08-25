@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import EntityCard from "../../components/EntityCard";
 import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
+import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
 
 const REGION_TONES = {
@@ -52,11 +53,13 @@ const FORM_FIELDS = [
 ];
 
 function DestinationsList() {
-  const { destinations, addDestination, updateDestination } = useTourismData();
+  const { destinations, addDestination, updateDestination, deleteDestination } =
+    useTourismData();
   const [query, setQuery] = useState("");
   const [regionFilter, setRegionFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [deletingRecord, setDeletingRecord] = useState(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -87,6 +90,11 @@ function DestinationsList() {
       addDestination(values);
     }
     setIsFormOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteDestination(deletingRecord.id);
+    setDeletingRecord(null);
   };
 
   return (
@@ -146,6 +154,7 @@ function DestinationsList() {
               { label: "Country", value: destination.country },
             ]}
             onEdit={() => openEditForm(destination)}
+            onDelete={() => setDeletingRecord(destination)}
           />
         ))}
       </div>
@@ -163,6 +172,14 @@ function DestinationsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+        />
+      )}
+
+      {deletingRecord && (
+        <ConfirmDeleteDialog
+          recordName={deletingRecord.name}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeletingRecord(null)}
         />
       )}
     </div>

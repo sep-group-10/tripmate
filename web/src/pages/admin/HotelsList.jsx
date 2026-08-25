@@ -2,17 +2,20 @@ import { useMemo, useState } from "react";
 import EntityCard from "../../components/EntityCard";
 import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
+import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
 
 const TIER_OPTIONS = ["Luxury", "Boutique"];
 
 function HotelsList() {
-  const { hotels, destinations, addHotel, updateHotel } = useTourismData();
+  const { hotels, destinations, addHotel, updateHotel, deleteHotel } =
+    useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [tierFilter, setTierFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [deletingRecord, setDeletingRecord] = useState(null);
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -107,6 +110,11 @@ function HotelsList() {
     setIsFormOpen(false);
   };
 
+  const handleConfirmDelete = () => {
+    deleteHotel(deletingRecord.id);
+    setDeletingRecord(null);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -172,6 +180,7 @@ function HotelsList() {
             metrics={[{ label: "Price / night", value: hotel.pricePerNight }]}
             chips={hotel.facilities}
             onEdit={() => openEditForm(hotel)}
+            onDelete={() => setDeletingRecord(hotel)}
           />
         ))}
       </div>
@@ -189,6 +198,14 @@ function HotelsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+        />
+      )}
+
+      {deletingRecord && (
+        <ConfirmDeleteDialog
+          recordName={deletingRecord.name}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeletingRecord(null)}
         />
       )}
     </div>

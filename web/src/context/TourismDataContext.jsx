@@ -21,10 +21,17 @@ function makeUpdater(setItems) {
   };
 }
 
+function makeDeleter(setItems) {
+  return (id) => {
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+}
+
 /** Holds the 4 admin tourism entities in state (seeded from the mock data
- * files) so records created/edited via the admin forms actually show up in
- * their list, not just get logged. C4 will swap this for real API calls;
- * the add/update functions are the seam that work will land on. */
+ * files) so records created/edited/deleted via the admin forms actually
+ * show up in their list, not just get logged. C4 will swap this for real
+ * API calls (delete becomes a soft-delete request); the add/update/delete
+ * functions are the seam that work will land on. */
 export function TourismDataProvider({ children }) {
   const [destinations, setDestinations] = useState(initialDestinations);
   const [attractions, setAttractions] = useState(initialAttractions);
@@ -44,6 +51,10 @@ export function TourismDataProvider({ children }) {
     updateAttraction: makeUpdater(setAttractions),
     updateHotel: makeUpdater(setHotels),
     updateRestaurant: makeUpdater(setRestaurants),
+    deleteDestination: makeDeleter(setDestinations),
+    deleteAttraction: makeDeleter(setAttractions),
+    deleteHotel: makeDeleter(setHotels),
+    deleteRestaurant: makeDeleter(setRestaurants),
   };
 
   return (

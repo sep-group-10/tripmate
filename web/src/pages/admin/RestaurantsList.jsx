@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import EntityCard from "../../components/EntityCard";
 import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
+import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
 
 const CUISINE_TONES = {
@@ -14,13 +15,19 @@ const CUISINE_TONES = {
 const CUISINE_OPTIONS = Object.keys(CUISINE_TONES);
 
 function RestaurantsList() {
-  const { restaurants, destinations, addRestaurant, updateRestaurant } =
-    useTourismData();
+  const {
+    restaurants,
+    destinations,
+    addRestaurant,
+    updateRestaurant,
+    deleteRestaurant,
+  } = useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [cuisineFilter, setCuisineFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [deletingRecord, setDeletingRecord] = useState(null);
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -108,6 +115,11 @@ function RestaurantsList() {
     setIsFormOpen(false);
   };
 
+  const handleConfirmDelete = () => {
+    deleteRestaurant(deletingRecord.id);
+    setDeletingRecord(null);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -178,6 +190,7 @@ function RestaurantsList() {
               { label: "Price range", value: restaurant.priceRange },
             ]}
             onEdit={() => openEditForm(restaurant)}
+            onDelete={() => setDeletingRecord(restaurant)}
           />
         ))}
       </div>
@@ -195,6 +208,14 @@ function RestaurantsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+        />
+      )}
+
+      {deletingRecord && (
+        <ConfirmDeleteDialog
+          recordName={deletingRecord.name}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeletingRecord(null)}
         />
       )}
     </div>

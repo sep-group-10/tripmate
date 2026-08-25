@@ -18,6 +18,7 @@ function EntityCard({
   metrics = [],
   chips,
   onEdit,
+  onDelete,
 }) {
   return (
     <article className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-control">
@@ -89,6 +90,7 @@ function EntityCard({
         </button>
         <button
           type="button"
+          onClick={onDelete}
           className="ml-auto rounded-full px-3.5 py-1.5 text-xs font-medium text-danger"
         >
           Delete
