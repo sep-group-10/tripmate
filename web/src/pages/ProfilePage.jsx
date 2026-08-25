@@ -1,14 +1,25 @@
 import { useState } from "react";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
-import { validateFullName, validateEmail } from "../utils/validation";
+import { validateFullName } from "../utils/validation";
 import { loadProfile, saveProfile } from "../utils/profileStorage";
 
 const BUDGET_OPTIONS = ["Budget", "Moderate", "Luxury"];
 const PACE_OPTIONS = ["Relaxed", "Balanced", "Packed"];
-const INTEREST_OPTIONS = ["Culture", "Nature", "Food", "Adventure", "Relaxation", "Nightlife"];
+const INTEREST_OPTIONS = [
+  "Culture",
+  "Nature",
+  "Food",
+  "Adventure",
+  "Relaxation",
+  "Nightlife",
+];
 
-const personalValidators = { fullName: validateFullName, email: validateEmail };
+// Email is deliberately excluded: the real PUT /users/me contract
+// (backend/app/schemas/profile.py) only allows full_name and preference
+// fields here, with extra="forbid" — sending email would reject the whole
+// request. Email is shown read-only for this reason, not as an oversight.
+const personalValidators = { fullName: validateFullName };
 
 function useFlash(duration = 2000) {
   const [flashed, setFlashed] = useState(false);
@@ -34,7 +45,9 @@ function SectionCard({ title, badge, children }) {
   return (
     <section className="overflow-hidden rounded-card bg-surface shadow-control">
       <div className="flex items-center justify-between gap-4 border-b border-divider px-7 py-4.5">
-        <h2 className="font-heading m-0 text-[17px] font-semibold tracking-tight">{title}</h2>
+        <h2 className="font-heading m-0 text-[17px] font-semibold tracking-tight">
+          {title}
+        </h2>
         <span className="rounded-[6px] bg-muted-300 px-2 py-[3px] font-mono text-[10px] font-medium tracking-wider text-muted-700 uppercase">
           {badge}
         </span>
@@ -74,17 +87,14 @@ function ProfilePage() {
     handleChange: handlePersonalChange,
     handleBlur: handlePersonalBlur,
     validateAll: validatePersonalAll,
-  } = useFormValidation(
-    { fullName: profile.fullName, email: profile.email },
-    personalValidators,
-  );
+  } = useFormValidation({ fullName: profile.fullName }, personalValidators);
   const [savedProfile, flashProfile] = useFlash();
 
   const handleSaveProfile = (event) => {
     event.preventDefault();
     const newErrors = validatePersonalAll();
     if (hasErrors(newErrors)) return;
-    setProfile(saveProfile({ fullName: personalValues.fullName, email: personalValues.email }));
+    setProfile(saveProfile({ fullName: personalValues.fullName }));
     flashProfile();
   };
 
@@ -92,7 +102,9 @@ function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [savedPassword, flashPassword] = useFlash();
-  const [emailNotifications, setEmailNotifications] = useState(profile.emailNotifications);
+  const [emailNotifications, setEmailNotifications] = useState(
+    profile.emailNotifications,
+  );
 
   const handleUpdatePassword = (event) => {
     event.preventDefault();
@@ -123,7 +135,9 @@ function ProfilePage() {
 
   const toggleInterest = (label) => {
     setInterests((prev) =>
-      prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label],
+      prev.includes(label)
+        ? prev.filter((item) => item !== label)
+        : [...prev, label],
     );
   };
 
@@ -145,7 +159,8 @@ function ProfilePage() {
               Profile
             </h1>
             <p className="m-0 text-[15px] text-muted-600">
-              Manage your personal information, account settings and travel preferences.
+              Manage your personal information, account settings and travel
+              preferences.
             </p>
           </div>
           <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
@@ -166,15 +181,24 @@ function ProfilePage() {
                 >
                   Change photo
                 </button>
-                <button type="button" className="rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-700">
+                <button
+                  type="button"
+                  className="rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-700"
+                >
                   Remove
                 </button>
               </div>
-              <span className="text-[12.5px] text-muted-600">JPG or PNG, up to 2 MB.</span>
+              <span className="text-[12.5px] text-muted-600">
+                JPG or PNG, up to 2 MB.
+              </span>
             </div>
           </div>
 
-          <form onSubmit={handleSaveProfile} noValidate className="flex flex-col gap-6">
+          <form
+            onSubmit={handleSaveProfile}
+            noValidate
+            className="flex flex-col gap-6"
+          >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormInput
                 id="fullName"
@@ -185,15 +209,19 @@ function ProfilePage() {
                 onBlur={handlePersonalBlur("fullName")}
                 error={personalErrors.fullName}
               />
-              <FormInput
-                id="email"
-                label="Email address"
-                type="email"
-                value={personalValues.email}
-                onChange={handlePersonalChange("email")}
-                onBlur={handlePersonalBlur("email")}
-                error={personalErrors.email}
-              />
+              <div>
+                <FormInput
+                  id="email"
+                  label="Email address"
+                  type="email"
+                  value={profile.email}
+                  disabled
+                  className="opacity-70"
+                />
+                <span className="mt-1.5 block text-[12.5px] text-muted-600">
+                  Email address cannot be changed.
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-3">
@@ -209,7 +237,11 @@ function ProfilePage() {
         </SectionCard>
 
         <SectionCard title="Account settings" badge="Security">
-          <form onSubmit={handleUpdatePassword} noValidate className="flex flex-col gap-6">
+          <form
+            onSubmit={handleUpdatePassword}
+            noValidate
+            className="flex flex-col gap-6"
+          >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormInput
                 id="currentPassword"
@@ -257,7 +289,9 @@ function ProfilePage() {
                 >
                   <span
                     className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow-control transition-transform ${
-                      emailNotifications ? "translate-x-[19px]" : "translate-x-[3px]"
+                      emailNotifications
+                        ? "translate-x-[19px]"
+                        : "translate-x-[3px]"
                     }`}
                   />
                 </button>
@@ -277,7 +311,10 @@ function ProfilePage() {
         </SectionCard>
 
         <SectionCard title="Travel preferences" badge="Planning">
-          <form onSubmit={handleSavePreferences} className="flex flex-col gap-6">
+          <form
+            onSubmit={handleSavePreferences}
+            className="flex flex-col gap-6"
+          >
             <div className="flex flex-col gap-2.5">
               <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
                 Budget style
@@ -325,7 +362,8 @@ function ProfilePage() {
                 ))}
               </div>
               <span className="text-[12.5px] text-muted-600">
-                {interests.length} selected — we weight your daily plans towards these.
+                {interests.length} selected — we weight your daily plans towards
+                these.
               </span>
             </div>
 
