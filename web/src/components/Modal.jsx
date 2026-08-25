@@ -1,3 +1,5 @@
+import { X } from "lucide-react";
+
 function Modal({ title, subtitle, onClose, children, footer }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 p-8">
@@ -13,7 +15,7 @@ function Modal({ title, subtitle, onClose, children, footer }) {
               {title}
             </h2>
             {subtitle && (
-              <p className="m-0 text-[13px] text-muted-600">{subtitle}</p>
+              <p className="m-0 text-label text-muted-600">{subtitle}</p>
             )}
           </div>
           <button
@@ -22,7 +24,7 @@ function Modal({ title, subtitle, onClose, children, footer }) {
             aria-label="Close"
             className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-muted-600"
           >
-            ✕
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 

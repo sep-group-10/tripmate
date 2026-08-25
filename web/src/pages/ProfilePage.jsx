@@ -48,7 +48,7 @@ function SectionCard({ title, badge, children }) {
         <h2 className="font-heading m-0 text-[17px] font-semibold tracking-tight">
           {title}
         </h2>
-        <span className="rounded-[6px] bg-muted-300 px-2 py-[3px] font-mono text-[10px] font-medium tracking-wider text-muted-700 uppercase">
+        <span className="rounded-badge bg-muted-300 px-2 py-[3px] font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
           {badge}
         </span>
       </div>
@@ -75,7 +75,7 @@ function ChoiceChip({ label, active, onClick }) {
 
 function SavedMessage({ show, text }) {
   if (!show) return null;
-  return <span className="text-[12.5px] text-success">{text}</span>;
+  return <span className="text-helper text-success">{text}</span>;
 }
 
 function ProfilePage() {
@@ -152,13 +152,13 @@ function ProfilePage() {
       <div className="mx-auto flex max-w-[840px] flex-col gap-6">
         <header className="mb-2 flex flex-wrap items-end justify-between gap-6">
           <div>
-            <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
+            <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
               TripMate account
             </span>
             <h1 className="font-heading mt-2 mb-1.5 text-[34px] font-semibold tracking-tight">
               Profile
             </h1>
-            <p className="m-0 text-[15px] text-muted-600">
+            <p className="m-0 text-md text-muted-600">
               Manage your personal information, account settings and travel
               preferences.
             </p>
@@ -188,7 +188,7 @@ function ProfilePage() {
                   Remove
                 </button>
               </div>
-              <span className="text-[12.5px] text-muted-600">
+              <span className="text-helper text-muted-600">
                 JPG or PNG, up to 2 MB.
               </span>
             </div>
@@ -218,7 +218,7 @@ function ProfilePage() {
                   disabled
                   className="opacity-70"
                 />
-                <span className="mt-1.5 block text-[12.5px] text-muted-600">
+                <span className="mt-1.5 block text-helper text-muted-600">
                   Email address cannot be changed.
                 </span>
               </div>
@@ -274,7 +274,7 @@ function ProfilePage() {
               <div className="flex items-center justify-between gap-6">
                 <div>
                   <div className="text-sm font-medium">Email notifications</div>
-                  <div className="text-[12.5px] text-muted-600">
+                  <div className="text-helper text-muted-600">
                     Trip updates, price drops and itinerary reminders
                   </div>
                 </div>
@@ -316,7 +316,7 @@ function ProfilePage() {
             className="flex flex-col gap-6"
           >
             <div className="flex flex-col gap-2.5">
-              <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
+              <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
                 Budget style
               </span>
               <div className="flex flex-wrap gap-2">
@@ -332,7 +332,7 @@ function ProfilePage() {
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
+              <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
                 Preferred pace
               </span>
               <div className="flex flex-wrap gap-2">
@@ -348,7 +348,7 @@ function ProfilePage() {
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
+              <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
                 Interests
               </span>
               <div className="flex flex-wrap gap-2">
@@ -361,7 +361,7 @@ function ProfilePage() {
                   />
                 ))}
               </div>
-              <span className="text-[12.5px] text-muted-600">
+              <span className="text-helper text-muted-600">
                 {interests.length} selected — we weight your daily plans towards
                 these.
               </span>

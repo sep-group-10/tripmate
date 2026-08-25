@@ -7,7 +7,14 @@
    Custom names (muted, ink, card, control) are used instead of overriding
    Tailwind's built-in neutral/shadow-lg/etc. keys, since those differ in
    value from this design system and are unrelated to it. --radius-lg is
-   skipped: Tailwind's stock 8px already matches this design's input radius. */
+   skipped: Tailwind's stock 8px already matches this design's input radius.
+
+   --text-* keys below are for sizes genuinely reused across multiple
+   components - one-off sizes stay as arbitrary text-[..] values on
+   purpose. --spacing-* keys are also usable via w-, min-w-, max-w- and
+   h- utilities, since Tailwind v4 shares one spacing scale across those.
+   Tailwind's theme block only allows custom properties, no comments
+   inside it, so this note lives up here instead of by the tokens below. */
 @theme {
   --color-bg: #eceded;
   --color-surface: #ffffff;
@@ -38,8 +45,24 @@
   --font-heading: "Schibsted Grotesk", system-ui, sans-serif;
   --font-body: "Schibsted Grotesk", system-ui, sans-serif;
 
+  --text-badge: 10px;
+  --text-caption: 11.5px;
+  --text-eyebrow: 11px;
+  --text-helper: 12.5px;
+  --text-label: 13px;
+  --text-body-sm: 13.5px;
+  --text-md: 15px;
+  --text-heading-sm: 26px;
+  --text-heading-md: 28px;
+
   --radius-card: 22px;
   --radius-pill: 999px;
+  --radius-badge: 6px;
+
+  --spacing-logo: 26px;
+  --spacing-filter: 170px;
+  --spacing-search: 260px;
+  --spacing-auth-card: 460px;
 
   --shadow-card:
     0 4px 8px rgba(23, 25, 26, 0.04), 0 32px 64px -24px rgba(23, 25, 26, 0.22);

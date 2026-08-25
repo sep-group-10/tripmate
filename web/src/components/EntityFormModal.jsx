@@ -1,3 +1,4 @@
+import { ImagePlus } from "lucide-react";
 import Modal from "./Modal";
 import FormInput from "./FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
@@ -81,7 +82,7 @@ function EntityFormModal({
           if (field.type === "select") {
             return (
               <div key={field.name}>
-                <label className="mb-1.5 block text-[13px] text-muted-700">
+                <label className="mb-1.5 block text-label text-muted-700">
                   {field.label}
                 </label>
                 <select
@@ -123,21 +124,16 @@ function EntityFormModal({
         })}
 
         <div>
-          <span className="mb-1.5 block text-[13px] text-muted-700">
+          <span className="mb-1.5 block text-label text-muted-700">
             Cover image
           </span>
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-muted-400 bg-bg px-4 py-6 text-center">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 256 256"
-              fill="currentColor"
+            <ImagePlus
+              size={20}
               aria-hidden="true"
               className="text-muted-500"
-            >
-              <path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM152,88V44l44,44Z" />
-            </svg>
-            <span className="text-[13px] text-muted-600">
+            />
+            <span className="text-label text-muted-600">
               Click to upload or drag and drop
             </span>
           </div>

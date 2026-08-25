@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
+import { MapPin } from "lucide-react";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", end: true },
@@ -13,21 +14,13 @@ function AdminLayout() {
     <div className="font-body grid min-h-screen grid-cols-[232px_minmax(0,1fr)] bg-bg text-ink">
       <aside className="sticky top-0 flex h-screen flex-col gap-6 p-4">
         <div className="flex items-center gap-2.5 px-2">
-          <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-accent text-white">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 256 256"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M128,16a88,88,0,0,0-88,88c0,75.3,80,132.17,83.41,134.55a8,8,0,0,0,9.18,0C136,236.17,216,179.3,216,104A88,88,0,0,0,128,16Zm0,56a32,32,0,1,1-32,32A32,32,0,0,1,128,72Z" />
-            </svg>
+          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
+            <MapPin size={15} aria-hidden="true" />
           </span>
-          <span className="font-heading text-[15px] font-semibold tracking-tight">
+          <span className="font-heading text-md font-semibold tracking-tight">
             TripMate
           </span>
-          <span className="ml-auto rounded-[6px] bg-muted-300 px-2 py-[3px] font-mono text-[10px] font-medium tracking-wider text-muted-700 uppercase">
+          <span className="ml-auto rounded-badge bg-muted-300 px-2 py-[3px] font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
             Admin
           </span>
         </div>
@@ -39,7 +32,7 @@ function AdminLayout() {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `rounded-pill px-3 py-2 text-left text-[13.5px] ${
+                `rounded-pill px-3 py-2 text-left text-body-sm ${
                   isActive
                     ? "bg-surface font-medium text-ink shadow-control"
                     : "text-muted-700"
@@ -52,7 +45,7 @@ function AdminLayout() {
         </nav>
 
         <div className="mt-auto flex flex-col gap-3 border-t border-divider px-2 pt-4">
-          <Link to="/" className="text-left text-[13px] text-muted-700">
+          <Link to="/" className="text-left text-label text-muted-700">
             Exit admin
           </Link>
           <div className="flex items-center gap-2.5">
@@ -60,8 +53,8 @@ function AdminLayout() {
               SA
             </span>
             <div className="flex flex-col">
-              <span className="text-[13.5px] font-medium">Super Admin</span>
-              <span className="text-[11.5px] text-muted-600">
+              <span className="text-body-sm font-medium">Super Admin</span>
+              <span className="text-caption text-muted-600">
                 admin@tripmate.lk
               </span>
             </div>

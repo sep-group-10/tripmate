@@ -125,10 +125,10 @@ function RestaurantsList() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
+        <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
           Admin · Restaurants
         </span>
-        <h1 className="font-heading mt-1.5 mb-0 text-[28px] font-semibold tracking-tight">
+        <h1 className="font-heading mt-1.5 mb-0 text-heading-md font-semibold tracking-tight">
           Restaurants
         </h1>
       </div>
@@ -138,13 +138,13 @@ function RestaurantsList() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search restaurants…"
-          className="w-[260px]"
+          className="w-search"
         />
         <select
           value={destinationFilter}
           onChange={(event) => setDestinationFilter(event.target.value)}
           aria-label="Destination"
-          className="min-h-10 min-w-[170px] rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
+          className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
           <option value="All">All destinations</option>
           {destinationNames.map((option) => (
@@ -157,7 +157,7 @@ function RestaurantsList() {
           value={cuisineFilter}
           onChange={(event) => setCuisineFilter(event.target.value)}
           aria-label="Cuisine"
-          className="min-h-10 min-w-[170px] rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
+          className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
           <option value="All">All cuisines</option>
           {CUISINE_OPTIONS.map((option) => (

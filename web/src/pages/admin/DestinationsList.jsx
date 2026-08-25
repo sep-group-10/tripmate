@@ -100,10 +100,10 @@ function DestinationsList() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <span className="font-mono text-[11px] font-medium tracking-widest text-muted-600 uppercase">
+        <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
           Admin · Destinations
         </span>
-        <h1 className="font-heading mt-1.5 mb-0 text-[28px] font-semibold tracking-tight">
+        <h1 className="font-heading mt-1.5 mb-0 text-heading-md font-semibold tracking-tight">
           Destinations
         </h1>
       </div>
@@ -113,13 +113,13 @@ function DestinationsList() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search destinations…"
-          className="w-[260px]"
+          className="w-search"
         />
         <select
           value={regionFilter}
           onChange={(event) => setRegionFilter(event.target.value)}
           aria-label="Region"
-          className="min-h-10 min-w-[170px] rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
+          className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
           <option value="All">All regions</option>
           {REGION_CATEGORIES.map((option) => (

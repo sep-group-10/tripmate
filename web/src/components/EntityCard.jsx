@@ -27,10 +27,10 @@ function EntityCard({
           <h3 className="font-heading m-0 text-base font-semibold tracking-tight">
             {name}
           </h3>
-          <span className="text-[13px] text-muted-600">{location}</span>
+          <span className="text-label text-muted-600">{location}</span>
         </div>
         {rating != null && (
-          <span className="flex flex-none items-center gap-1 text-[13px] font-medium text-accent">
+          <span className="flex flex-none items-center gap-1 text-label font-medium text-accent">
             ★ {rating}
           </span>
         )}
@@ -44,7 +44,7 @@ function EntityCard({
         </span>
       )}
 
-      <p className="m-0 text-[13.5px] leading-relaxed text-muted-700">
+      <p className="m-0 text-body-sm leading-relaxed text-muted-700">
         {description}
       </p>
 
@@ -52,10 +52,10 @@ function EntityCard({
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-bg p-3.5">
           {metrics.map((metric) => (
             <div key={metric.label} className="flex flex-col gap-0.5">
-              <span className="text-[11px] font-medium tracking-wide text-muted-600 uppercase">
+              <span className="text-eyebrow font-medium tracking-wide text-muted-600 uppercase">
                 {metric.label}
               </span>
-              <span className="text-[13.5px]">{metric.value}</span>
+              <span className="text-body-sm">{metric.value}</span>
             </div>
           ))}
         </div>
@@ -66,7 +66,7 @@ function EntityCard({
           {chips.map((chip) => (
             <span
               key={chip}
-              className="rounded-full border border-border px-2 py-0.5 text-[11.5px] text-muted-700"
+              className="rounded-full border border-border px-2 py-0.5 text-caption text-muted-700"
             >
               {chip}
             </span>

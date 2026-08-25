@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Check, Eye, EyeOff, MapPin } from "lucide-react";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { registerValidators } from "../utils/validation";
@@ -66,18 +67,10 @@ function RegisterPage() {
 
   return (
     <div className="font-body flex min-h-screen items-center justify-center bg-bg px-6 py-12 text-ink">
-      <div className="flex w-full max-w-[460px] flex-col items-stretch gap-6">
+      <div className="flex w-full max-w-auth-card flex-col items-stretch gap-6">
         <div className="flex items-center justify-center gap-2.5">
-          <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-accent text-white">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 256 256"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M128,16a88,88,0,0,0-88,88c0,75.3,80,132.17,83.41,134.55a8,8,0,0,0,9.18,0C136,236.17,216,179.3,216,104A88,88,0,0,0,128,16Zm0,56a32,32,0,1,1-32,32A32,32,0,0,1,128,72Z" />
-            </svg>
+          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
+            <MapPin size={15} aria-hidden="true" />
           </span>
           <span className="font-heading text-lg font-semibold tracking-tight">
             TripMate
@@ -88,20 +81,12 @@ function RegisterPage() {
           {status === "success" ? (
             <div className="flex flex-col items-start gap-3.5 py-2">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-success-100 text-success">
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 256 256"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z" />
-                </svg>
+                <Check size={22} aria-hidden="true" />
               </span>
               <h2 className="font-heading m-0 text-2xl font-semibold tracking-tight">
                 Account created
               </h2>
-              <p className="m-0 text-[15px] leading-relaxed text-muted-700">
+              <p className="m-0 text-md leading-relaxed text-muted-700">
                 Welcome,{" "}
                 <strong className="font-medium">{values.fullName}</strong>. This
                 is a UI-only demo — your details were logged to the console and
@@ -122,7 +107,7 @@ function RegisterPage() {
               className="flex flex-col gap-[22px]"
             >
               <div>
-                <h2 className="font-heading m-0 text-[26px] font-semibold tracking-tight">
+                <h2 className="font-heading m-0 text-heading-sm font-semibold tracking-tight">
                   Create your account
                 </h2>
                 <p className="mt-1.5 mb-0 text-sm text-muted-600">
@@ -168,7 +153,7 @@ function RegisterPage() {
 
               <div className="flex items-center gap-3">
                 <span className="h-px flex-1 bg-divider" />
-                <span className="font-mono text-[11px] font-medium tracking-widest text-muted-500 uppercase">
+                <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-500 uppercase">
                   or with email
                 </span>
                 <span className="h-px flex-1 bg-divider" />
@@ -218,15 +203,11 @@ function RegisterPage() {
                       }
                       className="absolute top-1/2 right-1 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-600"
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 256 256"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z" />
-                      </svg>
+                      {showPassword ? (
+                        <EyeOff size={16} aria-hidden="true" />
+                      ) : (
+                        <Eye size={16} aria-hidden="true" />
+                      )}
                     </button>
                   }
                 />
@@ -236,7 +217,7 @@ function RegisterPage() {
                 <button
                   type="submit"
                   disabled={status === "submitting"}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3.5 text-[15px] font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3.5 text-md font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {status === "submitting" ? (
                     <>
@@ -247,7 +228,7 @@ function RegisterPage() {
                     "Create account"
                   )}
                 </button>
-                <p className="m-0 text-[12.5px] leading-relaxed text-muted-600">
+                <p className="m-0 text-helper leading-relaxed text-muted-600">
                   By creating an account you agree to our{" "}
                   <a href="#terms" className="text-accent-700">
                     Terms of Service
