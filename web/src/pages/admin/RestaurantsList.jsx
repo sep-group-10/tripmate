@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import EntityCard from "../../components/EntityCard";
 import SearchInput from "../../components/SearchInput";
-import restaurants from "../../services/restaurantsData";
+import EntityFormModal from "../../components/EntityFormModal";
+import { useTourismData } from "../../hooks/useTourismData";
 
 const CUISINE_TONES = {
   "Sri Lankan": "warn",
@@ -10,16 +11,19 @@ const CUISINE_TONES = {
   "Street Food": "success",
 };
 
-const DESTINATION_OPTIONS = [
-  "All",
-  ...new Set(restaurants.map((r) => r.destination)),
-];
-const CUISINE_OPTIONS = ["All", ...new Set(restaurants.map((r) => r.cuisine))];
+const CUISINE_OPTIONS = Object.keys(CUISINE_TONES);
 
 function RestaurantsList() {
+  const { restaurants, destinations, addRestaurant } = useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [cuisineFilter, setCuisineFilter] = useState("All");
+  const [isAddOpen, setIsAddOpen] = useState(false);
+
+  const destinationNames = useMemo(
+    () => destinations.map((d) => d.name),
+    [destinations],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -35,7 +39,58 @@ function RestaurantsList() {
           r.name.toLowerCase().includes(q) ||
           r.description.toLowerCase().includes(q),
       );
-  }, [query, destinationFilter, cuisineFilter]);
+  }, [restaurants, query, destinationFilter, cuisineFilter]);
+
+  const formFields = useMemo(
+    () => [
+      {
+        name: "name",
+        label: "Restaurant name",
+        type: "text",
+        placeholder: "e.g. Ministry of Crab",
+        required: true,
+      },
+      {
+        name: "destination",
+        label: "Destination",
+        type: "select",
+        options: destinationNames,
+        required: true,
+      },
+      {
+        name: "cuisine",
+        label: "Cuisine",
+        type: "select",
+        options: CUISINE_OPTIONS,
+        required: true,
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea",
+        placeholder: "Brief description shown to travellers…",
+        required: true,
+      },
+      {
+        name: "hours",
+        label: "Hours",
+        type: "text",
+        placeholder: "e.g. 11:30–23:00",
+      },
+      {
+        name: "priceRange",
+        label: "Price range",
+        type: "text",
+        placeholder: "e.g. LKR 2,000–5,000",
+      },
+    ],
+    [destinationNames],
+  );
+
+  const handleAdd = (values) => {
+    addRestaurant(values);
+    setIsAddOpen(false);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,9 +116,10 @@ function RestaurantsList() {
           aria-label="Destination"
           className="min-h-10 min-w-[170px] rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
-          {DESTINATION_OPTIONS.map((option) => (
+          <option value="All">All destinations</option>
+          {destinationNames.map((option) => (
             <option key={option} value={option}>
-              {option === "All" ? "All destinations" : option}
+              {option}
             </option>
           ))}
         </select>
@@ -73,12 +129,20 @@ function RestaurantsList() {
           aria-label="Cuisine"
           className="min-h-10 min-w-[170px] rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
+          <option value="All">All cuisines</option>
           {CUISINE_OPTIONS.map((option) => (
             <option key={option} value={option}>
-              {option === "All" ? "All cuisines" : option}
+              {option}
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => setIsAddOpen(true)}
+          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+        >
+          ＋ Add Restaurant
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -100,6 +164,17 @@ function RestaurantsList() {
           />
         ))}
       </div>
+
+      {isAddOpen && (
+        <EntityFormModal
+          title="Add Restaurant"
+          subtitle="Add a new restaurant to the destination database."
+          submitLabel="Save Restaurant"
+          fields={formFields}
+          onSubmit={handleAdd}
+          onClose={() => setIsAddOpen(false)}
+        />
+      )}
     </div>
   );
 }

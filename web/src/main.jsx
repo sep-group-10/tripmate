@@ -4,12 +4,15 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { TourismDataProvider } from "./context/TourismDataContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <TourismDataProvider>
+          <App />
+        </TourismDataProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

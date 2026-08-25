@@ -36,3 +36,8 @@ export const loginValidators = {
   email: validateEmail,
   password: validateLoginPassword,
 };
+
+export function validateRequired(label) {
+  return (value) =>
+    value && value.toString().trim() ? "" : `${label} is required`;
+}
