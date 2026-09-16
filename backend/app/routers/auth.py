@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Cookie, Depends, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from app.core.security import (
     COOKIE_SECURE,
     JWT_ALGORITHM,
     JWT_SECRET_KEY,
+    REFRESH_TOKEN_COOKIE_NAME,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
     hash_password,
@@ -47,6 +49,19 @@ def _issue_access_token_cookie(response: Response, access_token: str) -> None:
     )
 
 
+def _issue_refresh_token_cookie(response: Response, refresh_token: str) -> None:
+    """Set the refresh token as an httpOnly cookie so it is inaccessible
+    to client-side scripts."""
+    response.set_cookie(
+        key=REFRESH_TOKEN_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,  # 7 days in seconds
+    )
+
+
 def _rotate_tokens(user: User, db: Session) -> tuple[str, str]:
     """Issue a new access/refresh token pair and store only the refresh
     token's hash, so a database leak cannot be used to authenticate.
@@ -68,6 +83,7 @@ def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
     and return the full response data including the user."""
     access_token, refresh_token = _rotate_tokens(user, db)
     _issue_access_token_cookie(response, access_token)
+    _issue_refresh_token_cookie(response, refresh_token)
     return LoginData(access_token=access_token, refresh_token=refresh_token, user=user)
 
 
@@ -128,13 +144,31 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @router.post("/refresh", response_model=ApiResponse[RefreshData])
-def refresh(payload: RefreshRequest, response: Response, db: Session = Depends(get_db)):
+def refresh(
+    response: Response,
+    payload: RefreshRequest | None = None,
+    refresh_token_cookie: str | None = Cookie(
+        default=None, alias=REFRESH_TOKEN_COOKIE_NAME
+    ),
+    db: Session = Depends(get_db),
+):
     """Exchange a valid refresh token for a new access/refresh pair.
-    The old refresh token is invalidated in the same call."""
-    try:
-        claims = jwt.decode(
-            payload.refresh_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM]
+    The old refresh token is invalidated in the same call.
+
+    Web clients send the refresh token via the httpOnly cookie set on
+    login; mobile clients (which can't rely on cookies) send it in the
+    request body instead. The cookie takes precedence when both are
+    present."""
+    refresh_token = refresh_token_cookie or (
+        payload.refresh_token if payload is not None else None
+    )
+    if refresh_token is None:
+        raise ApiError(
+            ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token is invalid or expired"
         )
+
+    try:
+        claims = jwt.decode(refresh_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except jwt.InvalidTokenError as exc:
         raise ApiError(
             ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token is invalid or expired"
@@ -157,7 +191,7 @@ def refresh(payload: RefreshRequest, response: Response, db: Session = Depends(g
     # The stored hash must match and not be past its own expiry, so a
     # token that was already rotated out (or never issued) is rejected
     # even though its signature and JWT expiry are still valid.
-    token_hash = hash_refresh_token(payload.refresh_token)
+    token_hash = hash_refresh_token(refresh_token)
     is_valid = (
         user is not None
         and user.refresh_token == token_hash
@@ -174,6 +208,7 @@ def refresh(payload: RefreshRequest, response: Response, db: Session = Depends(g
 
     access_token, new_refresh_token = _rotate_tokens(user, db)
     _issue_access_token_cookie(response, access_token)
+    _issue_refresh_token_cookie(response, new_refresh_token)
 
     return ApiResponse(
         data=RefreshData(access_token=access_token, refresh_token=new_refresh_token)
@@ -184,12 +219,18 @@ def refresh(payload: RefreshRequest, response: Response, db: Session = Depends(g
 def logout(
     response: Response,
     payload: LogoutRequest | None = None,
+    refresh_token_cookie: str | None = Cookie(
+        default=None, alias=REFRESH_TOKEN_COOKIE_NAME
+    ),
     db: Session = Depends(get_db),
 ):
-    """Clear the access token cookie and revoke the refresh token, so
+    """Clear both auth cookies and revoke the refresh token, so
     neither can be used again after logout."""
-    if payload is not None and payload.refresh_token is not None:
-        token_hash = hash_refresh_token(payload.refresh_token)
+    refresh_token = refresh_token_cookie or (
+        payload.refresh_token if payload is not None else None
+    )
+    if refresh_token is not None:
+        token_hash = hash_refresh_token(refresh_token)
         user = db.query(User).filter(User.refresh_token == token_hash).first()
         if user is not None:
             user.refresh_token = None
@@ -199,6 +240,12 @@ def logout(
 
     response.delete_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key=REFRESH_TOKEN_COOKIE_NAME,
         httponly=True,
         secure=COOKIE_SECURE,
         samesite="lax",

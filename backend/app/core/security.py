@@ -16,6 +16,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 ACCESS_TOKEN_COOKIE_NAME = "access_token"
+REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 # Secure cookies are only sent over HTTPS. Local dev runs on plain HTTP,
 # so the Secure flag is only forced on outside of development.
 COOKIE_SECURE = os.getenv("ENVIRONMENT", "development") != "development"
