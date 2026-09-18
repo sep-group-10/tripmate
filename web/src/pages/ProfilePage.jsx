@@ -101,6 +101,7 @@ function ProfilePage() {
   // Personal information comes from the real GET /users/me on mount, kept
   // separate from the localStorage-backed prefs below.
   const [email, setEmail] = useState("");
+  const [loginProvider, setLoginProvider] = useState("local");
   const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
 
@@ -126,6 +127,7 @@ function ProfilePage() {
         const me = response.data.data;
         setPersonalValues({ fullName: me.full_name });
         setEmail(me.email);
+        setLoginProvider(me.login_provider);
         setLoadStatus("ready");
       })
       .catch((error) => {
@@ -392,34 +394,41 @@ function ProfilePage() {
             noValidate
             className="flex flex-col gap-6"
           >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormInput
-                id="currentPassword"
-                label="Current password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={currentPassword}
-                onChange={(event) => {
-                  setCurrentPassword(event.target.value);
-                  setCurrentPasswordError("");
-                }}
-                error={currentPasswordError}
-              />
-              <FormInput
-                id="newPassword"
-                label="New password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="At least 8 characters"
-                value={newPassword}
-                onChange={(event) => {
-                  setNewPassword(event.target.value);
-                  setPasswordError("");
-                }}
-                error={passwordError}
-              />
-            </div>
+            {loginProvider === "google" ? (
+              <p className="m-0 rounded-lg bg-bg px-4 py-3 text-sm text-muted-600">
+                You signed in with Google, so there&apos;s no password to update
+                here.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormInput
+                  id="currentPassword"
+                  label="Current password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={currentPassword}
+                  onChange={(event) => {
+                    setCurrentPassword(event.target.value);
+                    setCurrentPasswordError("");
+                  }}
+                  error={currentPasswordError}
+                />
+                <FormInput
+                  id="newPassword"
+                  label="New password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={(event) => {
+                    setNewPassword(event.target.value);
+                    setPasswordError("");
+                  }}
+                  error={passwordError}
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-3.5 rounded-lg bg-bg p-4">
               <div className="flex items-center justify-between gap-6">
@@ -449,16 +458,20 @@ function ProfilePage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3">
-              <SavedMessage show={savedPassword} text="Password updated" />
-              <button
-                type="submit"
-                disabled={passwordStatus === "saving"}
-                className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {passwordStatus === "saving" ? "Updating…" : "Update password"}
-              </button>
-            </div>
+            {loginProvider !== "google" && (
+              <div className="flex items-center justify-end gap-3">
+                <SavedMessage show={savedPassword} text="Password updated" />
+                <button
+                  type="submit"
+                  disabled={passwordStatus === "saving"}
+                  className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {passwordStatus === "saving"
+                    ? "Updating…"
+                    : "Update password"}
+                </button>
+              </div>
+            )}
           </form>
         </SectionCard>
 
