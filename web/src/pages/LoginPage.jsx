@@ -18,13 +18,30 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | submitting | error
   const [submitError, setSubmitError] = useState("");
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
+  const [resendStatus, setResendStatus] = useState("idle"); // idle | sending | sent
 
   const onFieldChange = (field) => (event) => {
     if (status === "error") {
       setStatus("idle");
       setSubmitError("");
+      setUnverifiedEmail("");
+      setResendStatus("idle");
     }
     handleChange(field)(event);
+  };
+
+  const handleResendVerification = async () => {
+    setResendStatus("sending");
+    try {
+      await api.post("/api/v1/auth/resend-verification", {
+        email: unverifiedEmail,
+      });
+    } catch {
+      // resend-verification never reveals failure details either way -
+      // treat it the same as success from the UI's perspective.
+    }
+    setResendStatus("sent");
   };
 
   const handleSubmit = async (event) => {
@@ -47,7 +64,10 @@ function LoginPage() {
       // message - login intentionally never shows field-specific errors,
       // since email/password ambiguity is deliberate on the backend too
       // (see auth.py: same generic error either way).
-      const { message } = parseApiError(error);
+      const { code, message } = parseApiError(error);
+      if (code === "EMAIL_NOT_VERIFIED") {
+        setUnverifiedEmail(values.email.trim());
+      }
       setSubmitError(message);
       setStatus("error");
     }
@@ -81,9 +101,26 @@ function LoginPage() {
             </div>
 
             {status === "error" && (
-              <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
-                {submitError}
-              </p>
+              <div className="flex flex-col gap-2 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+                <p className="m-0">{submitError}</p>
+                {unverifiedEmail &&
+                  (resendStatus === "sent" ? (
+                    <p className="m-0 text-success">
+                      A new verification email is on its way.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendStatus === "sending"}
+                      className="self-start font-medium text-accent-700 underline disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {resendStatus === "sending"
+                        ? "Sending…"
+                        : "Resend verification email"}
+                    </button>
+                  ))}
+              </div>
             )}
 
             <button

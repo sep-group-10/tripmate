@@ -4,7 +4,6 @@ import { Eye, EyeOff, MapPin } from "lucide-react";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { registerValidators } from "../utils/validation";
-import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
 
@@ -21,7 +20,6 @@ const FIELD_NAME_MAP = {
 function RegisterPage() {
   const { values, errors, setErrors, handleChange, handleBlur, validateAll } =
     useFormValidation(initialFormData, registerValidators);
-  const { login } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | submitting | error
@@ -35,13 +33,13 @@ function RegisterPage() {
     setStatus("submitting");
     setSubmitError("");
     try {
-      const response = await api.post("/api/v1/auth/register", {
+      const email = values.email.trim();
+      await api.post("/api/v1/auth/register", {
         full_name: values.fullName.trim(),
-        email: values.email.trim(),
+        email,
         password: values.password,
       });
-      login(response.data.data.user);
-      navigate("/profile", { replace: true });
+      navigate("/check-inbox", { replace: true, state: { email } });
     } catch (error) {
       const { code, message, details } = parseApiError(error);
       if (code === "VALIDATION_ERROR" && details.length > 0) {
