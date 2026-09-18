@@ -72,6 +72,23 @@ function HotelsList() {
         required: true,
       },
       {
+        name: "location",
+        label: "Location",
+        type: "location",
+        required: true,
+        resolveInitialCenter: (values) => {
+          const destination = destinations.find(
+            (d) => d.name === values.destination,
+          );
+          return destination
+            ? {
+                latitude: destination.latitude,
+                longitude: destination.longitude,
+              }
+            : undefined;
+        },
+      },
+      {
         name: "tier",
         label: "Tier",
         type: "select",
@@ -99,7 +116,7 @@ function HotelsList() {
         placeholder: "e.g. Pool, Spa, Restaurant",
       },
     ],
-    [destinationNames],
+    [destinationNames, destinations],
   );
 
   const openAddForm = () => {

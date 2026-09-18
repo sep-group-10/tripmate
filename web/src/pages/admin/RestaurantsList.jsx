@@ -77,6 +77,23 @@ function RestaurantsList() {
         required: true,
       },
       {
+        name: "location",
+        label: "Location",
+        type: "location",
+        required: true,
+        resolveInitialCenter: (values) => {
+          const destination = destinations.find(
+            (d) => d.name === values.destination,
+          );
+          return destination
+            ? {
+                latitude: destination.latitude,
+                longitude: destination.longitude,
+              }
+            : undefined;
+        },
+      },
+      {
         name: "cuisine_type",
         label: "Cuisine",
         type: "select",
@@ -104,7 +121,7 @@ function RestaurantsList() {
         required: true,
       },
     ],
-    [destinationNames],
+    [destinationNames, destinations],
   );
 
   const openAddForm = () => {

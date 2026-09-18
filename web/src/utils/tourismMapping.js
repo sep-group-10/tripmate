@@ -64,18 +64,31 @@ function requireDestination(destinations, name) {
   return destination;
 }
 
+// The admin's LocationPicker (web/src/components/LocationPicker.jsx) is a
+// required field producing `values.location = { latitude, longitude }` from
+// a real place search - this is the actual entity location, which may sit
+// anywhere within (or near) the chosen destination, not the destination's
+// own coordinates.
+function requireLocation(location) {
+  if (!location || location.latitude == null || location.longitude == null) {
+    throw new Error("A location must be picked before saving.");
+  }
+  return location;
+}
+
 // `category` has no backend field (AttractionCreate/Update in
 // schemas/tourism.py) - deliberately left out of the payload rather than
 // sent and silently ignored by the API. AttractionsList flags this to the
 // admin via the form's helper text instead.
 export function buildAttractionPayload(values, destinations) {
   const destination = requireDestination(destinations, values.destination);
+  const location = requireLocation(values.location);
   return {
     destination_id: destination.id,
     name: values.name.trim(),
     description: values.description.trim(),
-    latitude: destination.latitude,
-    longitude: destination.longitude,
+    latitude: location.latitude,
+    longitude: location.longitude,
     opening_hours: hoursTextToApi(values.opening_hours),
     entry_fee: values.entry_fee === "" ? undefined : Number(values.entry_fee),
     duration_hours:
@@ -87,6 +100,10 @@ export function mapAttractionFromApi(record, destinations) {
   return {
     ...record,
     destination: findDestinationNameById(destinations, record.destination_id),
+    location: {
+      latitude: Number(record.latitude),
+      longitude: Number(record.longitude),
+    },
     opening_hours: hoursApiToText(record.opening_hours),
     entry_fee: decimalToFormValue(record.entry_fee),
     duration_hours: decimalToFormValue(record.duration_hours),
@@ -97,12 +114,13 @@ export function mapAttractionFromApi(record, destinations) {
 // `category` above.
 export function buildHotelPayload(values, destinations) {
   const destination = requireDestination(destinations, values.destination);
+  const location = requireLocation(values.location);
   return {
     destination_id: destination.id,
     name: values.name.trim(),
     description: values.description.trim(),
-    latitude: destination.latitude,
-    longitude: destination.longitude,
+    latitude: location.latitude,
+    longitude: location.longitude,
     price_per_night: Number(values.price_per_night),
     facilities: values.facilities,
   };
@@ -112,18 +130,23 @@ export function mapHotelFromApi(record, destinations) {
   return {
     ...record,
     destination: findDestinationNameById(destinations, record.destination_id),
+    location: {
+      latitude: Number(record.latitude),
+      longitude: Number(record.longitude),
+    },
     price_per_night: decimalToFormValue(record.price_per_night),
   };
 }
 
 export function buildRestaurantPayload(values, destinations) {
   const destination = requireDestination(destinations, values.destination);
+  const location = requireLocation(values.location);
   return {
     destination_id: destination.id,
     name: values.name.trim(),
     description: values.description.trim(),
-    latitude: destination.latitude,
-    longitude: destination.longitude,
+    latitude: location.latitude,
+    longitude: location.longitude,
     cuisine_type: values.cuisine_type,
     avg_meal_cost: Number(values.avg_meal_cost),
     operating_hours: hoursTextToApi(values.operating_hours),
@@ -134,6 +157,10 @@ export function mapRestaurantFromApi(record, destinations) {
   return {
     ...record,
     destination: findDestinationNameById(destinations, record.destination_id),
+    location: {
+      latitude: Number(record.latitude),
+      longitude: Number(record.longitude),
+    },
     operating_hours: hoursApiToText(record.operating_hours),
     avg_meal_cost: decimalToFormValue(record.avg_meal_cost),
   };

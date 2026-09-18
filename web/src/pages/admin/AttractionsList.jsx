@@ -79,6 +79,23 @@ function AttractionsList() {
         required: true,
       },
       {
+        name: "location",
+        label: "Location",
+        type: "location",
+        required: true,
+        resolveInitialCenter: (values) => {
+          const destination = destinations.find(
+            (d) => d.name === values.destination,
+          );
+          return destination
+            ? {
+                latitude: destination.latitude,
+                longitude: destination.longitude,
+              }
+            : undefined;
+        },
+      },
+      {
         name: "category",
         label: "Category",
         type: "select",
@@ -111,7 +128,7 @@ function AttractionsList() {
         placeholder: "e.g. 2",
       },
     ],
-    [destinationNames],
+    [destinationNames, destinations],
   );
 
   const openAddForm = () => {

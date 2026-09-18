@@ -71,3 +71,14 @@ export function validateLongitude(value) {
   if (num < -180 || num > 180) return "Longitude must be between -180 and 180";
   return "";
 }
+
+// LocationPicker's value shape ({ latitude, longitude } | null) - "required"
+// just means a place was actually picked, not any particular coordinate
+// range (validateLatitude/validateLongitude above already gate that on the
+// Destination form's raw number inputs).
+export function validateLocation(label) {
+  return (value) =>
+    value && value.latitude != null && value.longitude != null
+      ? ""
+      : `${label} is required`;
+}

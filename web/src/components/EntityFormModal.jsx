@@ -1,8 +1,9 @@
 import { ImagePlus } from "lucide-react";
 import Modal from "./Modal";
 import FormInput from "./FormInput";
+import LocationPicker from "./LocationPicker";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
-import { validateRequired } from "../utils/validation";
+import { validateRequired, validateLocation } from "../utils/validation";
 
 const SELECT_CLASSES =
   "min-h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none";
@@ -20,6 +21,11 @@ const noValidate = () => "";
  * renders a muted note under the field - used to flag fields the backend
  * doesn't actually persist yet (e.g. Attraction category, Hotel tier) so
  * that gap is visible to the admin instead of silently dropped.
+ * A `type: 'location'` field renders LocationPicker instead of a plain
+ * input - its value is `{ latitude, longitude } | null`, not a string, and
+ * `resolveInitialCenter(values)` lets the caller derive where the map
+ * should start (e.g. from whichever destination is currently selected in
+ * this same form) from the form's live values.
  * Pass `initialValues` (an existing record) to open in edit mode — fields
  * are pre-filled and the caller's onSubmit decides whether that means
  * updating that record or creating a new one; this component doesn't know
@@ -39,17 +45,24 @@ function EntityFormModal({
   submitError = "",
 }) {
   const defaultValues = Object.fromEntries(
-    fields.map((field) => [field.name, initialValues?.[field.name] ?? ""]),
+    fields.map((field) => [
+      field.name,
+      initialValues?.[field.name] ?? (field.type === "location" ? null : ""),
+    ]),
   );
   const validators = Object.fromEntries(
     fields.map((field) => [
       field.name,
       field.validate ??
-        (field.required ? validateRequired(field.label) : noValidate),
+        (field.required
+          ? field.type === "location"
+            ? validateLocation(field.label)
+            : validateRequired(field.label)
+          : noValidate),
     ]),
   );
 
-  const { values, errors, handleChange, handleBlur, validateAll } =
+  const { values, errors, setValues, handleChange, handleBlur, validateAll } =
     useFormValidation(defaultValues, validators);
 
   const handleSubmit = (event) => {
@@ -117,6 +130,33 @@ function EntityFormModal({
                     </option>
                   ))}
                 </select>
+                {errors[field.name] && (
+                  <span className="mt-1.5 block text-xs text-danger">
+                    {errors[field.name]}
+                  </span>
+                )}
+                {field.helperText && (
+                  <span className="mt-1.5 block text-xs text-muted-600">
+                    {field.helperText}
+                  </span>
+                )}
+              </div>
+            );
+          }
+
+          if (field.type === "location") {
+            return (
+              <div key={field.name}>
+                <label className="mb-1.5 block text-label text-muted-700">
+                  {field.label}
+                </label>
+                <LocationPicker
+                  value={values[field.name]}
+                  onChange={(coords) =>
+                    setValues((prev) => ({ ...prev, [field.name]: coords }))
+                  }
+                  initialCenter={field.resolveInitialCenter?.(values)}
+                />
                 {errors[field.name] && (
                   <span className="mt-1.5 block text-xs text-danger">
                     {errors[field.name]}

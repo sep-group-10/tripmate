@@ -25,8 +25,10 @@ const DESTINATION_LIST_PARAMS = { params: { limit: 50 } };
 /** Holds the 4 admin tourism entities in state, all wired to the real API
  * (C4.2). Attractions/Hotels/Restaurants each depend on `destinations`
  * being loaded first, since every add/update needs it to resolve
- * destination_id and coordinates (see utils/tourismMapping.js) - their
- * fetch effects wait on `destinationsStatus`. */
+ * destination_id (see utils/tourismMapping.js) - their fetch effects wait
+ * on `destinationsStatus`. Each entity's actual latitude/longitude comes
+ * from its own LocationPicker field (web/src/components/LocationPicker.jsx),
+ * not from the destination. */
 export function TourismDataProvider({ children }) {
   const [destinations, setDestinations] = useState([]);
   const [destinationsStatus, setDestinationsStatus] = useState("loading"); // loading | ready | error
