@@ -94,6 +94,12 @@ class ResetPasswordRequest(BaseModel):
         return value
 
 
+class GoogleLoginRequest(BaseModel):
+    """Request body for POST /auth/google."""
+
+    id_token: str
+
+
 class ChangePasswordRequest(BaseModel):
     """Request body for POST /auth/change-password."""
 

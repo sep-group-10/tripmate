@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 import jwt
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,6 +33,7 @@ from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
+    GoogleLoginRequest,
     LoginData,
     LoginRequest,
     LogoutRequest,
@@ -235,7 +238,13 @@ def login(
 ):
     """Verify credentials and issue tokens for the session."""
     user = db.query(User).filter(User.email == payload.email).first()
-    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    # A Google-only account has no password_hash - treat it the same as
+    # "wrong password" rather than crashing verify_password on None.
+    password_hash = (
+        user.password_hash
+        if user is not None and user.password_hash is not None
+        else _DUMMY_PASSWORD_HASH
+    )
     password_is_valid = verify_password(payload.password, password_hash)
 
     # Same error for unknown email and wrong password, to avoid
@@ -250,6 +259,66 @@ def login(
         raise ApiError(
             ErrorCode.EMAIL_NOT_VERIFIED, "Please verify your email before logging in"
         )
+
+    return ApiResponse(data=_issue_tokens(user, response, db))
+
+
+@router.post("/google", response_model=ApiResponse[LoginData])
+@limiter.limit("5/minute")
+def google_login(
+    request: Request,
+    payload: GoogleLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Logs in via a Google ID token: links to an existing account by
+    email, or creates a new Tourist account. Google-only forever - this
+    never sets a password, and never lets a Google account log in any
+    other way."""
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not google_client_id:
+        raise ApiError(
+            ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE, "Google sign-in is not configured"
+        )
+
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            payload.id_token, google_requests.Request(), google_client_id
+        )
+    except ValueError as exc:
+        raise ApiError(ErrorCode.INVALID_GOOGLE_TOKEN, "Google sign-in failed") from exc
+
+    if not claims.get("email_verified", False):
+        raise ApiError(
+            ErrorCode.INVALID_GOOGLE_TOKEN, "Google account email is not verified"
+        )
+
+    google_id = claims["sub"]
+    email = claims["email"].lower()
+
+    user = db.query(User).filter(User.google_id == google_id).first()
+    if user is None:
+        user = db.query(User).filter(User.email == email).first()
+
+    if user is not None and not user.is_active:
+        raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
+
+    if user is None:
+        user = User(
+            full_name=claims.get("name") or email,
+            email=email,
+            login_provider="google",
+            google_id=google_id,
+        )
+        db.add(user)
+    elif user.google_id is None:
+        user.google_id = google_id
+
+    # Google has already proven this email, regardless of which path above.
+    user.is_email_verified = True
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
     return ApiResponse(data=_issue_tokens(user, response, db))
 
