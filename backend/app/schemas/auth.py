@@ -26,6 +26,14 @@ class LoginData(BaseModel):
     user: UserResponse
 
 
+class RegisterData(BaseModel):
+    """Response data for a successful registration - no tokens, since
+    the account isn't usable until the email is verified."""
+
+    email: str
+    message: str
+
+
 class RefreshRequest(BaseModel):
     """Request body for POST /auth/refresh."""
 

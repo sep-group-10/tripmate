@@ -14,6 +14,7 @@ if not JWT_SECRET_KEY:
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS = 24
 
 ACCESS_TOKEN_COOKIE_NAME = "access_token"
 REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
@@ -77,6 +78,16 @@ def create_refresh_token(user_id: uuid.UUID) -> tuple[str, datetime]:
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token, expires_at
+
+
+def generate_verification_token() -> tuple[str, datetime]:
+    """Create a random email-verification token. Returns (token,
+    expires_at) - unlike the JWT tokens above, this is stored directly
+    (not hashed), matching the User model's plain token columns."""
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS
+    )
+    return secrets.token_urlsafe(32), expires_at
 
 
 def hash_refresh_token(token: str) -> str:

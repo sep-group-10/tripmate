@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -20,6 +21,7 @@ from app.core.security import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
+    generate_verification_token,
     hash_password,
     hash_refresh_token,
     verify_password,
@@ -32,9 +34,12 @@ from app.schemas.auth import (
     LogoutRequest,
     RefreshData,
     RefreshRequest,
+    RegisterData,
 )
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest
+from app.services.email import send_email
+from app.services.email_templates import verification_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -90,20 +95,35 @@ def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
     return LoginData(access_token=access_token, refresh_token=refresh_token, user=user)
 
 
+def _send_verification_email(user: User, db: Session) -> None:
+    """Generate a fresh verification token for the user, save it, and
+    email the verification link. Shared by register and (later) the
+    resend-verification endpoint."""
+    token, expires_at = generate_verification_token()
+    user.email_verification_token = token
+    user.email_verification_expiry = expires_at
+    db.add(user)
+    db.commit()
+
+    frontend_base_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+    link = f"{frontend_base_url}/verify-email?token={token}"
+    subject, body = verification_email(link)
+    send_email(user.email, subject, body)
+
+
 @router.post(
     "/register",
-    response_model=ApiResponse[LoginData],
+    response_model=ApiResponse[RegisterData],
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit("5/minute")
 def register(
     request: Request,
     payload: UserRegisterRequest,
-    response: Response,
     db: Session = Depends(get_db),
 ):
-    """Register a new user with the default role and log them in
-    immediately."""
+    """Register a new user with the default role. No session is issued
+    here - the account can't be used until the email is verified."""
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user is not None:
         raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
@@ -125,7 +145,14 @@ def register(
         ) from exc
     db.refresh(user)
 
-    return ApiResponse(data=_issue_tokens(user, response, db))
+    _send_verification_email(user, db)
+
+    return ApiResponse(
+        data=RegisterData(
+            email=user.email,
+            message="Please check your email to verify your account.",
+        )
+    )
 
 
 # Used to keep response time constant when the email does not exist.
