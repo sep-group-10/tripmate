@@ -159,6 +159,7 @@ def test_refresh_for_deactivated_account_is_rejected(client, db_session):
         full_name="Deactivated Refresh User",
         email="deactivatedrefresh@example.com",
         password_hash=hash_password(EXISTING_USER_PASSWORD),
+        is_email_verified=True,
     )
     db_session.add(user)
     db_session.commit()

@@ -53,6 +53,12 @@ class LogoutRequest(BaseModel):
     refresh_token: str | None = None
 
 
+class VerifyEmailRequest(BaseModel):
+    """Request body for POST /auth/verify-email."""
+
+    token: str
+
+
 class ChangePasswordRequest(BaseModel):
     """Request body for POST /auth/change-password."""
 

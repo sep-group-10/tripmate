@@ -94,6 +94,7 @@ def admin_client(client, db_session):
         email="tourism-admin@example.com",
         password_hash=hash_password("adminpassword123"),
         role="ADMIN",
+        is_email_verified=True,
     )
 
     db_session.add(admin)
@@ -124,6 +125,7 @@ def existing_user(db_session):
         full_name="Existing User",
         email="existing@example.com",
         password_hash=hash_password("existingpassword123"),
+        is_email_verified=True,
     )
 
     db_session.add(user)
@@ -140,6 +142,7 @@ def other_user(db_session):
         full_name="Other User",
         email="otheruser@example.com",
         password_hash=hash_password("otheruserpassword123"),
+        is_email_verified=True,
     )
 
     db_session.add(user)

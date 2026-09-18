@@ -35,6 +35,7 @@ from app.schemas.auth import (
     RefreshData,
     RefreshRequest,
     RegisterData,
+    VerifyEmailRequest,
 )
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest
@@ -155,6 +156,33 @@ def register(
     )
 
 
+@router.post("/verify-email", response_model=ApiResponse[dict])
+def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """Mark the account as verified if the token matches and hasn't
+    expired. The token is single-use - it's cleared either way once
+    checked, so it can't be replayed."""
+    user = db.query(User).filter(User.email_verification_token == payload.token).first()
+
+    is_valid = (
+        user is not None
+        and user.email_verification_expiry is not None
+        and user.email_verification_expiry > datetime.now(timezone.utc)
+    )
+    if not is_valid:
+        raise ApiError(
+            ErrorCode.INVALID_VERIFICATION_TOKEN,
+            "Verification link is invalid or expired",
+        )
+
+    user.is_email_verified = True
+    user.email_verification_token = None
+    user.email_verification_expiry = None
+    db.add(user)
+    db.commit()
+
+    return ApiResponse(data={})
+
+
 # Used to keep response time constant when the email does not exist.
 _DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
 
@@ -179,6 +207,11 @@ def login(
 
     if not user.is_active:
         raise ApiError(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated")
+
+    if not user.is_email_verified:
+        raise ApiError(
+            ErrorCode.EMAIL_NOT_VERIFIED, "Please verify your email before logging in"
+        )
 
     return ApiResponse(data=_issue_tokens(user, response, db))
 
