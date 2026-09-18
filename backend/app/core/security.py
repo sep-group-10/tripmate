@@ -22,6 +22,16 @@ REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
 COOKIE_SECURE = os.getenv("ENVIRONMENT", "development") != "development"
 
 
+def validate_password_strength(password: str) -> None:
+    """Raise ValueError unless the password has at least one letter and
+    one digit. Shared by register, change-password, and reset-password,
+    so the rule only needs to change in one place."""
+    has_letter = any(char.isalpha() for char in password)
+    has_digit = any(char.isdigit() for char in password)
+    if not (has_letter and has_digit):
+        raise ValueError("Password must contain at least one letter and one number")
+
+
 def hash_password(password: str) -> str:
     """Hash a plaintext password with bcrypt (random salt per call)."""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

@@ -18,6 +18,10 @@ export function validatePassword(value) {
   if (value.length < 8) return "Password must be at least 8 characters";
   if (value.length > 72) return "Password must be 72 characters or fewer";
   if (!value.trim()) return "Password cannot be blank or only whitespace";
+  // Mirrors backend validate_password_strength.
+  if (!/[a-zA-Z]/.test(value) || !/[0-9]/.test(value)) {
+    return "Password must contain at least one letter and one number";
+  }
   return "";
 }
 

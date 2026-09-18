@@ -2,6 +2,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.security import validate_password_strength
 from app.schemas.common import UTCTimestamp
 
 
@@ -26,6 +27,12 @@ class UserRegisterRequest(BaseModel):
         would let e.g. 8 spaces through)."""
         if not value.strip():
             raise ValueError("Password cannot be blank or only whitespace")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
         return value
 
     @field_validator("full_name")
