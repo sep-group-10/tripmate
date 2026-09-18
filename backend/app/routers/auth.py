@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime, timezone
 
 import jwt
-from fastapi import APIRouter, Cookie, Depends, Response, status
+from fastapi import APIRouter, Cookie, Depends, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.errors import ApiError, ErrorCode
+from app.core.rate_limit import limiter
 from app.core.security import (
     ACCESS_TOKEN_COOKIE_NAME,
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -92,8 +93,12 @@ def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
     response_model=ApiResponse[LoginData],
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("5/minute")
 def register(
-    payload: UserRegisterRequest, response: Response, db: Session = Depends(get_db)
+    request: Request,
+    payload: UserRegisterRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     """Register a new user with the default role and log them in
     immediately."""
@@ -126,7 +131,13 @@ _DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-safety")
 
 
 @router.post("/login", response_model=ApiResponse[LoginData])
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(
+    request: Request,
+    payload: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     """Verify credentials and issue tokens for the session."""
     user = db.query(User).filter(User.email == payload.email).first()
     password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
