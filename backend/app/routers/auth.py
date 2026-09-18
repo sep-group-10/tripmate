@@ -21,6 +21,7 @@ from app.core.security import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
+    generate_password_reset_token,
     generate_verification_token,
     hash_password,
     hash_refresh_token,
@@ -29,6 +30,7 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginData,
     LoginRequest,
     LogoutRequest,
@@ -36,12 +38,13 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterData,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     VerifyEmailRequest,
 )
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest
 from app.services.email import send_email
-from app.services.email_templates import verification_email
+from app.services.email_templates import password_reset_email, verification_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -97,20 +100,37 @@ def _issue_tokens(user: User, response: Response, db: Session) -> LoginData:
     return LoginData(access_token=access_token, refresh_token=refresh_token, user=user)
 
 
+def _frontend_base_url() -> str:
+    # `or`, not getenv's default arg - an empty-but-set env var must still fall back.
+    return os.getenv("FRONTEND_BASE_URL") or "http://localhost:5173"
+
+
 def _send_verification_email(user: User, db: Session) -> None:
     """Generate a fresh verification token for the user, save it, and
-    email the verification link. Shared by register and (later) the
-    resend-verification endpoint."""
+    email the verification link. Shared by register and
+    resend-verification."""
     token, expires_at = generate_verification_token()
     user.email_verification_token = token
     user.email_verification_expiry = expires_at
     db.add(user)
     db.commit()
 
-    # `or`, not getenv's default arg - an empty-but-set env var must still fall back.
-    frontend_base_url = os.getenv("FRONTEND_BASE_URL") or "http://localhost:5173"
-    link = f"{frontend_base_url}/verify-email?token={token}"
+    link = f"{_frontend_base_url()}/verify-email?token={token}"
     subject, body = verification_email(link)
+    send_email(user.email, subject, body)
+
+
+def _send_password_reset_email(user: User, db: Session) -> None:
+    """Generate a fresh password-reset token for the user, save it, and
+    email the reset link."""
+    token, expires_at = generate_password_reset_token()
+    user.password_reset_token = token
+    user.reset_token_expiry = expires_at
+    db.add(user)
+    db.commit()
+
+    link = f"{_frontend_base_url()}/reset-password?token={token}"
+    subject, body = password_reset_email(link)
     send_email(user.email, subject, body)
 
 
@@ -341,6 +361,58 @@ def logout(
         secure=COOKIE_SECURE,
         samesite="lax",
     )
+    return ApiResponse(data={})
+
+
+@router.post("/forgot-password", response_model=ApiResponse[dict])
+@limiter.limit("5/minute")
+def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Sends a password-reset email if the account exists. Always
+    returns the same generic response either way - this must never
+    reveal whether an email is registered."""
+    user = db.query(User).filter(User.email == payload.email).first()
+
+    if user is not None:
+        _send_password_reset_email(user, db)
+
+    return ApiResponse(data={})
+
+
+@router.post("/reset-password", response_model=ApiResponse[dict])
+@limiter.limit("5/minute")
+def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Sets a new password if the reset token is valid and unexpired,
+    then revokes the account's refresh token - any other device must
+    log in again with the new password. The token is cleared either
+    way, so it can't be replayed."""
+    user = db.query(User).filter(User.password_reset_token == payload.token).first()
+
+    is_valid = (
+        user is not None
+        and user.reset_token_expiry is not None
+        and user.reset_token_expiry > datetime.now(timezone.utc)
+    )
+    if not is_valid:
+        raise ApiError(
+            ErrorCode.INVALID_RESET_TOKEN, "Reset link is invalid or expired"
+        )
+
+    user.password_hash = hash_password(payload.new_password)
+    user.password_reset_token = None
+    user.reset_token_expiry = None
+    user.refresh_token = None
+    user.refresh_token_expiry = None
+    db.add(user)
+    db.commit()
+
     return ApiResponse(data={})
 
 

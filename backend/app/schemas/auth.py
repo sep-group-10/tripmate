@@ -70,6 +70,30 @@ class ResendVerificationRequest(BaseModel):
         return value.lower()
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request body for POST /auth/forgot-password."""
+
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for POST /auth/reset-password."""
+
+    token: str
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
+        return value
+
+
 class ChangePasswordRequest(BaseModel):
     """Request body for POST /auth/change-password."""
 
