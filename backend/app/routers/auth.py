@@ -35,6 +35,7 @@ from app.schemas.auth import (
     RefreshData,
     RefreshRequest,
     RegisterData,
+    ResendVerificationRequest,
     VerifyEmailRequest,
 )
 from app.schemas.common import ApiResponse
@@ -106,7 +107,8 @@ def _send_verification_email(user: User, db: Session) -> None:
     db.add(user)
     db.commit()
 
-    frontend_base_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+    # `or`, not getenv's default arg - an empty-but-set env var must still fall back.
+    frontend_base_url = os.getenv("FRONTEND_BASE_URL") or "http://localhost:5173"
     link = f"{frontend_base_url}/verify-email?token={token}"
     subject, body = verification_email(link)
     send_email(user.email, subject, body)
@@ -158,9 +160,8 @@ def register(
 
 @router.post("/verify-email", response_model=ApiResponse[dict])
 def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
-    """Mark the account as verified if the token matches and hasn't
-    expired. The token is single-use - it's cleared either way once
-    checked, so it can't be replayed."""
+    """Marks the account verified if the token is valid and unexpired;
+    the token is cleared either way, so it can't be replayed."""
     user = db.query(User).filter(User.email_verification_token == payload.token).first()
 
     is_valid = (
@@ -179,6 +180,23 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
     user.email_verification_expiry = None
     db.add(user)
     db.commit()
+
+    return ApiResponse(data={})
+
+
+@router.post("/resend-verification", response_model=ApiResponse[dict])
+@limiter.limit("5/minute")
+def resend_verification(
+    request: Request,
+    payload: ResendVerificationRequest,
+    db: Session = Depends(get_db),
+):
+    """Resends the verification email unless already verified - same
+    response either way, so this can't reveal which emails exist."""
+    user = db.query(User).filter(User.email == payload.email).first()
+
+    if user is not None and not user.is_email_verified:
+        _send_verification_email(user, db)
 
     return ApiResponse(data={})
 

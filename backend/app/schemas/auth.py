@@ -59,6 +59,17 @@ class VerifyEmailRequest(BaseModel):
     token: str
 
 
+class ResendVerificationRequest(BaseModel):
+    """Request body for POST /auth/resend-verification."""
+
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
 class ChangePasswordRequest(BaseModel):
     """Request body for POST /auth/change-password."""
 
