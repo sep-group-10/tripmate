@@ -4,7 +4,6 @@ import os
 from app.schemas.agent_session import AgentSession
 from app.services.langgraph.critic import critic_node
 
-
 DATASET_PATH = os.path.join(
     os.path.dirname(__file__),
     "planner_dataset.json",
@@ -80,10 +79,10 @@ def run_critic_eval():
                 f"Actual status: {actual_status}"
             )
 
-        except Exception as exc:
+        except (ValueError, TypeError, RuntimeError) as exc:
             failed += 1
 
-            print(f"FAIL | " f"{case['id']} | " f"Error: {exc}")
+            print(f"FAIL | {case['id']} | Error: {exc}")
 
     total = passed + failed
     match_rate = (passed / total * 100) if total else 0
