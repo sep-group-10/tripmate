@@ -1,0 +1,94 @@
+[
+  {
+    "id": "planner_001",
+    "type": "planner",
+    "name": "Complete Kandy trip",
+    "request": "Plan a 3-day trip to Kandy for 2 people.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "3 days",
+      "travelers": 2,
+      "budget": "50000 LKR",
+      "interests": ["culture", "nature"]
+    },
+    "expected_action": "placeholder_tool"
+  },
+  {
+    "id": "planner_002",
+    "type": "planner",
+    "name": "Galle beach trip",
+    "request": "Plan a beach trip to Galle.",
+    "preferences": {
+      "destination": "Galle",
+      "interests": ["beach"]
+    },
+    "expected_action": "placeholder_tool"
+  },
+  {
+    "id": "planner_003",
+    "type": "planner",
+    "name": "Budget trip",
+    "request": "Plan a trip to Ella with a budget of 40000 LKR.",
+    "preferences": {
+      "destination": "Ella",
+      "budget": "40000 LKR"
+    },
+    "expected_action": "placeholder_tool"
+  },
+  {
+    "id": "planner_004",
+    "type": "planner",
+    "name": "Cultural trip",
+    "request": "I want to visit Kandy and explore cultural attractions.",
+    "preferences": {
+      "destination": "Kandy",
+      "interests": ["culture"]
+    },
+    "expected_action": "placeholder_tool"
+  },
+  {
+    "id": "planner_005",
+    "type": "planner",
+    "name": "General Sri Lanka trip",
+    "request": "I want to plan a trip around Sri Lanka.",
+    "preferences": {
+      "destination": "Sri Lanka"
+    },
+    "expected_action": "placeholder_tool"
+  },
+  {
+    "id": "critic_001",
+    "type": "critic",
+    "name": "Complete planning result",
+    "request": "Plan a 3-day trip to Kandy for 2 people.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "3 days",
+      "travelers": 2,
+      "budget": "50000 LKR",
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "placeholder_tool",
+        "result": "Placeholder tool executed successfully."
+      }
+    ],
+    "tool_execution_order": ["placeholder_tool"],
+    "expected_continue_planning": false,
+    "expected_status": "completed"
+  },
+  {
+    "id": "critic_002",
+    "type": "critic",
+    "name": "Incomplete planning result",
+    "request": "Plan a trip to Kandy.",
+    "preferences": {
+      "destination": "Kandy"
+    },
+    "tool_results": [],
+    "tool_execution_order": [],
+    "expected_continue_planning": true,
+    "expected_status": null
+  }
+]
