@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.dependencies import get_current_user
 from app.core.errors import ApiError, ErrorCode
 from app.core.rate_limit import limiter
 from app.core.security import (
@@ -25,6 +26,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginData,
     LoginRequest,
     LogoutRequest,
@@ -262,3 +264,25 @@ def logout(
         samesite="lax",
     )
     return ApiResponse(data={})
+
+
+@router.post("/change-password", response_model=ApiResponse[LoginData])
+def change_password(
+    payload: ChangePasswordRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change the logged-in user's password. Requires the current
+    password. Rotates the session's tokens on success, which also
+    invalidates any other device's refresh token (only one is stored
+    per user), forcing them to log in again with the new password."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect")
+
+    current_user.password_hash = hash_password(payload.new_password)
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return ApiResponse(data=_issue_tokens(current_user, response, db))

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
-import { validateFullName } from "../utils/validation";
+import { validateFullName, validatePassword } from "../utils/validation";
 import { loadProfile, saveProfile } from "../utils/profileStorage";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
@@ -25,10 +25,11 @@ const INTEREST_OPTIONS = [
 // would reject the whole request. Email is shown read-only for this
 // reason, not as an oversight.
 //
-// Account Settings (password change, email notifications) has no backend
-// fields at all yet - no password-change endpoint, no notifications
-// column on User - so it stays on the local-only profileStorage behavior
-// below. Travel Preferences partially overlaps the real contract
+// Account Settings: password change now calls the real
+// POST /auth/change-password. Email notifications still has no backend
+// field (no notifications column on User yet), so it stays on the
+// local-only profileStorage behavior below. Travel Preferences partially
+// overlaps the real contract
 // (typical_budget_range and interests both exist on ProfileUpdateRequest)
 // but "pace" has no backend equivalent, and this issue (C4.1) is scoped to
 // register -> login -> profile's Personal Information section only, so
@@ -189,26 +190,58 @@ function ProfilePage() {
   const [localPrefs, setLocalPrefs] = useState(() => loadProfile());
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState("idle"); // idle | saving | error
   const [savedPassword, flashPassword] = useFlash();
   const [emailNotifications, setEmailNotifications] = useState(
     localPrefs.emailNotifications,
   );
 
-  const handleUpdatePassword = (event) => {
+  const handleUpdatePassword = async (event) => {
     event.preventDefault();
+
     if (!currentPassword) {
-      setPasswordError("Enter your current password");
+      setCurrentPasswordError("Enter your current password");
       return;
     }
-    if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
+    const newPasswordError = validatePassword(newPassword);
+    if (newPasswordError) {
+      setPasswordError(newPasswordError);
       return;
     }
+
+    setCurrentPasswordError("");
     setPasswordError("");
-    setCurrentPassword("");
-    setNewPassword("");
-    flashPassword();
+    setPasswordStatus("saving");
+    try {
+      const response = await api.post("/api/v1/auth/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      login(response.data.data.user);
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordStatus("idle");
+      flashPassword();
+    } catch (error) {
+      const { code, message, details } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      if (code === "INVALID_CREDENTIALS") {
+        setCurrentPasswordError(message);
+      } else if (code === "VALIDATION_ERROR" && details.length > 0) {
+        const newPasswordDetail = details.find(
+          (detail) => detail.field === "new_password",
+        );
+        setPasswordError(newPasswordDetail?.message ?? message);
+      } else {
+        setPasswordError(message);
+      }
+      setPasswordStatus("error");
+    }
   };
 
   const handleToggleEmailNotifications = () => {
@@ -369,8 +402,9 @@ function ProfilePage() {
                 value={currentPassword}
                 onChange={(event) => {
                   setCurrentPassword(event.target.value);
-                  setPasswordError("");
+                  setCurrentPasswordError("");
                 }}
+                error={currentPasswordError}
               />
               <FormInput
                 id="newPassword"
@@ -419,9 +453,10 @@ function ProfilePage() {
               <SavedMessage show={savedPassword} text="Password updated" />
               <button
                 type="submit"
-                className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control"
+                disabled={passwordStatus === "saving"}
+                className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Update password
+                {passwordStatus === "saving" ? "Updating…" : "Update password"}
               </button>
             </div>
           </form>
