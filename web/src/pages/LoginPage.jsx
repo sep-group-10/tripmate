@@ -201,6 +201,13 @@ function LoginPage() {
                   </button>
                 }
               />
+
+              <Link
+                to="/forgot-password"
+                className="self-end text-sm text-accent-700"
+              >
+                Forgot password?
+              </Link>
             </div>
 
             <button
