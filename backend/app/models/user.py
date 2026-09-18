@@ -28,9 +28,22 @@ class User(Base):
         unique=True,
     )
 
-    password_hash: Mapped[str] = mapped_column(
+    # Nullable: a Google-only account has no password.
+    password_hash: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    login_provider: Mapped[str] = mapped_column(
+        String(20),
         nullable=False,
+        default="local",
+    )
+
+    google_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        unique=True,
     )
 
     role: Mapped[str] = mapped_column(
