@@ -4,7 +4,15 @@ import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
+import { parseApiError } from "../../utils/apiError";
+import { formatCurrency } from "../../utils/tourismMapping";
 
+// `category` has no backend/app/schemas/tourism.py field (C4.2/C4.3) - kept
+// here purely as a client-side taxonomy for the form and tag color, but
+// excluded from the API payload (see utils/tourismMapping.js) rather than
+// sent and silently ignored. The filter dropdown is deliberately NOT
+// offered below, since filtering by an unpersisted field would silently
+// return nothing for every real (API-loaded) attraction.
 const CATEGORY_TONES = {
   Historical: "warn",
   Hiking: "success",
@@ -17,6 +25,8 @@ const CATEGORY_OPTIONS = Object.keys(CATEGORY_TONES);
 function AttractionsList() {
   const {
     attractions,
+    attractionsStatus,
+    attractionsError,
     destinations,
     addAttraction,
     updateAttraction,
@@ -24,10 +34,13 @@ function AttractionsList() {
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
-  const [categoryFilter, setCategoryFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const [deletingRecord, setDeletingRecord] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -41,14 +54,13 @@ function AttractionsList() {
         (a) =>
           destinationFilter === "All" || a.destination === destinationFilter,
       )
-      .filter((a) => categoryFilter === "All" || a.category === categoryFilter)
       .filter(
         (a) =>
           !q ||
           a.name.toLowerCase().includes(q) ||
           a.description.toLowerCase().includes(q),
       );
-  }, [attractions, query, destinationFilter, categoryFilter]);
+  }, [attractions, query, destinationFilter]);
 
   const formFields = useMemo(
     () => [
@@ -71,7 +83,7 @@ function AttractionsList() {
         label: "Category",
         type: "select",
         options: CATEGORY_OPTIONS,
-        required: true,
+        helperText: "Not saved yet — no backend field for this.",
       },
       {
         name: "description",
@@ -84,19 +96,19 @@ function AttractionsList() {
         name: "opening_hours",
         label: "Hours",
         type: "text",
-        placeholder: "e.g. 6:00–18:00",
+        placeholder: "e.g. 06:00-18:00",
       },
       {
         name: "entry_fee",
-        label: "Entry fee",
-        type: "text",
-        placeholder: "e.g. LKR 500",
+        label: "Entry fee (LKR)",
+        type: "number",
+        placeholder: "e.g. 500",
       },
       {
         name: "duration_hours",
-        label: "Duration",
-        type: "text",
-        placeholder: "e.g. 1–2 hr",
+        label: "Duration (hours)",
+        type: "number",
+        placeholder: "e.g. 2",
       },
     ],
     [destinationNames],
@@ -104,26 +116,44 @@ function AttractionsList() {
 
   const openAddForm = () => {
     setEditingRecord(null);
+    setFormError("");
     setIsFormOpen(true);
   };
 
   const openEditForm = (record) => {
     setEditingRecord(record);
+    setFormError("");
     setIsFormOpen(true);
   };
 
-  const handleSubmit = (values) => {
-    if (editingRecord) {
-      updateAttraction(editingRecord.id, values);
-    } else {
-      addAttraction(values);
+  const handleSubmit = async (values) => {
+    setFormSubmitting(true);
+    setFormError("");
+    try {
+      if (editingRecord) {
+        await updateAttraction(editingRecord.id, values);
+      } else {
+        await addAttraction(values);
+      }
+      setIsFormOpen(false);
+    } catch (error) {
+      setFormError(parseApiError(error).message);
+    } finally {
+      setFormSubmitting(false);
     }
-    setIsFormOpen(false);
   };
 
-  const handleConfirmDelete = () => {
-    deleteAttraction(deletingRecord.id);
-    setDeletingRecord(null);
+  const handleConfirmDelete = async () => {
+    setDeleteSubmitting(true);
+    setDeleteError("");
+    try {
+      await deleteAttraction(deletingRecord.id);
+      setDeletingRecord(null);
+    } catch (error) {
+      setDeleteError(parseApiError(error).message);
+    } finally {
+      setDeleteSubmitting(false);
+    }
   };
 
   return (
@@ -157,50 +187,62 @@ function AttractionsList() {
             </option>
           ))}
         </select>
-        <select
-          value={categoryFilter}
-          onChange={(event) => setCategoryFilter(event.target.value)}
-          aria-label="Category"
-          className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
-        >
-          <option value="All">All categories</option>
-          {CATEGORY_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           onClick={openAddForm}
-          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+          disabled={attractionsStatus !== "ready"}
+          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           ＋ Add Attraction
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((attraction) => (
-          <EntityCard
-            key={attraction.id}
-            name={attraction.name}
-            location={attraction.destination}
-            rating={attraction.rating}
-            tag={{
-              label: attraction.category,
-              tone: CATEGORY_TONES[attraction.category] || "accent",
-            }}
-            description={attraction.description}
-            metrics={[
-              { label: "Hours", value: attraction.opening_hours },
-              { label: "Entry", value: attraction.entry_fee },
-              { label: "Duration", value: attraction.duration_hours },
-            ]}
-            onEdit={() => openEditForm(attraction)}
-            onDelete={() => setDeletingRecord(attraction)}
-          />
-        ))}
-      </div>
+      {attractionsStatus === "loading" && (
+        <p className="m-0 text-sm text-muted-600">Loading attractions…</p>
+      )}
+
+      {attractionsStatus === "error" && (
+        <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+          {attractionsError}
+        </p>
+      )}
+
+      {attractionsStatus === "ready" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((attraction) => (
+            <EntityCard
+              key={attraction.id}
+              name={attraction.name}
+              location={attraction.destination}
+              rating={attraction.rating}
+              tag={
+                attraction.category
+                  ? {
+                      label: attraction.category,
+                      tone: CATEGORY_TONES[attraction.category] || "accent",
+                    }
+                  : undefined
+              }
+              description={attraction.description}
+              metrics={[
+                { label: "Hours", value: attraction.opening_hours || "—" },
+                { label: "Entry", value: formatCurrency(attraction.entry_fee) },
+                {
+                  label: "Duration",
+                  value: attraction.duration_hours
+                    ? `${attraction.duration_hours} hr`
+                    : "—",
+                },
+              ]}
+              onEdit={() => openEditForm(attraction)}
+              onDelete={() => {
+                setDeleteError("");
+                setDeletingRecord(attraction);
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {isFormOpen && (
         <EntityFormModal
@@ -215,6 +257,8 @@ function AttractionsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          submitting={formSubmitting}
+          submitError={formError}
         />
       )}
 
@@ -223,6 +267,8 @@ function AttractionsList() {
           recordName={deletingRecord.name}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeletingRecord(null)}
+          submitting={deleteSubmitting}
+          submitError={deleteError}
         />
       )}
     </div>

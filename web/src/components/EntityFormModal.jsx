@@ -16,7 +16,10 @@ const noValidate = () => "";
  * cancel plumbing are identical. Each field is { name, label, type:
  * 'text'|'select'|'textarea'|'number', options?, placeholder?, required?,
  * validate? } - `validate` overrides the default required/no-op validator
- * with a custom one (e.g. numeric range checks for lat/long).
+ * with a custom one (e.g. numeric range checks for lat/long). `helperText`
+ * renders a muted note under the field - used to flag fields the backend
+ * doesn't actually persist yet (e.g. Attraction category, Hotel tier) so
+ * that gap is visible to the admin instead of silently dropped.
  * Pass `initialValues` (an existing record) to open in edit mode — fields
  * are pre-filled and the caller's onSubmit decides whether that means
  * updating that record or creating a new one; this component doesn't know
@@ -119,26 +122,37 @@ function EntityFormModal({
                     {errors[field.name]}
                   </span>
                 )}
+                {field.helperText && (
+                  <span className="mt-1.5 block text-xs text-muted-600">
+                    {field.helperText}
+                  </span>
+                )}
               </div>
             );
           }
 
           return (
-            <FormInput
-              key={field.name}
-              id={field.name}
-              label={field.label}
-              type={
-                field.type === "textarea" ? undefined : (field.type ?? "text")
-              }
-              as={field.type === "textarea" ? "textarea" : "input"}
-              rows={field.type === "textarea" ? 3 : undefined}
-              placeholder={field.placeholder}
-              value={values[field.name]}
-              onChange={handleChange(field.name)}
-              onBlur={handleBlur(field.name)}
-              error={errors[field.name]}
-            />
+            <div key={field.name}>
+              <FormInput
+                id={field.name}
+                label={field.label}
+                type={
+                  field.type === "textarea" ? undefined : (field.type ?? "text")
+                }
+                as={field.type === "textarea" ? "textarea" : "input"}
+                rows={field.type === "textarea" ? 3 : undefined}
+                placeholder={field.placeholder}
+                value={values[field.name]}
+                onChange={handleChange(field.name)}
+                onBlur={handleBlur(field.name)}
+                error={errors[field.name]}
+              />
+              {field.helperText && (
+                <span className="mt-1.5 block text-xs text-muted-600">
+                  {field.helperText}
+                </span>
+              )}
+            </div>
           );
         })}
 
