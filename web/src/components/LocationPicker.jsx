@@ -1,9 +1,10 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   APIProvider,
   Map,
   AdvancedMarker,
   Pin,
+  useAdvancedMarkerRef,
 } from "@vis.gl/react-google-maps";
 import { PlacePicker } from "@googlemaps/extended-component-library/react";
 
@@ -44,6 +45,21 @@ function resolveCameraProps(value, initialCenter) {
   return { center: FALLBACK_CENTER, zoom: FALLBACK_ZOOM };
 }
 
+// AdvancedMarkerElement's post-drag position is a LatLngAltitude-shaped
+// object (plain `.lat`/`.lng` number properties), not a classic LatLng (with
+// `.lat()`/`.lng()` methods) - handle either, since which one shows up isn't
+// pinned down by public docs.
+function readLatLng(position) {
+  if (!position) return null;
+  const lat =
+    typeof position.lat === "function" ? position.lat() : position.lat;
+  const lng =
+    typeof position.lng === "function" ? position.lng() : position.lng;
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    ? { latitude: lat, longitude: lng }
+    : null;
+}
+
 function positionKey(value, initialCenter) {
   return [
     value?.latitude,
@@ -60,7 +76,11 @@ function positionKey(value, initialCenter) {
  * shape once a real place is picked. `initialCenter` (typically the
  * selected Destination's coordinates) only affects where the map starts
  * before a place is picked - once `value` is set (a fresh pick, or an
- * existing record being edited), the map centers on that instead. */
+ * existing record being edited), the map centers on that instead.
+ * Once a pin is showing (from either a search pick or an edited record's
+ * saved position), it's always draggable - search results often land near
+ * but not exactly on the real spot, so dragging lets the admin nudge it;
+ * `onChange` fires again on drop with the marker's new position. */
 function LocationPicker({ value, onChange, initialCenter }) {
   const rawId = useId();
   const mapDomId = `location-picker-${rawId.replace(/[^a-zA-Z0-9-]/g, "")}`;
@@ -83,6 +103,25 @@ function LocationPicker({ value, onChange, initialCenter }) {
     setCameraProps(resolveCameraProps(value, initialCenter));
   }
 
+  const [markerRef, marker] = useAdvancedMarkerRef();
+
+  // AdvancedMarkerElement dispatches its drag-end as a DOM CustomEvent named
+  // 'gmp-dragend' (per Google's draggable-markers guide), not the classic
+  // 'dragend' google.maps.event that @vis.gl/react-google-maps' onDragEnd
+  // prop listens for via google.maps.event.addListener - that prop never
+  // fires here, so the native event is bound directly off the marker
+  // instance instead. The event carries no position data; read it back off
+  // marker.position afterwards, as the guide does.
+  useEffect(() => {
+    if (!marker) return;
+    const handleDragEnd = () => {
+      const dragged = readLatLng(marker.position);
+      if (dragged) onChange(dragged);
+    };
+    marker.addEventListener("gmp-dragend", handleDragEnd);
+    return () => marker.removeEventListener("gmp-dragend", handleDragEnd);
+  }, [marker, onChange]);
+
   if (!API_KEY) {
     return (
       <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
@@ -91,7 +130,7 @@ function LocationPicker({ value, onChange, initialCenter }) {
     );
   }
 
-  const marker = toLatLng(value);
+  const markerPosition = toLatLng(value);
 
   return (
     <APIProvider apiKey={API_KEY} version="beta">
@@ -119,8 +158,12 @@ function LocationPicker({ value, onChange, initialCenter }) {
             gestureHandling="greedy"
             disableDefaultUI={false}
           >
-            {marker && (
-              <AdvancedMarker position={marker}>
+            {markerPosition && (
+              <AdvancedMarker
+                ref={markerRef}
+                position={markerPosition}
+                draggable
+              >
                 <Pin
                   background="#FBBC04"
                   glyphColor="#000"
