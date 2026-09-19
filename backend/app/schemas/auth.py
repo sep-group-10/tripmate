@@ -111,3 +111,11 @@ class ChangePasswordRequest(BaseModel):
     def new_password_strength(cls, value: str) -> str:
         validate_password_strength(value)
         return value
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request body for POST /auth/delete-account. current_password is
+    required for local accounts, ignored for Google-only accounts
+    (which have no password to confirm with)."""
+
+    current_password: str | None = None

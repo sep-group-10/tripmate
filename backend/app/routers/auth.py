@@ -32,6 +32,7 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
+    DeleteAccountRequest,
     ForgotPasswordRequest,
     GoogleLoginRequest,
     LoginData,
@@ -505,3 +506,59 @@ def change_password(
     db.refresh(current_user)
 
     return ApiResponse(data=_issue_tokens(current_user, response, db))
+
+
+@router.post("/delete-account", response_model=ApiResponse[dict])
+def delete_account(
+    payload: DeleteAccountRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Anonymizes and deactivates the account rather than deleting the
+    row outright - trips and feedback reference it by foreign key, and
+    a hard delete would fail (or silently orphan that history) instead
+    of just working. Local accounts must confirm with their current
+    password; Google-only accounts have none to confirm with."""
+    if current_user.password_hash is not None:
+        if payload.current_password is None or not verify_password(
+            payload.current_password, current_user.password_hash
+        ):
+            raise ApiError(
+                ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect"
+            )
+
+    current_user.full_name = "Deleted User"
+    # `.local`/`.invalid`/`.test` etc are reserved special-use TLDs that
+    # EmailStr rejects outright - this domain just needs to be syntactically
+    # ordinary, not real or deliverable.
+    current_user.email = f"deleted-{current_user.id}@deleted-users.tripmate.com"
+    current_user.password_hash = None
+    current_user.google_id = None
+    current_user.is_active = False
+    current_user.email_verification_token = None
+    current_user.email_verification_expiry = None
+    current_user.password_reset_token = None
+    current_user.reset_token_expiry = None
+    current_user.refresh_token = None
+    current_user.refresh_token_expiry = None
+    current_user.preferred_travel_style = None
+    current_user.preferred_accommodation = None
+    current_user.typical_budget_range = None
+    current_user.interests = None
+    db.add(current_user)
+    db.commit()
+
+    response.delete_cookie(
+        key=ACCESS_TOKEN_COOKIE_NAME,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key=REFRESH_TOKEN_COOKIE_NAME,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+    )
+    return ApiResponse(data={})
