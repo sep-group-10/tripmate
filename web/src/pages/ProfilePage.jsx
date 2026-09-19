@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
+import Modal from "../components/Modal";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { validateFullName, validatePassword } from "../utils/validation";
 import { loadProfile, saveProfile } from "../utils/profileStorage";
@@ -269,6 +270,61 @@ function ProfilePage() {
     event.preventDefault();
     setLocalPrefs(saveProfile({ budget, pace, interests }));
     flashPrefs();
+  };
+
+  const [exportStatus, setExportStatus] = useState("idle"); // idle | exporting | error
+  const [exportError, setExportError] = useState("");
+
+  const handleExportData = async () => {
+    setExportStatus("exporting");
+    setExportError("");
+    try {
+      const response = await api.get("/api/v1/users/me/export");
+      const blob = new Blob([JSON.stringify(response.data.data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "tripmate-my-data.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      setExportStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setExportError(message);
+      setExportStatus("error");
+    }
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState("idle"); // idle | deleting
+
+  const handleDeleteAccount = async () => {
+    setDeleteStatus("deleting");
+    setDeleteError("");
+    try {
+      await api.post("/api/v1/auth/delete-account", {
+        current_password:
+          loginProvider === "google" ? undefined : deletePassword,
+      });
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setDeleteError(message);
+      setDeleteStatus("idle");
+    }
   };
 
   return (
@@ -543,7 +599,111 @@ function ProfilePage() {
             </div>
           </form>
         </SectionCard>
+
+        <SectionCard title="Your data" badge="Privacy">
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <div className="text-sm font-medium">Export your data</div>
+              <div className="text-helper text-muted-600">
+                Download everything TripMate holds about your account as a JSON
+                file.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportData}
+              disabled={exportStatus === "exporting"}
+              className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {exportStatus === "exporting" ? "Preparing…" : "Export data"}
+            </button>
+          </div>
+          {exportStatus === "error" && (
+            <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+              {exportError}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-6 border-t border-divider pt-6">
+            <div>
+              <div className="text-sm font-medium text-danger">
+                Delete account
+              </div>
+              <div className="text-helper text-muted-600">
+                Permanently deactivates your account. This cannot be undone.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="rounded-full border border-danger px-4 py-2 text-sm font-medium text-danger shadow-control"
+            >
+              Delete account
+            </button>
+          </div>
+        </SectionCard>
       </div>
+
+      {showDeleteModal && (
+        <Modal
+          title="Delete your account?"
+          subtitle="This action cannot be undone."
+          onClose={() => {
+            setShowDeleteModal(false);
+            setDeletePassword("");
+            setDeleteError("");
+          }}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeletePassword("");
+                  setDeleteError("");
+                }}
+                disabled={deleteStatus === "deleting"}
+                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={
+                  deleteStatus === "deleting" ||
+                  (loginProvider !== "google" && !deletePassword)
+                }
+                className="rounded-full bg-danger px-4 py-2 text-sm font-medium text-white shadow-control hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {deleteStatus === "deleting" ? "Deleting…" : "Delete account"}
+              </button>
+            </>
+          }
+        >
+          {deleteError && (
+            <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+              {deleteError}
+            </p>
+          )}
+          {loginProvider === "google" ? (
+            <p className="m-0 text-sm text-muted-600">
+              Your account was signed in with Google. Confirm below to
+              permanently deactivate it.
+            </p>
+          ) : (
+            <FormInput
+              id="deletePassword"
+              label="Enter your password to confirm"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={deletePassword}
+              onChange={(event) => setDeletePassword(event.target.value)}
+            />
+          )}
+        </Modal>
+      )}
     </div>
   );
 }
