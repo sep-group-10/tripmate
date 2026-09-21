@@ -5,6 +5,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Public auth endpoints never need a session refresh - a 401 from any
+// of these is a real answer (wrong credentials, bad token, etc.), not
+// an expired session, and retrying could refresh an unrelated session
+// that happens to be logged in in the same browser.
+const PUBLIC_AUTH_PATHS = [
+  "/api/v1/auth/login",
+  "/api/v1/auth/register",
+  "/api/v1/auth/google",
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/forgot-password",
+  "/api/v1/auth/reset-password",
+  "/api/v1/auth/verify-email",
+  "/api/v1/auth/resend-verification",
+];
+
 // Shared so concurrent 401s reuse one refresh call instead of racing.
 let refreshPromise = null;
 
@@ -21,11 +36,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const isUnauthorized = error.response?.status === 401;
-    const isRefreshCall = error.config?.url === "/api/v1/auth/refresh";
+    const isPublicAuthCall = PUBLIC_AUTH_PATHS.includes(error.config?.url);
     // True once this request was already retried, so it can't loop forever.
     const alreadyRetried = error.config?._retry;
 
-    if (isUnauthorized && !isRefreshCall && !alreadyRetried) {
+    if (isUnauthorized && !isPublicAuthCall && !alreadyRetried) {
       try {
         await refreshAccessToken();
         error.config._retry = true;

@@ -40,9 +40,9 @@ Applies to registration, change-password, and reset-password.
 |---|---|
 | Minimum length | 8 characters |
 | Maximum length | 72 characters (bcrypt's own limit — longer input is silently truncated by bcrypt, which would be a worse bug than just rejecting it) |
-| Composition | At least one letter and one digit |
+| Composition | At least one letter and one digit (Unicode-aware — accented letters and non-ASCII digits count) |
 
-Checked in two places: the frontend (`validation.js`) rejects it before submitting, and the backend (`validate_password_strength` in `security.py`) rejects it again regardless — the frontend check is for a fast error message, not a security boundary, so the backend must never trust it alone.
+Checked in two places: the frontend (`validation.js`) rejects it before submitting, and the backend (`validate_password_strength` in `security.py`) rejects it again regardless — the frontend check is for a fast error message, not a security boundary, so the backend must never trust it alone. Both checks must stay Unicode-aware together, or the two can disagree on the same password.
 
 ---
 
@@ -101,6 +101,8 @@ Note: the refresh response does **not** include the user object — the client a
 **Web clients** never see either token's value directly — both are silently refreshed by the browser via `Set-Cookie` headers. No web frontend code reads or stores a token at all; it only needs to call `/auth/refresh` (no body) when a request comes back `TOKEN_EXPIRED`, then retry.
 
 **Concurrent refreshes:** if multiple requests hit `TOKEN_EXPIRED` at the same moment (e.g. two components fetching data at once), the client must not fire multiple independent `/auth/refresh` calls — since refresh rotates the token, the first call to complete invalidates the token the second call is still using, and the second call fails with `INVALID_REFRESH_TOKEN`. The web client shares one in-flight refresh call across all simultaneous 401s instead.
+
+**Scope of auto-refresh:** the web client only retries-after-refresh on `401`s from authenticated endpoints (e.g. `/users/me`, `/auth/change-password`). Public auth endpoints — `login`, `register`, `google`, `refresh` itself, `forgot-password`, `reset-password`, `verify-email`, `resend-verification` — are excluded, since a `401` from one of these is a real answer (wrong credentials, bad token) and not a sign of an expired session.
 
 ---
 
