@@ -16,10 +16,10 @@ class PlanningSession(Base):
         default=uuid.uuid4,
     )
 
-    trip_id: Mapped[uuid.UUID] = mapped_column(
+    trip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("trips.id"),
-        nullable=False,
+        nullable=True,
     )
 
     working_memory: Mapped[dict | None] = mapped_column(
