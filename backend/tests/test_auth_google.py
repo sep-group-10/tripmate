@@ -2,10 +2,19 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from app.core.security import hash_password, verify_password
 from app.models.user import User
 
 GOOGLE_URL = "/api/v1/auth/google"
+
+
+@pytest.fixture(autouse=True)
+def google_client_id(monkeypatch):
+    """verify_oauth2_token is mocked in every test here, so the actual
+    value doesn't matter - only that the endpoint sees one configured."""
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id")
 
 
 def _mock_google(claims):
