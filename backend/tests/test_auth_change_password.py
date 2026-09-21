@@ -1,6 +1,6 @@
 """Tests for POST /auth/change-password."""
 
-from app.core.security import verify_password
+from app.core.security import create_access_token, verify_password
 from app.models.user import User
 
 LOGIN_URL = "/api/v1/auth/login"
@@ -191,3 +191,28 @@ def test_change_password_does_not_affect_other_users(
 
     other_user_after = db_session.query(User).filter(User.id == other_user.id).first()
     assert verify_password("otheruserpassword123", other_user_after.password_hash)
+
+
+def test_change_password_on_google_only_account_is_rejected(client, db_session):
+    """A Google-only account has no password_hash - this must reject
+    cleanly instead of crashing verify_password on None."""
+    user = User(
+        full_name="Google Only",
+        email="googleonly-changepw@example.com",
+        login_provider="google",
+        google_id="google-sub-changepw-1",
+        is_email_verified=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    token = create_access_token(user.id, user.role)
+    client.headers.update({"Authorization": f"Bearer {token}"})
+
+    response = client.post(
+        CHANGE_PASSWORD_URL,
+        json={"current_password": "anything", "new_password": NEW_PASSWORD},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"

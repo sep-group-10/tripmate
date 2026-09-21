@@ -441,12 +441,11 @@ def forgot_password(
     payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
-    """Sends a password-reset email if the account exists. Always
-    returns the same generic response either way - this must never
-    reveal whether an email is registered."""
+    """Sends a reset email only if the account has a password. Same
+    generic response either way, so nothing about the account leaks."""
     user = db.query(User).filter(User.email == payload.email).first()
 
-    if user is not None:
+    if user is not None and user.password_hash is not None:
         _send_password_reset_email(user, db)
 
     return ApiResponse(data={})
@@ -493,11 +492,12 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the logged-in user's password. Requires the current
-    password. Rotates the session's tokens on success, which also
-    invalidates any other device's refresh token (only one is stored
-    per user), forcing them to log in again with the new password."""
-    if not verify_password(payload.current_password, current_user.password_hash):
+    """Change the logged-in user's password. A Google-only account has
+    none to check, so this rejects instead of crashing. Rotates the
+    session's tokens on success, revoking any other device's session."""
+    if current_user.password_hash is None or not verify_password(
+        payload.current_password, current_user.password_hash
+    ):
         raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect")
 
     current_user.password_hash = hash_password(payload.new_password)
@@ -520,13 +520,11 @@ def delete_account(
     a hard delete would fail (or silently orphan that history) instead
     of just working. Local accounts must confirm with their current
     password; Google-only accounts have none to confirm with."""
-    if current_user.password_hash is not None:
-        if payload.current_password is None or not verify_password(
-            payload.current_password, current_user.password_hash
-        ):
-            raise ApiError(
-                ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect"
-            )
+    if current_user.password_hash is not None and (
+        payload.current_password is None
+        or not verify_password(payload.current_password, current_user.password_hash)
+    ):
+        raise ApiError(ErrorCode.INVALID_CREDENTIALS, "Current password is incorrect")
 
     current_user.full_name = "Deleted User"
     # `.local`/`.invalid`/`.test` etc are reserved special-use TLDs that

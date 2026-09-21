@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.models.user import User
+
 FORGOT_URL = "/api/v1/auth/forgot-password"
 
 
@@ -68,3 +70,29 @@ def test_forgot_password_normalizes_email_case(client, existing_user, mock_send_
 
     assert response.status_code == 200
     assert len(mock_send_email.calls) == 1
+
+
+def test_forgot_password_for_google_only_account_sends_no_email(
+    client, db_session, mock_send_email
+):
+    """A Google-only account has no password to reset - sending a reset
+    link for it would let it gain a local password, breaking the
+    Google-only-forever rule. The response must still look generic."""
+    user = User(
+        full_name="Google Only",
+        email="googleonly-forgot@example.com",
+        login_provider="google",
+        google_id="google-sub-forgot-1",
+        is_email_verified=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    response = client.post(FORGOT_URL, json={"email": user.email})
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {}
+    assert len(mock_send_email.calls) == 0
+
+    db_session.refresh(user)
+    assert user.password_reset_token is None

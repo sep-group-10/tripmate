@@ -34,7 +34,7 @@ We use short-lived access tokens + long-lived refresh tokens.
 
 ## Password rules
 
-Applies to registration now; will apply to change-password and reset-password once those exist.
+Applies to registration, change-password, and reset-password.
 
 | Rule | Value |
 |---|---|
@@ -163,6 +163,10 @@ Regardless of platform:
 |---|---|---|
 | `POST /auth/register` | 5 / minute | Client IP |
 | `POST /auth/login` | 5 / minute | Client IP |
+| `POST /auth/google` | 5 / minute | Client IP |
+| `POST /auth/resend-verification` | 5 / minute | Client IP |
+| `POST /auth/forgot-password` | 5 / minute | Client IP |
+| `POST /auth/reset-password` | 5 / minute | Client IP |
 
 **Why:** without a limit, either endpoint can be scripted — thousands of login attempts per second to guess a password, or thousands of fake registrations to spam the system.
 
@@ -171,6 +175,4 @@ Regardless of platform:
 **On exceeding the limit:** `429` with `{"success": false, "error": {"code": "RATE_LIMITED", ...}}` — same response shape as every other error, per api-contract.md.
 
 **Storage:** in-memory (per backend process) via `slowapi`. Resets on restart, and does not share state across multiple backend instances. Fine at current scale; switch to `slowapi`'s Redis-backed storage once Redis is provisioned — a one-line config change, no route code changes needed.
-
-**Not yet covered:** `forgot-password` will need the same treatment once it exists — arguably more important there, since it's the endpoint most likely to be abused for email spam.
 
