@@ -1,0 +1,495 @@
+[
+  {
+    "id": "preference_001",
+    "type": "complete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I want to visit Kandy from October 1 to October 3, 2026. We are two people with a budget of 50000 LKR. We love culture and nature."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Kandy",
+      "start_date": "2026-10-01",
+      "end_date": "2026-10-03",
+      "duration_days": 3,
+      "budget": 50000,
+      "travelers": 2,
+      "interests": ["culture", "nature"],
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_002",
+    "type": "incomplete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Plan a 5 day trip to Galle for four travelers. Our budget is 80000 rupees and we are interested in beaches and history."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Galle",
+      "duration_days": 5,
+      "budget": 80000,
+      "travelers": 4,
+      "interests": ["beaches", "history"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_003",
+    "type": "complete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I need a Colombo trip for 2 people from November 10 to November 12, 2026. We can spend 30000 LKR and want food and shopping."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Colombo",
+      "start_date": "2026-11-10",
+      "end_date": "2026-11-12",
+      "duration_days": 3,
+      "budget": 30000,
+      "travelers": 2,
+      "interests": ["food", "shopping"],
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_004",
+    "type": "incomplete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Help me arrange a 4-day solo trip to Ella with 40000 rupees. I enjoy hiking and photography."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Ella",
+      "duration_days": 4,
+      "budget": 40000,
+      "travelers": 1,
+      "interests": ["hiking", "photography"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_005",
+    "type": "incomplete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I want to visit Kandy for three days with my wife. We have around 50000 rupees."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Kandy",
+      "duration_days": 3,
+      "budget": 50000,
+      "travelers": 2,
+      "missing_fields": ["dates", "interests"]
+    }
+  },
+  {
+    "id": "preference_006",
+    "type": "incomplete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Plan a trip to Galle for two people. We like beaches and history."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Galle",
+      "travelers": 2,
+      "interests": ["beaches", "history"],
+      "missing_fields": ["dates", "duration_days", "budget"]
+    }
+  },
+  {
+    "id": "preference_007",
+    "type": "single_missing",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I want a 3-day trip to Kandy for two people with a 50000 LKR budget. I like culture and nature."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Kandy",
+      "duration_days": 3,
+      "budget": 50000,
+      "travelers": 2,
+      "interests": ["culture", "nature"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_008",
+    "type": "single_missing",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Plan a 4-day trip to Ella for two people from December 1 to December 4, 2026. We want hiking and nature."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Ella",
+      "start_date": "2026-12-01",
+      "end_date": "2026-12-04",
+      "duration_days": 4,
+      "travelers": 2,
+      "interests": ["hiking", "nature"],
+      "missing_fields": ["budget"]
+    }
+  },
+  {
+    "id": "preference_009",
+    "type": "single_missing",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I have 60000 LKR for a 3-day trip to Colombo for three people. We are interested in food."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Colombo",
+      "duration_days": 3,
+      "budget": 60000,
+      "travelers": 3,
+      "interests": ["food"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_010",
+    "type": "multiple_missing",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I would like to go to Kandy."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Kandy",
+      "missing_fields": [
+  "dates",
+  "duration_days",
+  "budget",
+  "travelers",
+  "interests"
+]
+    }
+  },
+  {
+    "id": "preference_011",
+    "type": "multiple_missing",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Can you plan a trip to Galle? I don't know the dates yet."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Galle",
+      "missing_fields": [
+  "dates",
+  "duration_days",
+  "budget",
+  "travelers",
+  "interests"
+]
+    }
+  },
+  {
+    "id": "preference_012",
+    "type": "multi_message",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I want to travel to Kandy."
+      },
+      {
+        "role": "assistant",
+        "content": "Sure. How long will you stay?"
+      },
+      {
+        "role": "user",
+        "content": "Three days, and it will be me and my wife."
+      },
+      {
+        "role": "assistant",
+        "content": "What budget do you have?"
+      },
+      {
+        "role": "user",
+        "content": "About 50000 LKR. We enjoy culture."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Kandy",
+      "duration_days": 3,
+      "budget": 50000,
+      "travelers": 2,
+      "interests": ["culture"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_013",
+    "type": "multi_message",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I want to plan a holiday."
+      },
+      {
+        "role": "assistant",
+        "content": "Where would you like to go?"
+      },
+      {
+        "role": "user",
+        "content": "Ella."
+      },
+      {
+        "role": "assistant",
+        "content": "How many people are traveling?"
+      },
+      {
+        "role": "user",
+        "content": "Three people for five days."
+      },
+      {
+        "role": "assistant",
+        "content": "What are your interests?"
+      },
+      {
+        "role": "user",
+        "content": "Hiking and waterfalls. Budget is 90000 rupees."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Ella",
+      "duration_days": 5,
+      "budget": 90000,
+      "travelers": 3,
+      "interests": ["hiking", "waterfalls"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_014",
+    "type": "multi_message",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Can you help me plan a trip?"
+      },
+      {
+        "role": "assistant",
+        "content": "Of course. Where are you going?"
+      },
+      {
+        "role": "user",
+        "content": "Colombo, for two people."
+      },
+      {
+        "role": "assistant",
+        "content": "How long?"
+      },
+      {
+        "role": "user",
+        "content": "Two days, with a budget of 25000 LKR."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Colombo",
+      "duration_days": 2,
+      "budget": 25000,
+      "travelers": 2,
+      "missing_fields": ["dates", "interests"]
+    }
+  },
+  {
+    "id": "preference_015",
+    "type": "paraphrase",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I'd love to take a 3-day trip to Galle with my husband. We have 70000 rupees and enjoy beaches and local food."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Galle",
+      "duration_days": 3,
+      "budget": 70000,
+      "travelers": 2,
+      "interests": ["beaches", "local food"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_016",
+    "type": "paraphrase",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Could you organize a 6-day vacation (5 nights) in Kandy for my family of four? Our spending limit is 100000 LKR and we want cultural attractions."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Kandy",
+      "duration_days": 6,
+      "budget": 100000,
+      "travelers": 4,
+      "interests": ["culture"],
+      "missing_fields": ["dates"]
+    }
+  },
+  {
+    "id": "preference_017",
+    "type": "normal_conversation",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hi, what can you do?"
+      }
+    ],
+    "expected": {
+      "intent": "normal_conversation",
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_018",
+    "type": "normal_conversation",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! How are you today?"
+      }
+    ],
+    "expected": {
+      "intent": "normal_conversation",
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_019",
+    "type": "normal_conversation",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Thank you for your help."
+      }
+    ],
+    "expected": {
+      "intent": "normal_conversation",
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_020",
+    "type": "unrelated",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the capital of France?"
+      }
+    ],
+    "expected": {
+      "intent": "normal_conversation",
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_021",
+    "type": "unrelated",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Can you explain what a database transaction is?"
+      }
+    ],
+    "expected": {
+      "intent": "normal_conversation",
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_022",
+    "type": "complete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Take me to Nuwara Eliya from January 5 to January 7, 2027. There will be 2 of us. Budget is 45000 LKR. We want tea plantations and scenic places."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Nuwara Eliya",
+      "start_date": "2027-01-05",
+      "end_date": "2027-01-07",
+      "duration_days": 3,
+      "budget": 45000,
+      "travelers": 2,
+      "interests": ["tea plantations", "scenic places"],
+      "missing_fields": []
+    }
+  },
+  {
+    "id": "preference_023",
+    "type": "incomplete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Plan a 3-day trip to Ella for me and my friend. We like hiking."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Ella",
+      "duration_days": 3,
+      "travelers": 2,
+      "interests": ["hiking"],
+      "missing_fields": ["dates", "budget"]
+    }
+  },
+  {
+    "id": "preference_024",
+    "type": "incomplete",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I need a 2-day trip to Sigiriya for three people with 35000 LKR. We are interested in history, wildlife, and photography."
+      }
+    ],
+    "expected": {
+      "intent": "trip_planning",
+      "destination": "Sigiriya",
+      "duration_days": 2,
+      "budget": 35000,
+      "travelers": 3,
+      "interests": ["history", "wildlife", "photography"],
+      "missing_fields": ["dates"]
+    }
+  }
+]
