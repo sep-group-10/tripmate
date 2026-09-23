@@ -104,5 +104,5 @@ def test_preference_processor_reports_missing_trip_preferences():
 def test_preference_processor_rejects_invalid_model_response():
     processor = _processor_with_result({"intent": "trip_planning"})
 
-    with pytest.raises(ValueError, match="invalid preference result"):
+    with pytest.raises(TypeError, match="invalid preference result"):
         processor.process([HumanMessage(content="Plan a trip to Kandy.")])
