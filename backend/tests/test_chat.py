@@ -1,19 +1,57 @@
-"""API tests for POST /chat/{session_id}."""
+"""Integration tests for the chat preference-processing flow."""
 
+import inspect
 import uuid
 from datetime import date
 from decimal import Decimal
 
+from app.models.conversation_history import ConversationHistory
 from app.models.planning_session import PlanningSession
 from app.models.trip import Trip
+from app.routers import chat as chat_router
+from app.schemas.preference import PreferenceResult
 
 CHAT_URL = "/api/v1/chat"
 
 
-def test_start_chat_creates_planning_session(client):
+class FakePreferenceProcessor:
+    """Record processed messages and return predefined preference results."""
+
+    def __init__(self, results: list[PreferenceResult]):
+        self.results = results
+        self.calls = []
+
+    def process(self, messages):
+        self.calls.append(list(messages))
+        return self.results.pop(0)
+
+
+def _mock_processor(monkeypatch, *results: PreferenceResult) -> FakePreferenceProcessor:
+    processor = FakePreferenceProcessor(list(results))
+    monkeypatch.setattr(chat_router, "PreferenceProcessor", lambda: processor)
+    return processor
+
+
+def _conversation(db_session, session_id):
+    return (
+        db_session.query(ConversationHistory)
+        .filter(ConversationHistory.planning_session_id == session_id)
+        .order_by(ConversationHistory.created_at.asc())
+        .all()
+    )
+
+
+def test_start_chat_processes_normal_conversation_and_stores_messages(
+    client, db_session, monkeypatch
+):
+    processor = _mock_processor(
+        monkeypatch,
+        PreferenceResult(intent="normal_conversation"),
+    )
+
     response = client.post(
         CHAT_URL,
-        json={"message": "I want to plan a trip to Kandy"},
+        json={"message": "Hello there"},
     )
 
     assert response.status_code == 200
@@ -21,7 +59,7 @@ def test_start_chat_creates_planning_session(client):
     body = response.json()
 
     assert body["success"] is True
-    assert body["data"]["assistant_message"] == "Thanks! I received your message."
+    assert body["data"]["assistant_message"] == "Hello! How can I help you today?"
 
     session = body["data"]["session"]
 
@@ -29,6 +67,14 @@ def test_start_chat_creates_planning_session(client):
     assert session["iteration_count"] == 0
     assert session["progress_message"] is None
     assert session["progress_percentage"] == 0
+    assert [message.content for message in processor.calls[0]] == ["Hello there"]
+    assert [
+        (entry.role, entry.message)
+        for entry in _conversation(db_session, session["id"])
+    ] == [
+        ("user", "Hello there"),
+        ("assistant", "Hello! How can I help you today?"),
+    ]
 
 
 def _planning_session(db_session, user) -> PlanningSession:
@@ -59,8 +105,18 @@ def _planning_session(db_session, user) -> PlanningSession:
     return session
 
 
-def test_send_message_to_existing_planning_session(client, db_session, existing_user):
+def test_send_message_asks_only_for_missing_trip_fields(
+    client, db_session, existing_user, monkeypatch
+):
     session = _planning_session(db_session, existing_user)
+    _mock_processor(
+        monkeypatch,
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            missing_fields=["dates", "budget"],
+        ),
+    )
 
     response = client.post(
         f"{CHAT_URL}/{session.id}",
@@ -70,7 +126,9 @@ def test_send_message_to_existing_planning_session(client, db_session, existing_
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"]["assistant_message"] == "Thanks! I received your message."
+    assert body["data"]["assistant_message"] == (
+        "When are you planning to travel? What is your budget for the trip?"
+    )
     assert body["data"]["session"] == {
         "id": str(session.id),
         "status": "pending",
@@ -78,6 +136,101 @@ def test_send_message_to_existing_planning_session(client, db_session, existing_
         "progress_message": None,
         "progress_percentage": 0,
     }
+    assert [
+        (entry.role, entry.message) for entry in _conversation(db_session, session.id)
+    ] == [
+        ("user", "I want to plan a trip to Kandy"),
+        (
+            "assistant",
+            "When are you planning to travel? What is your budget for the trip?",
+        ),
+    ]
+
+
+def test_send_message_processes_complete_multi_turn_conversation(
+    client, db_session, existing_user, monkeypatch
+):
+    session = _planning_session(db_session, existing_user)
+    processor = _mock_processor(
+        monkeypatch,
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            missing_fields=["dates", "travelers"],
+        ),
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            travelers=2,
+            missing_fields=["budget"],
+        ),
+    )
+
+    first_response = client.post(
+        f"{CHAT_URL}/{session.id}",
+        json={"message": "I want to visit Kandy."},
+    )
+    second_response = client.post(
+        f"{CHAT_URL}/{session.id}",
+        json={"message": "December 10-12, two people."},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert [(message.type, message.content) for message in processor.calls[1]] == [
+        ("human", "I want to visit Kandy."),
+        (
+            "ai",
+            "When are you planning to travel? How many people will be traveling?",
+        ),
+        ("human", "December 10-12, two people."),
+    ]
+
+
+def test_complete_preferences_are_prepared_without_starting_planning(
+    client, db_session, monkeypatch
+):
+    processor = _mock_processor(
+        monkeypatch,
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            duration_days=3,
+            budget=Decimal("50000.00"),
+            travelers=2,
+            interests=["culture"],
+            missing_fields=[],
+        ),
+    )
+    trip_count_before = db_session.query(Trip).count()
+
+    response = client.post(
+        CHAT_URL,
+        json={"message": "Plan a three-day Kandy trip for two people."},
+    )
+
+    assert response.status_code == 200
+    session_id = uuid.UUID(response.json()["data"]["session"]["id"])
+    session = db_session.get(PlanningSession, session_id)
+    assert response.json()["data"]["assistant_message"] == (
+        "Your trip preferences are ready for planning."
+    )
+    assert session.working_memory == {
+        "trip_preferences": {
+            "intent": "trip_planning",
+            "destination": "Kandy",
+            "start_date": None,
+            "end_date": None,
+            "duration_days": 3,
+            "budget": "50000.00",
+            "travelers": 2,
+            "interests": ["culture"],
+            "missing_fields": [],
+        }
+    }
+    assert db_session.query(Trip).count() == trip_count_before
+    assert "planning_graph" not in inspect.getsource(chat_router)
+    assert len(processor.calls) == 1
 
 
 def test_send_message_to_missing_planning_session_returns_404(client):
