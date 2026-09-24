@@ -1,14 +1,18 @@
 """Integration tests for the chat preference-processing flow."""
 
-import inspect
 import uuid
 from datetime import date
 from decimal import Decimal
 
+import pytest
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.models.conversation_history import ConversationHistory
 from app.models.planning_session import PlanningSession
 from app.models.trip import Trip
 from app.routers import chat as chat_router
+from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.preference import PreferenceResult
 
 CHAT_URL = "/api/v1/chat"
@@ -41,12 +45,36 @@ def _conversation(db_session, session_id):
     )
 
 
+def _complete_preferences() -> PreferenceResult:
+    return PreferenceResult(
+        intent="trip_planning",
+        destination="Kandy",
+        duration_days=3,
+        budget=Decimal("50000.00"),
+        travelers=2,
+        interests=["culture"],
+        missing_fields=[],
+    )
+
+
 def test_start_chat_processes_normal_conversation_and_stores_messages(
     client, db_session, monkeypatch
 ):
     processor = _mock_processor(
         monkeypatch,
         PreferenceResult(intent="normal_conversation"),
+    )
+    factory_calls = []
+    graph_calls = []
+    monkeypatch.setattr(
+        chat_router,
+        "create_agent_session",
+        lambda preferences: factory_calls.append(preferences),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type("Graph", (), {"invoke": lambda self, state: graph_calls.append(state)})(),
     )
 
     response = client.post(
@@ -68,6 +96,8 @@ def test_start_chat_processes_normal_conversation_and_stores_messages(
     assert session["progress_message"] is None
     assert session["progress_percentage"] == 0
     assert [message.content for message in processor.calls[0]] == ["Hello there"]
+    assert factory_calls == []
+    assert graph_calls == []
     assert [
         (entry.role, entry.message)
         for entry in _conversation(db_session, session["id"])
@@ -117,6 +147,18 @@ def test_send_message_asks_only_for_missing_trip_fields(
             missing_fields=["dates", "budget"],
         ),
     )
+    factory_calls = []
+    graph_calls = []
+    monkeypatch.setattr(
+        chat_router,
+        "create_agent_session",
+        lambda preferences: factory_calls.append(preferences),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type("Graph", (), {"invoke": lambda self, state: graph_calls.append(state)})(),
+    )
 
     response = client.post(
         f"{CHAT_URL}/{session.id}",
@@ -136,6 +178,8 @@ def test_send_message_asks_only_for_missing_trip_fields(
         "progress_message": None,
         "progress_percentage": 0,
     }
+    assert factory_calls == []
+    assert graph_calls == []
     assert [
         (entry.role, entry.message) for entry in _conversation(db_session, session.id)
     ] == [
@@ -187,22 +231,36 @@ def test_send_message_processes_complete_multi_turn_conversation(
     ]
 
 
-def test_complete_preferences_are_prepared_without_starting_planning(
+def test_complete_preferences_start_planning_and_persist_final_result(
     client, db_session, monkeypatch
 ):
-    processor = _mock_processor(
-        monkeypatch,
-        PreferenceResult(
-            intent="trip_planning",
-            destination="Kandy",
-            duration_days=3,
-            budget=Decimal("50000.00"),
-            travelers=2,
-            interests=["culture"],
-            missing_fields=[],
-        ),
+    preferences = _complete_preferences()
+    _mock_processor(monkeypatch, preferences)
+    agent_session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy"},
     )
-    trip_count_before = db_session.query(Trip).count()
+    final_agent_session = agent_session.model_copy(
+        update={
+            "status": AgentSessionStatus.COMPLETED,
+            "iteration_count": 2,
+            "itinerary": {"days": []},
+        }
+    )
+    factory_calls = []
+    graph_calls = []
+
+    def fake_factory(result):
+        factory_calls.append(result)
+        return agent_session
+
+    class FakeGraph:
+        def invoke(self, state):
+            graph_calls.append(state)
+            return {"session": final_agent_session}
+
+    monkeypatch.setattr(chat_router, "create_agent_session", fake_factory)
+    monkeypatch.setattr(chat_router, "planning_graph", FakeGraph())
 
     response = client.post(
         CHAT_URL,
@@ -212,9 +270,17 @@ def test_complete_preferences_are_prepared_without_starting_planning(
     assert response.status_code == 200
     session_id = uuid.UUID(response.json()["data"]["session"]["id"])
     session = db_session.get(PlanningSession, session_id)
-    assert response.json()["data"]["assistant_message"] == (
-        "Your trip preferences are ready for planning."
+    assert (
+        response.json()["data"]["assistant_message"]
+        == "Your trip itinerary has been prepared."
     )
+    assert factory_calls == [preferences]
+    assert len(graph_calls) == 1
+    assert graph_calls[0]["session"] is agent_session
+    assert graph_calls[0]["planner_decision"] is None
+    assert graph_calls[0]["critic_decision"] is None
+    assert graph_calls[0]["last_failure"] is None
+    assert graph_calls[0]["consecutive_failures"] == 0
     assert session.working_memory == {
         "trip_preferences": {
             "intent": "trip_planning",
@@ -228,9 +294,64 @@ def test_complete_preferences_are_prepared_without_starting_planning(
             "missing_fields": [],
         }
     }
-    assert db_session.query(Trip).count() == trip_count_before
-    assert "planning_graph" not in inspect.getsource(chat_router)
-    assert len(processor.calls) == 1
+    assert session.status == AgentSessionStatus.COMPLETED.value
+    assert session.iteration_count == 2
+    assert [
+        (entry.role, entry.message) for entry in _conversation(db_session, session_id)
+    ] == [
+        ("user", "Plan a three-day Kandy trip for two people."),
+        ("assistant", "Your trip itinerary has been prepared."),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("status", "itinerary", "expected_text"),
+    [
+        (AgentSessionStatus.COMPLETED, {"days": []}, "itinerary"),
+        (AgentSessionStatus.BEST_EFFORT, None, "best-effort"),
+        (AgentSessionStatus.INFEASIBLE, None, "could not be satisfied"),
+        (AgentSessionStatus.FAILED, None, "could not be completed"),
+    ],
+)
+def test_response_for_planning_session_maps_terminal_statuses(
+    status, itinerary, expected_text
+):
+    response = chat_router._response_for_planning_session(
+        AgentSession(goal="Plan a trip", status=status, itinerary=itinerary)
+    )
+
+    assert expected_text in response
+
+
+def test_planning_failure_uses_global_safe_error_handling(client, monkeypatch):
+    _mock_processor(monkeypatch, _complete_preferences())
+    monkeypatch.setattr(
+        chat_router,
+        "create_agent_session",
+        lambda preferences: AgentSession(goal="Plan a trip"),
+    )
+
+    class FailingGraph:
+        def invoke(self, state):
+            raise RuntimeError("planning provider secret failure")
+
+    monkeypatch.setattr(chat_router, "planning_graph", FailingGraph())
+
+    with TestClient(app, raise_server_exceptions=False) as safe_client:
+        response = safe_client.post(
+            CHAT_URL,
+            json={"message": "Plan a three-day Kandy trip for two people."},
+        )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "success": False,
+        "error": {
+            "code": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred",
+        },
+    }
+    assert "Your trip preferences are ready for planning." not in response.text
 
 
 def test_send_message_to_missing_planning_session_returns_404(client):

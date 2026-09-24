@@ -8,10 +8,13 @@ from app.core.database import get_db
 from app.core.errors import ApiError, ErrorCode
 from app.models.conversation_history import ConversationHistory
 from app.models.planning_session import PlanningSession
+from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.chat import ChatRequest, ChatResponse, PlanningSessionInfo
 from app.schemas.common import ApiResponse
 from app.schemas.preference import PreferenceResult
+from app.services.agent_session import create_agent_session
 from app.services.conversation_history import get_conversation, save_message
+from app.services.langgraph.planning_graph import planning_graph
 from app.services.preference_processor import PreferenceProcessor
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -58,6 +61,22 @@ def _response_for_preferences(preferences: PreferenceResult) -> str:
     return "Your trip preferences are ready for planning."
 
 
+def _response_for_planning_session(session: AgentSession) -> str:
+    """Build a safe, deterministic response from the final planning state."""
+
+    if session.status == AgentSessionStatus.COMPLETED:
+        if session.itinerary:
+            return "Your trip itinerary has been prepared."
+        return "Your trip plan has been prepared."
+    if session.status == AgentSessionStatus.BEST_EFFORT:
+        return "A best-effort trip plan has been prepared."
+    if session.status == AgentSessionStatus.INFEASIBLE:
+        return "Your requested trip constraints could not be satisfied."
+    if session.status == AgentSessionStatus.FAILED:
+        return "Trip planning could not be completed."
+    return "Your trip planning request has been processed."
+
+
 def _prepare_preferences_for_planning(
     db: Session,
     planning_session: PlanningSession,
@@ -85,8 +104,27 @@ def _process_chat_message(
 
     if preferences.intent == "trip_planning" and not preferences.missing_fields:
         _prepare_preferences_for_planning(db, planning_session, preferences)
+        agent_session = create_agent_session(preferences)
+        planning_result = planning_graph.invoke(
+            {
+                "session": agent_session,
+                "planner_decision": None,
+                "critic_decision": None,
+                "last_failure": None,
+                "consecutive_failures": 0,
+            }
+        )
+        final_agent_session = planning_result["session"]
 
-    assistant_message = _response_for_preferences(preferences)
+        planning_session.status = final_agent_session.status.value
+        planning_session.iteration_count = final_agent_session.iteration_count
+        db.commit()
+        db.refresh(planning_session)
+
+        assistant_message = _response_for_planning_session(final_agent_session)
+    else:
+        assistant_message = _response_for_preferences(preferences)
+
     save_message(db, planning_session.id, "assistant", assistant_message)
 
     return ChatResponse(

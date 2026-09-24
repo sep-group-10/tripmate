@@ -42,8 +42,8 @@ def test_agent_session_flows_through_langgraph():
     graph = build_test_graph()
 
     session = AgentSession(
-        user_request="Plan a 5-day trip to Kandy",
-        trip_preferences={
+        goal="Plan a 5-day trip to Kandy",
+        trip_requirements={
             "destination": "Kandy",
             "duration_days": 5,
         },
@@ -53,8 +53,8 @@ def test_agent_session_flows_through_langgraph():
 
     updated_session = result["session"]
 
-    assert updated_session.user_request == "Plan a 5-day trip to Kandy"
-    assert updated_session.trip_preferences["destination"] == "Kandy"
+    assert updated_session.goal == "Plan a 5-day trip to Kandy"
+    assert updated_session.trip_requirements["destination"] == "Kandy"
     assert updated_session.iteration_count == 1
     assert updated_session.status == AgentSessionStatus.COMPLETED
 
@@ -62,7 +62,7 @@ def test_agent_session_flows_through_langgraph():
 def test_agent_session_supports_all_terminal_states():
     for status in AgentSessionStatus:
         session = AgentSession(
-            user_request="Plan a trip to Kandy",
+            goal="Plan a trip to Kandy",
             status=status,
         )
 

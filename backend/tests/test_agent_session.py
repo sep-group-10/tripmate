@@ -3,24 +3,32 @@ from app.schemas.agent_session import AgentSession, AgentSessionStatus
 
 def test_agent_session_has_required_fields():
     session = AgentSession(
-        user_request="Plan a 5-day trip to Kandy",
-        trip_preferences={
+        goal="Plan a 5-day trip to Kandy",
+        trip_requirements={
             "destination": "Kandy",
             "duration_days": 5,
             "budget": "medium",
         },
     )
 
-    assert session.user_request == "Plan a 5-day trip to Kandy"
-    assert session.trip_preferences["destination"] == "Kandy"
+    assert session.goal == "Plan a 5-day trip to Kandy"
+    assert session.trip_requirements["destination"] == "Kandy"
+
+    assert session.candidates == []
+    assert session.ranked_candidates == []
+    assert session.itinerary is None
+    assert session.optimised_route is None
+    assert session.constraint_result is None
+
     assert session.tool_results == []
+    assert session.tool_execution_order == []
     assert session.iteration_count == 0
     assert session.status is None
 
 
 def test_agent_session_stores_tool_results():
     session = AgentSession(
-        user_request="Find attractions in Kandy",
+        goal="Find attractions in Kandy",
         tool_results=[
             {
                 "tool": "search_attractions",
@@ -42,7 +50,7 @@ def test_agent_session_status_values():
 
 def test_agent_session_can_be_updated():
     session = AgentSession(
-        user_request="Plan a trip to Kandy",
+        goal="Plan a trip to Kandy",
     )
 
     session.iteration_count += 1
@@ -61,7 +69,7 @@ def test_agent_session_can_be_updated():
 
 def test_agent_session_stores_tool_execution_order():
     session = AgentSession(
-        user_request="Plan a trip to Kandy",
+        goal="Plan a trip to Kandy",
         tool_execution_order=[
             "preference_processor",
             "candidate_retriever",
