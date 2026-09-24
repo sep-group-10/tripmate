@@ -66,6 +66,13 @@ def test_refresh_rotates_the_stored_token(client, existing_user, db_session):
 
     client.post(REFRESH_URL, json={"refresh_token": login_data["refresh_token"]})
 
+    # The refresh call above set a new refresh_token cookie on the client,
+    # which would take priority over the stale body value below and mask
+    # whether the old token was actually invalidated - clear it so this
+    # call genuinely exercises the body-only (mobile) path with the old
+    # token, same as a client that never received that cookie.
+    client.cookies.clear()
+
     # The token just used must no longer work, since a new one replaced it.
     response = client.post(
         REFRESH_URL, json={"refresh_token": login_data["refresh_token"]}
@@ -152,6 +159,7 @@ def test_refresh_for_deactivated_account_is_rejected(client, db_session):
         full_name="Deactivated Refresh User",
         email="deactivatedrefresh@example.com",
         password_hash=hash_password(EXISTING_USER_PASSWORD),
+        is_email_verified=True,
     )
     db_session.add(user)
     db_session.commit()
@@ -239,6 +247,13 @@ def test_logout_does_not_revoke_other_users_token(
         LOGIN_URL,
         json={"email": other_user.email, "password": "otheruserpassword123"},
     ).json()["data"]
+
+    # Logging in above set other_user's own refresh_token cookie on this
+    # client, which would take priority and legitimately log THEM out -
+    # correct behavior for that device, but not what this test means to
+    # check. Clear it so logout sees only the garbage body value, as if
+    # from an unrelated device that was never logged in as other_user.
+    client.cookies.clear()
 
     # Log out the current session with an unrelated refresh token.
     client.post(LOGOUT_URL, json={"refresh_token": "garbage-token"})

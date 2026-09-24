@@ -121,6 +121,24 @@ def test_login_deactivated_account_returns_forbidden(client, db_session):
     assert response.json()["error"]["code"] == "ACCOUNT_DEACTIVATED"
 
 
+def test_login_unverified_email_is_blocked(client, db_session):
+    user = User(
+        full_name="Unverified User",
+        email="unverified@example.com",
+        password_hash=hash_password(EXISTING_USER_PASSWORD),
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    response = client.post(
+        LOGIN_URL,
+        json={"email": user.email, "password": EXISTING_USER_PASSWORD},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+
+
 def test_login_missing_fields_returns_validation_error(client):
     response = client.post(LOGIN_URL, json={"email": "missing@example.com"})
 

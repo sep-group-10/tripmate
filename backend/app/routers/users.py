@@ -3,8 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.models.feedback import Feedback
+from app.models.trip import Trip
 from app.models.user import User
 from app.schemas.common import ApiResponse
+from app.schemas.export import UserDataExport
 from app.schemas.profile import ProfileUpdateRequest
 from app.schemas.user import UserResponse
 
@@ -36,3 +39,22 @@ def update_my_profile(
     db.refresh(current_user)
 
     return ApiResponse(data=current_user)
+
+
+@router.get("/me/export", response_model=ApiResponse[UserDataExport])
+def export_my_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export all personal data the system holds about the current
+    user - profile, trips, and feedback - as a single JSON document."""
+    trips = db.query(Trip).filter(Trip.user_id == current_user.id).all()
+    feedback = db.query(Feedback).filter(Feedback.user_id == current_user.id).all()
+
+    return ApiResponse(
+        data=UserDataExport(
+            profile=current_user,
+            trips=trips,
+            feedback=feedback,
+        )
+    )

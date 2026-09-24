@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
+import Modal from "../components/Modal";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
-import { validateFullName } from "../utils/validation";
+import { validateFullName, validatePassword } from "../utils/validation";
 import { loadProfile, saveProfile } from "../utils/profileStorage";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
@@ -25,10 +26,11 @@ const INTEREST_OPTIONS = [
 // would reject the whole request. Email is shown read-only for this
 // reason, not as an oversight.
 //
-// Account Settings (password change, email notifications) has no backend
-// fields at all yet - no password-change endpoint, no notifications
-// column on User - so it stays on the local-only profileStorage behavior
-// below. Travel Preferences partially overlaps the real contract
+// Account Settings: password change now calls the real
+// POST /auth/change-password. Email notifications still has no backend
+// field (no notifications column on User yet), so it stays on the
+// local-only profileStorage behavior below. Travel Preferences partially
+// overlaps the real contract
 // (typical_budget_range and interests both exist on ProfileUpdateRequest)
 // but "pace" has no backend equivalent, and this issue (C4.1) is scoped to
 // register -> login -> profile's Personal Information section only, so
@@ -100,6 +102,7 @@ function ProfilePage() {
   // Personal information comes from the real GET /users/me on mount, kept
   // separate from the localStorage-backed prefs below.
   const [email, setEmail] = useState("");
+  const [loginProvider, setLoginProvider] = useState("local");
   const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
 
@@ -125,6 +128,7 @@ function ProfilePage() {
         const me = response.data.data;
         setPersonalValues({ fullName: me.full_name });
         setEmail(me.email);
+        setLoginProvider(me.login_provider);
         setLoadStatus("ready");
       })
       .catch((error) => {
@@ -189,26 +193,58 @@ function ProfilePage() {
   const [localPrefs, setLocalPrefs] = useState(() => loadProfile());
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState("idle"); // idle | saving | error
   const [savedPassword, flashPassword] = useFlash();
   const [emailNotifications, setEmailNotifications] = useState(
     localPrefs.emailNotifications,
   );
 
-  const handleUpdatePassword = (event) => {
+  const handleUpdatePassword = async (event) => {
     event.preventDefault();
+
     if (!currentPassword) {
-      setPasswordError("Enter your current password");
+      setCurrentPasswordError("Enter your current password");
       return;
     }
-    if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
+    const newPasswordError = validatePassword(newPassword);
+    if (newPasswordError) {
+      setPasswordError(newPasswordError);
       return;
     }
+
+    setCurrentPasswordError("");
     setPasswordError("");
-    setCurrentPassword("");
-    setNewPassword("");
-    flashPassword();
+    setPasswordStatus("saving");
+    try {
+      const response = await api.post("/api/v1/auth/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      login(response.data.data.user);
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordStatus("idle");
+      flashPassword();
+    } catch (error) {
+      const { code, message, details } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      if (code === "INVALID_CREDENTIALS") {
+        setCurrentPasswordError(message);
+      } else if (code === "VALIDATION_ERROR" && details.length > 0) {
+        const newPasswordDetail = details.find(
+          (detail) => detail.field === "new_password",
+        );
+        setPasswordError(newPasswordDetail?.message ?? message);
+      } else {
+        setPasswordError(message);
+      }
+      setPasswordStatus("error");
+    }
   };
 
   const handleToggleEmailNotifications = () => {
@@ -234,6 +270,61 @@ function ProfilePage() {
     event.preventDefault();
     setLocalPrefs(saveProfile({ budget, pace, interests }));
     flashPrefs();
+  };
+
+  const [exportStatus, setExportStatus] = useState("idle"); // idle | exporting | error
+  const [exportError, setExportError] = useState("");
+
+  const handleExportData = async () => {
+    setExportStatus("exporting");
+    setExportError("");
+    try {
+      const response = await api.get("/api/v1/users/me/export");
+      const blob = new Blob([JSON.stringify(response.data.data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "tripmate-my-data.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      setExportStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setExportError(message);
+      setExportStatus("error");
+    }
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState("idle"); // idle | deleting
+
+  const handleDeleteAccount = async () => {
+    setDeleteStatus("deleting");
+    setDeleteError("");
+    try {
+      await api.post("/api/v1/auth/delete-account", {
+        current_password:
+          loginProvider === "google" ? undefined : deletePassword,
+      });
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setDeleteError(message);
+      setDeleteStatus("idle");
+    }
   };
 
   return (
@@ -359,33 +450,41 @@ function ProfilePage() {
             noValidate
             className="flex flex-col gap-6"
           >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormInput
-                id="currentPassword"
-                label="Current password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={currentPassword}
-                onChange={(event) => {
-                  setCurrentPassword(event.target.value);
-                  setPasswordError("");
-                }}
-              />
-              <FormInput
-                id="newPassword"
-                label="New password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="At least 8 characters"
-                value={newPassword}
-                onChange={(event) => {
-                  setNewPassword(event.target.value);
-                  setPasswordError("");
-                }}
-                error={passwordError}
-              />
-            </div>
+            {loginProvider === "google" ? (
+              <p className="m-0 rounded-lg bg-bg px-4 py-3 text-sm text-muted-600">
+                You signed in with Google, so there&apos;s no password to update
+                here.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormInput
+                  id="currentPassword"
+                  label="Current password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={currentPassword}
+                  onChange={(event) => {
+                    setCurrentPassword(event.target.value);
+                    setCurrentPasswordError("");
+                  }}
+                  error={currentPasswordError}
+                />
+                <FormInput
+                  id="newPassword"
+                  label="New password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={(event) => {
+                    setNewPassword(event.target.value);
+                    setPasswordError("");
+                  }}
+                  error={passwordError}
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-3.5 rounded-lg bg-bg p-4">
               <div className="flex items-center justify-between gap-6">
@@ -415,15 +514,20 @@ function ProfilePage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3">
-              <SavedMessage show={savedPassword} text="Password updated" />
-              <button
-                type="submit"
-                className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control"
-              >
-                Update password
-              </button>
-            </div>
+            {loginProvider !== "google" && (
+              <div className="flex items-center justify-end gap-3">
+                <SavedMessage show={savedPassword} text="Password updated" />
+                <button
+                  type="submit"
+                  disabled={passwordStatus === "saving"}
+                  className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {passwordStatus === "saving"
+                    ? "Updating…"
+                    : "Update password"}
+                </button>
+              </div>
+            )}
           </form>
         </SectionCard>
 
@@ -495,7 +599,111 @@ function ProfilePage() {
             </div>
           </form>
         </SectionCard>
+
+        <SectionCard title="Your data" badge="Privacy">
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <div className="text-sm font-medium">Export your data</div>
+              <div className="text-helper text-muted-600">
+                Download everything TripMate holds about your account as a JSON
+                file.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportData}
+              disabled={exportStatus === "exporting"}
+              className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {exportStatus === "exporting" ? "Preparing…" : "Export data"}
+            </button>
+          </div>
+          {exportStatus === "error" && (
+            <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+              {exportError}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-6 border-t border-divider pt-6">
+            <div>
+              <div className="text-sm font-medium text-danger">
+                Delete account
+              </div>
+              <div className="text-helper text-muted-600">
+                Permanently deactivates your account. This cannot be undone.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="rounded-full border border-danger px-4 py-2 text-sm font-medium text-danger shadow-control"
+            >
+              Delete account
+            </button>
+          </div>
+        </SectionCard>
       </div>
+
+      {showDeleteModal && (
+        <Modal
+          title="Delete your account?"
+          subtitle="This action cannot be undone."
+          onClose={() => {
+            setShowDeleteModal(false);
+            setDeletePassword("");
+            setDeleteError("");
+          }}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeletePassword("");
+                  setDeleteError("");
+                }}
+                disabled={deleteStatus === "deleting"}
+                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={
+                  deleteStatus === "deleting" ||
+                  (loginProvider !== "google" && !deletePassword)
+                }
+                className="rounded-full bg-danger px-4 py-2 text-sm font-medium text-white shadow-control hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {deleteStatus === "deleting" ? "Deleting…" : "Delete account"}
+              </button>
+            </>
+          }
+        >
+          {deleteError && (
+            <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+              {deleteError}
+            </p>
+          )}
+          {loginProvider === "google" ? (
+            <p className="m-0 text-sm text-muted-600">
+              Your account was signed in with Google. Confirm below to
+              permanently deactivate it.
+            </p>
+          ) : (
+            <FormInput
+              id="deletePassword"
+              label="Enter your password to confirm"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={deletePassword}
+              onChange={(event) => setDeletePassword(event.target.value)}
+            />
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

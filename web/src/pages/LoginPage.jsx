@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, MapPin } from "lucide-react";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { loginValidators } from "../utils/validation";
 import { useAuth } from "../hooks/useAuth";
+import { useGoogleSignIn } from "../hooks/useGoogleSignIn";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
 
@@ -18,13 +19,48 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | submitting | error
   const [submitError, setSubmitError] = useState("");
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
+  const [resendStatus, setResendStatus] = useState("idle"); // idle | sending | sent
+  const googleButtonRef = useRef(null);
+
+  const handleGoogleCredential = async (idToken) => {
+    setStatus("submitting");
+    setSubmitError("");
+    try {
+      const response = await api.post("/api/v1/auth/google", {
+        id_token: idToken,
+      });
+      login(response.data.data.user);
+      navigate("/profile", { replace: true });
+    } catch (error) {
+      setSubmitError(parseApiError(error).message);
+      setStatus("error");
+    }
+  };
+
+  useGoogleSignIn(googleButtonRef, handleGoogleCredential);
 
   const onFieldChange = (field) => (event) => {
     if (status === "error") {
       setStatus("idle");
       setSubmitError("");
+      setUnverifiedEmail("");
+      setResendStatus("idle");
     }
     handleChange(field)(event);
+  };
+
+  const handleResendVerification = async () => {
+    setResendStatus("sending");
+    try {
+      await api.post("/api/v1/auth/resend-verification", {
+        email: unverifiedEmail,
+      });
+    } catch {
+      // resend-verification never reveals failure details either way -
+      // treat it the same as success from the UI's perspective.
+    }
+    setResendStatus("sent");
   };
 
   const handleSubmit = async (event) => {
@@ -47,7 +83,10 @@ function LoginPage() {
       // message - login intentionally never shows field-specific errors,
       // since email/password ambiguity is deliberate on the backend too
       // (see auth.py: same generic error either way).
-      const { message } = parseApiError(error);
+      const { code, message } = parseApiError(error);
+      if (code === "EMAIL_NOT_VERIFIED") {
+        setUnverifiedEmail(values.email.trim());
+      }
       setSubmitError(message);
       setStatus("error");
     }
@@ -81,40 +120,29 @@ function LoginPage() {
             </div>
 
             {status === "error" && (
-              <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
-                {submitError}
-              </p>
+              <div className="flex flex-col gap-2 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+                <p className="m-0">{submitError}</p>
+                {unverifiedEmail &&
+                  (resendStatus === "sent" ? (
+                    <p className="m-0 text-success">
+                      A new verification email is on its way.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendStatus === "sending"}
+                      className="self-start font-medium text-accent-700 underline disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {resendStatus === "sending"
+                        ? "Sending…"
+                        : "Resend verification email"}
+                    </button>
+                  ))}
+              </div>
             )}
 
-            <button
-              type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-surface px-[18px] py-[11px] text-sm font-medium text-ink shadow-control"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 48 48"
-                aria-hidden="true"
-              >
-                <path
-                  fill="#4285F4"
-                  d="M45.1 24.5c0-1.6-.1-2.8-.4-4H24v7.6h12c-.2 2-1.5 5-4.4 7l6.7 5.2c4-3.7 6.8-9.1 6.8-15.8z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M24 46c6 0 11-2 14.3-5.7l-6.7-5.2c-1.8 1.3-4.3 2.2-7.6 2.2-5.8 0-10.8-3.9-12.6-9.2l-7 5.4C7.8 41 15.3 46 24 46z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M11.4 28.1c-.5-1.4-.8-2.9-.8-4.5s.3-3.1.7-4.5l-7-5.4C2.9 16.8 2 20.3 2 23.6s.9 6.8 2.4 9.9l7-5.4z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M24 9.9c4.1 0 6.9 1.8 8.5 3.3l6-5.8C34.9 3.9 30 2 24 2 15.3 2 7.8 7 4.4 13.7l7 5.4C13.2 13.8 18.2 9.9 24 9.9z"
-                />
-              </svg>
-              Continue with Google
-            </button>
+            <div ref={googleButtonRef} className="flex w-full justify-center" />
 
             <div className="flex items-center gap-3">
               <span className="h-px flex-1 bg-divider" />
@@ -164,6 +192,13 @@ function LoginPage() {
                   </button>
                 }
               />
+
+              <Link
+                to="/forgot-password"
+                className="self-end text-sm text-accent-700"
+              >
+                Forgot password?
+              </Link>
             </div>
 
             <button

@@ -2,6 +2,7 @@ alembic==1.19.1
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
+boto3==1.40.0
 click==8.4.2
 fastapi==0.141.1
 greenlet==3.5.5
@@ -13,9 +14,11 @@ MarkupSafe==3.0.3
 psycopg2-binary==2.9.12
 bcrypt==4.2.1
 email-validator==2.2.0
+google-auth==2.56.0
 pyjwt==2.10.1
 pydantic==2.13.4
 pydantic_core==2.46.4
+slowapi==0.1.9
 SQLAlchemy==2.0.52
 starlette==1.6.0
 typing-inspection==0.4.3

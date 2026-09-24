@@ -12,9 +12,12 @@ from app.api.tourism import (
 )
 from app.core.database import get_db
 from app.core.exception_handlers import register_exception_handlers
+from app.core.rate_limit import limiter
 from app.routers import auth, users
 
 app = FastAPI(title="AI Tourism Planning System", version="1.0.0")
+
+app.state.limiter = limiter
 
 app.add_middleware(
     CORSMiddleware,

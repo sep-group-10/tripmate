@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.errors import ApiError, ErrorCode
@@ -71,6 +72,17 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             content=_error_body(
                 ErrorCode.VALIDATION_ERROR, "Some fields are invalid", details
+            ),
+        )
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        """Handles slowapi's rate-limit trigger, converting its default
+        {"error": "..."} body into the standard {success, error} shape."""
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=_error_body(
+                ErrorCode.RATE_LIMITED, "Too many attempts, please try again later"
             ),
         )
 
