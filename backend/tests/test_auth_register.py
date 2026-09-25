@@ -1,9 +1,11 @@
 """Tests for POST /auth/register: valid registration, duplicate email,
-and invalid input handling. Registration also logs the user in
-immediately (same token issuance as /login), so the response shape
-matches LoginData: {access_token, user}."""
+and invalid input handling. Registration no longer logs the user in -
+the account isn't usable until the email is verified (see
+test_auth_verify_email.py), so the response is just {email, message}
+and no cookie is set."""
 
-from app.core.security import ACCESS_TOKEN_COOKIE_NAME
+import pytest
+
 from app.models.user import User
 
 REGISTER_URL = "/api/v1/auth/register"
@@ -15,42 +17,54 @@ VALID_PAYLOAD = {
 }
 
 
-def test_register_success_returns_created_user(client, db_session):
+@pytest.fixture(autouse=True)
+def mock_send_email(monkeypatch):
+    """Registration sends a real verification email - stub it out so
+    tests never depend on network access or real AWS credentials."""
+    monkeypatch.setattr("app.routers.auth.send_email", lambda *args, **kwargs: True)
+
+
+def test_register_success_returns_email_and_message(client):
     response = client.post(REGISTER_URL, json=VALID_PAYLOAD)
 
     assert response.status_code == 201
     body = response.json()
     assert body["success"] is True
-
-    data = body["data"]
-    assert "access_token" in data
-
-    user = data["user"]
-    assert user["email"] == VALID_PAYLOAD["email"]
-    assert user["full_name"] == VALID_PAYLOAD["full_name"]
-    assert user["role"] == "TOURIST"
-    assert user["is_active"] is True
-    assert user["is_email_verified"] is False
-    assert "id" in user
-    assert "created_at" in user
-    assert user["created_at"].endswith("Z")
+    assert body["data"]["email"] == VALID_PAYLOAD["email"]
+    assert "message" in body["data"]
 
 
-def test_register_success_sets_httponly_cookie(client):
+def test_register_success_creates_unverified_user(client, db_session):
+    client.post(REGISTER_URL, json=VALID_PAYLOAD)
+
+    user = db_session.query(User).filter(User.email == VALID_PAYLOAD["email"]).first()
+    assert user is not None
+    assert user.full_name == VALID_PAYLOAD["full_name"]
+    assert user.role == "TOURIST"
+    assert user.is_active is True
+    assert user.is_email_verified is False
+
+
+def test_register_generates_verification_token(client, db_session):
+    client.post(REGISTER_URL, json=VALID_PAYLOAD)
+
+    user = db_session.query(User).filter(User.email == VALID_PAYLOAD["email"]).first()
+    assert user.email_verification_token is not None
+    assert user.email_verification_expiry is not None
+
+
+def test_register_does_not_set_any_cookie(client):
     response = client.post(REGISTER_URL, json=VALID_PAYLOAD)
 
-    set_cookie = response.headers.get("set-cookie")
-    assert set_cookie is not None
-    assert ACCESS_TOKEN_COOKIE_NAME in set_cookie
-    assert "HttpOnly" in set_cookie
+    assert response.headers.get("set-cookie") is None
 
 
-def test_register_never_returns_password_fields(client):
+def test_register_response_never_includes_password_fields(client):
     response = client.post(REGISTER_URL, json=VALID_PAYLOAD)
 
-    user = response.json()["data"]["user"]
-    assert "password" not in user
-    assert "password_hash" not in user
+    body_text = response.text
+    assert VALID_PAYLOAD["password"] not in body_text
+    assert "password_hash" not in body_text
 
 
 def test_register_persists_hashed_password_not_plaintext(client, db_session):
@@ -90,7 +104,7 @@ def test_register_stores_email_normalized_to_lowercase(client, db_session):
     response = client.post(REGISTER_URL, json=payload)
 
     assert response.status_code == 201
-    assert response.json()["data"]["user"]["email"] == "mixedcase@example.com"
+    assert response.json()["data"]["email"] == "mixedcase@example.com"
     user = db_session.query(User).filter(User.email == "mixedcase@example.com").first()
     assert user is not None
 
@@ -120,7 +134,7 @@ def test_register_invalid_email_format_returns_validation_error(client):
 
 
 def test_register_short_password_returns_validation_error(client):
-    payload = {**VALID_PAYLOAD, "email": "shortpw@example.com", "password": "short"}
+    payload = {**VALID_PAYLOAD, "email": "shortpw@example.com", "password": "short1"}
 
     response = client.post(REGISTER_URL, json=payload)
 
@@ -129,6 +143,19 @@ def test_register_short_password_returns_validation_error(client):
     assert body["error"]["code"] == "VALIDATION_ERROR"
     fields = {detail["field"] for detail in body["error"]["details"]}
     assert "password" in fields
+
+
+def test_register_password_without_digit_returns_validation_error(client):
+    payload = {
+        **VALID_PAYLOAD,
+        "email": "nodigit@example.com",
+        "password": "onlyletters",
+    }
+
+    response = client.post(REGISTER_URL, json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_register_whitespace_only_password_returns_validation_error(client):

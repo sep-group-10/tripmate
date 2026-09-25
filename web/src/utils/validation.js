@@ -18,6 +18,12 @@ export function validatePassword(value) {
   if (value.length < 8) return "Password must be at least 8 characters";
   if (value.length > 72) return "Password must be 72 characters or fewer";
   if (!value.trim()) return "Password cannot be blank or only whitespace";
+  // Unicode-aware to match backend validate_password_strength, which
+  // uses Python's isalpha()/isdigit() - an ASCII-only regex here would
+  // wrongly reject passwords the backend accepts (e.g. accented letters).
+  if (!/\p{L}/u.test(value) || !/\p{N}/u.test(value)) {
+    return "Password must contain at least one letter and one number";
+  }
   return "";
 }
 

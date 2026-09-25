@@ -58,13 +58,12 @@ export function AuthProvider({ children }) {
     setIsAuthenticated(false);
   };
 
-  // KNOWN LIMITATION (C4.1): there is no POST /auth/refresh endpoint yet
-  // (backend/app/routers/auth.py only has register/login/logout), so an
-  // access token that comes back TOKEN_EXPIRED or UNAUTHORIZED can't be
-  // silently renewed. Callers should treat that as a full session expiry -
-  // call clearSession() and let ProtectedRoute/AdminRoute redirect to
-  // /login - rather than attempting to refresh. Revisit once the refresh
-  // token feature (docs/auth-flow.md) actually lands.
+  // KNOWN LIMITATION: POST /auth/refresh now exists on the backend, but
+  // nothing here calls it yet - a TOKEN_EXPIRED or UNAUTHORIZED response
+  // still just clears the session instead of silently refreshing first.
+  // Callers should keep treating that as a full session expiry - call
+  // clearSession() and let ProtectedRoute/AdminRoute redirect to /login -
+  // until an interceptor is wired up to retry via /auth/refresh first.
   const clearSession = () => {
     setUser(null);
     setRole(null);

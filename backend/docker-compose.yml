@@ -22,6 +22,11 @@ services:
     - .env
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      SES_SENDER_EMAIL: ${SES_SENDER_EMAIL}
     ports:
       - "8000:8000"
     depends_on:

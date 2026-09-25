@@ -2,6 +2,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.security import validate_password_strength
 from app.schemas.common import UTCTimestamp
 
 
@@ -28,6 +29,12 @@ class UserRegisterRequest(BaseModel):
             raise ValueError("Password cannot be blank or only whitespace")
         return value
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
+        return value
+
     @field_validator("full_name")
     @classmethod
     def full_name_not_blank(cls, value: str) -> str:
@@ -49,6 +56,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     is_email_verified: bool
+    login_provider: str
     preferred_travel_style: str | None
     preferred_accommodation: str | None
     typical_budget_range: str | None

@@ -49,6 +49,7 @@ def _create_user_with_role(db_session, email: str, role: str) -> User:
         email=email,
         password_hash=hash_password(TEST_PASSWORD),
         role=role,
+        is_email_verified=True,
     )
     db_session.add(user)
     db_session.commit()

@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.core.security import validate_password_strength
 from app.schemas.user import UserResponse
 
 
@@ -25,6 +26,14 @@ class LoginData(BaseModel):
     user: UserResponse
 
 
+class RegisterData(BaseModel):
+    """Response data for a successful registration - no tokens, since
+    the account isn't usable until the email is verified."""
+
+    email: str
+    message: str
+
+
 class RefreshRequest(BaseModel):
     """Request body for POST /auth/refresh."""
 
@@ -42,3 +51,71 @@ class LogoutRequest(BaseModel):
     """Request body for POST /auth/logout."""
 
     refresh_token: str | None = None
+
+
+class VerifyEmailRequest(BaseModel):
+    """Request body for POST /auth/verify-email."""
+
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    """Request body for POST /auth/resend-verification."""
+
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request body for POST /auth/forgot-password."""
+
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for POST /auth/reset-password."""
+
+    token: str
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
+        return value
+
+
+class GoogleLoginRequest(BaseModel):
+    """Request body for POST /auth/google."""
+
+    id_token: str
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request body for POST /auth/change-password."""
+
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
+        return value
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request body for POST /auth/delete-account. current_password is
+    required for local accounts, ignored for Google-only accounts
+    (which have no password to confirm with)."""
+
+    current_password: str | None = None

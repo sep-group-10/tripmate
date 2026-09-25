@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.base import Base
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.core.security import hash_password
 from app.core.seed import seed_all
 from app.main import app
@@ -16,6 +17,16 @@ TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+psycopg2://tripmate_user:tripmate1234@database:5432/tripmate_db",
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Every request in tests shares the same client IP (TestClient's
+    fake address), so without this the per-IP login/register rate limit
+    (see rate_limit.py) would trip after 5 login calls across the whole
+    test session, not just within one test."""
+    limiter.reset()
+    yield
 
 
 @pytest.fixture(scope="session")
@@ -83,6 +94,7 @@ def admin_client(client, db_session):
         email="tourism-admin@example.com",
         password_hash=hash_password("adminpassword123"),
         role="ADMIN",
+        is_email_verified=True,
     )
 
     db_session.add(admin)
@@ -113,6 +125,7 @@ def existing_user(db_session):
         full_name="Existing User",
         email="existing@example.com",
         password_hash=hash_password("existingpassword123"),
+        is_email_verified=True,
     )
 
     db_session.add(user)
@@ -129,6 +142,7 @@ def other_user(db_session):
         full_name="Other User",
         email="otheruser@example.com",
         password_hash=hash_password("otheruserpassword123"),
+        is_email_verified=True,
     )
 
     db_session.add(user)
