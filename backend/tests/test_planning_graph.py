@@ -1,9 +1,10 @@
-from langgraph.graph import END, START, StateGraph
+import inspect
 
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.planning import CriticDecision, PlannerDecision
+from app.services.langgraph import critic, planner
 from app.services.langgraph.planning_graph import (
-    PlanningState,
+    planning_graph,
     route_after_critic,
     tool_execution_node,
 )
@@ -19,7 +20,7 @@ def create_state(
 ):
     """Create a small fake graph state for testing routing."""
     session = AgentSession(
-        user_request="Plan a trip to Kandy",
+        goal="Plan a trip to Kandy",
         iteration_count=iteration_count,
     )
 
@@ -110,45 +111,33 @@ def test_graph_uses_default_max_iterations():
     assert state["session"].status == AgentSessionStatus.BEST_EFFORT
 
 
-def test_planning_graph_flow():
-    """Verify the complete Planner → Tool → Critic → END flow."""
+def test_planning_graph_flow(monkeypatch):
+    """Verify the real Planner → Tool → Critic → END flow."""
 
-    def fake_planner(state: PlanningState) -> dict:
-        # Simulate Gemini selecting the placeholder tool.
-        return {
-            "planner_decision": PlannerDecision(
-                action="placeholder_tool",
-                arguments={},
-            )
-        }
+    class FakeModel:
+        def __init__(self, response):
+            self.response = response
 
-    def fake_critic(state: PlanningState) -> dict:
-        # Simulate the Critic deciding that planning is complete.
-        state["session"].status = AgentSessionStatus.COMPLETED
+        def invoke(self, prompt):
+            return self.response
 
-        return {
-            "critic_decision": None,
-        }
-
-    graph_builder = StateGraph(PlanningState)
-
-    graph_builder.add_node("planner", fake_planner)
-    graph_builder.add_node("tool_execution", tool_execution_node)
-    graph_builder.add_node("critic", fake_critic)
-
-    # Verify the complete Planner → Tool → Critic flow.
-    graph_builder.add_edge(START, "planner")
-    graph_builder.add_edge("planner", "tool_execution")
-    graph_builder.add_edge("tool_execution", "critic")
-    graph_builder.add_edge("critic", END)
-
-    graph = graph_builder.compile()
-
-    session = AgentSession(
-        user_request="Plan a simple one-day trip to Kandy.",
+    monkeypatch.setattr(
+        planner,
+        "create_planner_model",
+        lambda: FakeModel(PlannerDecision(action="placeholder_tool", arguments={})),
+    )
+    monkeypatch.setattr(
+        critic,
+        "create_critic_model",
+        lambda: FakeModel(CriticDecision(continue_planning=False, status="completed")),
     )
 
-    result = graph.invoke(
+    session = AgentSession(
+        goal="Plan a simple one-day trip to Kandy.",
+        trip_requirements={"destination": "Kandy", "duration_days": 1},
+    )
+
+    result = planning_graph.invoke(
         {
             "session": session,
             "max_iterations": 8,
@@ -166,6 +155,76 @@ def test_planning_graph_flow():
         result["session"].tool_results[0]["result"]
         == "Placeholder tool executed successfully."
     )
+
+
+def test_real_planner_uses_current_agent_session_fields(monkeypatch):
+    class FakeModel:
+        def __init__(self):
+            self.prompts = []
+
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
+            return PlannerDecision(action="placeholder_tool", arguments={})
+
+    model = FakeModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda: model)
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy", "duration_days": 3},
+    )
+
+    result = planner.planner_node(
+        {
+            "session": session,
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    assert result["planner_decision"].action == "placeholder_tool"
+    assert session.iteration_count == 1
+    assert "Plan a trip to Kandy" in model.prompts[0]
+    assert "'destination': 'Kandy'" in model.prompts[0]
+
+
+def test_real_critic_uses_current_agent_session_fields(monkeypatch):
+    class FakeModel:
+        def __init__(self):
+            self.prompts = []
+
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
+            return CriticDecision(continue_planning=False, status="completed")
+
+    model = FakeModel()
+    monkeypatch.setattr(critic, "create_critic_model", lambda: model)
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy", "duration_days": 3},
+    )
+
+    result = critic.critic_node(
+        {
+            "session": session,
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    assert result["critic_decision"].status == "completed"
+    assert "Plan a trip to Kandy" in model.prompts[0]
+    assert "'destination': 'Kandy'" in model.prompts[0]
+
+
+def test_planning_components_do_not_reference_removed_session_fields():
+    for component in (planner, critic):
+        source = inspect.getsource(component)
+        assert "session.user_request" not in source
+        assert "session.trip_preferences" not in source
 
 
 def test_different_failures_reset_consecutive_failure_count():

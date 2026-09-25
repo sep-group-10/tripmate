@@ -2,6 +2,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.schemas.planning import PlannerDecision
 from app.services.langgraph.state import PlanningState
+from app.services.tools.registry import TOOLS
 
 
 def create_planner_model():
@@ -12,17 +13,22 @@ def create_planner_model():
 
 
 def planner_node(state: PlanningState) -> dict:
+    """Choose the next registered planning tool from the current session."""
+
     session = state["session"]
     session.iteration_count += 1
+    available_tools = "\n".join(
+        f"- {name}: {tool.description}" for name, tool in TOOLS.items()
+    )
 
     prompt = f"""
 You are the TripMate planning assistant.
 
-User request:
-{session.user_request}
+Planning goal:
+{session.goal}
 
-Trip preferences:
-{session.trip_preferences}
+Trip requirements:
+{session.trip_requirements}
 
 Tool results collected so far:
 {session.tool_results}
@@ -31,7 +37,7 @@ Current iteration:
 {session.iteration_count}
 
 Available tools:
-- placeholder_tool: temporary tool used for testing the planning workflow.
+{available_tools}
 
 Decide what action should happen next.
 

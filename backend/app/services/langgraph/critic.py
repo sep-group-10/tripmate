@@ -18,11 +18,11 @@ def critic_node(state: PlanningState) -> dict:
     prompt = f"""
 You are the TripMate planning critic.
 
-User request:
-{session.user_request}
+Planning goal:
+{session.goal}
 
-Trip preferences:
-{session.trip_preferences}
+Trip requirements:
+{session.trip_requirements}
 
 Tool execution order:
 {session.tool_execution_order}
