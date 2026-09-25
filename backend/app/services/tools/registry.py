@@ -1,5 +1,7 @@
 from langchain_core.tools import BaseTool, tool
 
+from app.services.tools.candidate_retriever import candidate_retriever
+
 
 @tool
 def placeholder_tool() -> str:
@@ -9,4 +11,5 @@ def placeholder_tool() -> str:
 
 TOOLS: dict[str, BaseTool] = {
     "placeholder_tool": placeholder_tool,
+    "candidate_retriever": candidate_retriever,
 }
