@@ -34,7 +34,8 @@ def _semantic_score(candidate: dict[str, Any]) -> float:
 
 
 def _rating_score(candidate: dict[str, Any]) -> float:
-    rating = _to_float(candidate.get("rating")) or 3.0
+    rating_value = _to_float(candidate.get("rating"))
+    rating = 3.0 if rating_value is None else rating_value
     return rating / 5.0
 
 
