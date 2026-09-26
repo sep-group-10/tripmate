@@ -1,3 +1,4 @@
+from app.models.attraction import Attraction
 from app.models.restaurant import Restaurant
 from app.services.tools.candidate_retriever import retrieve_candidates
 
@@ -35,13 +36,26 @@ def test_retrieve_candidates_result_shape(db_session):
     candidates = retrieve_candidates(db_session, "Colombo")
 
     assert len(candidates) > 0
-    base_keys = {"id", "category", "name", "description", "rating"}
+    expected_keys = {
+        "id",
+        "category",
+        "name",
+        "description",
+        "rating",
+        "entry_fee",
+        "opening_hours",
+        "duration_minutes",
+        "latitude",
+        "longitude",
+        "starts_on",
+        "ends_on",
+        "event_start_time",
+        "event_end_time",
+        "similarity_score",
+    }
     for candidate in candidates:
-        assert base_keys.issubset(candidate.keys())
+        assert set(candidate.keys()) == expected_keys
         assert isinstance(candidate["id"], str)
-        if candidate["category"] != "hotel":
-            assert "entry_fee" in candidate
-            assert "opening_hours" in candidate
 
 
 def test_restaurant_candidate_dict_has_normalized_fields(db_session):
@@ -67,3 +81,48 @@ def test_restaurant_candidate_dict_has_normalized_fields(db_session):
     )
     assert restaurants[0]["entry_fee"] == matching_row.avg_meal_cost
     assert restaurants[0]["opening_hours"] == matching_row.operating_hours
+
+
+def test_attraction_duration_minutes_is_integer(db_session):
+    candidates = retrieve_candidates(db_session, "Kandy")
+    attractions = [c for c in candidates if c["category"] == "attraction"]
+
+    assert len(attractions) > 0
+    matching_row = (
+        db_session.query(Attraction)
+        .filter(Attraction.name == attractions[0]["name"])
+        .one()
+    )
+
+    assert isinstance(attractions[0]["duration_minutes"], int)
+    assert attractions[0]["duration_minutes"] == int(matching_row.duration_hours * 60)
+
+
+def test_event_candidate_dict_has_date_fields(db_session):
+    candidates = retrieve_candidates(db_session, "Kandy")
+    events = [c for c in candidates if c["category"] == "local_event"]
+
+    assert len(events) > 0
+    for event in events:
+        assert event["starts_on"] is not None
+        assert event["ends_on"] is not None
+        assert "event_start_time" in event
+        assert "event_end_time" in event
+
+
+def test_hotel_candidate_dict_duration_is_none(db_session):
+    candidates = retrieve_candidates(db_session, "Kandy")
+    hotels = [c for c in candidates if c["category"] == "hotel"]
+
+    assert len(hotels) > 0
+    for hotel in hotels:
+        assert hotel["duration_minutes"] is None
+        assert hotel["opening_hours"] is None
+
+
+def test_serializers_return_consistent_keys(db_session):
+    candidates = retrieve_candidates(db_session, "Kandy")
+
+    assert len(candidates) > 0
+    key_sets = {frozenset(candidate.keys()) for candidate in candidates}
+    assert len(key_sets) == 1

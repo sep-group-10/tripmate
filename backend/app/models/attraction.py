@@ -64,9 +64,10 @@ class Attraction(Base):
         default=Decimal("0.00"),
     )
 
-    duration_hours: Mapped[Decimal | None] = mapped_column(
+    duration_hours: Mapped[Decimal] = mapped_column(
         Numeric(4, 2),
-        nullable=True,
+        nullable=False,
+        default=Decimal("1.0"),
     )
 
     is_active: Mapped[bool] = mapped_column(

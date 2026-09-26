@@ -1,7 +1,8 @@
 import uuid
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +72,16 @@ class LocalEvent(Base):
 
     event_schedule: Mapped[dict] = mapped_column(
         JSONB,
+        nullable=False,
+    )
+
+    starts_on: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+    )
+
+    ends_on: Mapped[date] = mapped_column(
+        Date,
         nullable=False,
     )
 
