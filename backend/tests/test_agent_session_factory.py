@@ -17,6 +17,7 @@ def _complete_preferences() -> PreferenceResult:
         budget=Decimal("50000.00"),
         travelers=2,
         interests=["culture", "nature"],
+        transport_type="train",
     )
 
 
@@ -34,6 +35,7 @@ def test_create_agent_session_from_complete_trip_preferences():
         "budget": Decimal("50000.00"),
         "travelers": 2,
         "interests": ["culture", "nature"],
+        "transport_type": "train",
     }
 
 

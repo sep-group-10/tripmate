@@ -21,6 +21,7 @@ def create_agent_session(trip_preferences: PreferenceResult) -> AgentSession:
         "budget": trip_preferences.budget,
         "travelers": trip_preferences.travelers,
         "interests": list(trip_preferences.interests),
+        "transport_type": trip_preferences.transport_type,
     }
     goal = (
         f"Plan a trip to {trip_preferences.destination}"

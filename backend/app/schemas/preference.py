@@ -17,5 +17,6 @@ class PreferenceResult(BaseModel):
     budget: Decimal | None = None
     travelers: int | None = None
     interests: list[str] = Field(default_factory=list)
+    transport_type: str | None = None
 
     missing_fields: list[str] = Field(default_factory=list)

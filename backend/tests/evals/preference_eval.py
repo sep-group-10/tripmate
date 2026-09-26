@@ -21,6 +21,7 @@ EVALUATED_FIELDS = [
     "budget",
     "travelers",
     "interests",
+    "transport_type",
     "missing_fields",
 ]
 
@@ -76,6 +77,11 @@ def evaluate_result(result, expected: dict[str, Any]) -> dict[str, bool]:
     if "interests" in expected:
         field_matches["interests"] = Counter(result.interests) == Counter(
             expected["interests"]
+        )
+
+    if "transport_type" in expected:
+        field_matches["transport_type"] = (
+            result.transport_type == expected["transport_type"]
         )
 
     if "missing_fields" in expected:
