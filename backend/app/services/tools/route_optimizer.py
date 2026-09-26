@@ -11,8 +11,8 @@ from typing import Any
 from langchain_core.tools import tool
 
 from app.services import routing
-from app.services.routing import TravelEstimate
 from app.services.opening_hours import parse_opening_hours
+from app.services.routing import TravelEstimate
 from app.services.tools.scheduling_config import DEFAULT_CONFIG, DayType
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ _ATTRACTION = "attraction"
 
 
 def _clock(value: str) -> time:
-    return datetime.strptime(value, "%H:%M").time()
+    return time.fromisoformat(value)
 
 
 def _clock_str(value: time) -> str:
@@ -170,6 +170,33 @@ def _optimise_block(
         return block, False, "Routing failed; original attraction order kept"
 
 
+def _flush_attraction_block(
+    day: dict[str, Any],
+    pending: list[dict[str, Any]],
+    previous_anchor: dict[str, Any] | None,
+    next_anchor: dict[str, Any] | None,
+    day_window: tuple[time, time],
+    rebuilt: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, bool, str | None]:
+    window_start, window_end = day_window
+    block_start = window_start
+    block_end = window_end
+    if previous_anchor is not None:
+        block_start = max(block_start, _clock(previous_anchor["end_time"]))
+    if next_anchor is not None:
+        block_end = min(block_end, _clock(next_anchor["start_time"]))
+
+    optimized, reordered, warning = _optimise_block(
+        day, pending, previous_anchor, block_start, block_end, next_anchor
+    )
+    rebuilt.extend(optimized)
+    if next_anchor is not None:
+        rebuilt.append(next_anchor)
+        previous_anchor = next_anchor
+
+    return previous_anchor, reordered, warning
+
+
 def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
     """Optimize attraction ordering without moving fixed-time items."""
     result = copy.deepcopy(schedule)
@@ -191,32 +218,35 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
         previous_anchor: dict[str, Any] | None = None
         window_start, window_end = _day_window(day)
 
-        def flush(next_anchor: dict[str, Any] | None, rebuilt_items=rebuilt) -> None:
-            nonlocal pending, previous_anchor, day_reordered
-            block_start = window_start
-            block_end = window_end
-            if previous_anchor is not None:
-                block_start = max(block_start, _clock(previous_anchor["end_time"]))
-            if next_anchor is not None:
-                block_end = min(block_end, _clock(next_anchor["start_time"]))
-            optimized, reordered, warning = _optimise_block(
-                day, pending, previous_anchor, block_start, block_end, next_anchor
-            )
-            rebuilt_items.extend(optimized)
-            day_reordered = day_reordered or reordered
-            if warning:
-                warnings.append(warning)
-            if next_anchor is not None:
-                rebuilt_items.append(next_anchor)
-                previous_anchor = next_anchor
-            pending = []
-
         for item in sorted_items:
             if item.get("category") == _ATTRACTION:
                 pending.append(item)
-            else:
-                flush(item)
-        flush(None)
+                continue
+
+            previous_anchor, reordered, warning = _flush_attraction_block(
+                day,
+                pending,
+                previous_anchor,
+                item,
+                (window_start, window_end),
+                rebuilt,
+            )
+            day_reordered = day_reordered or reordered
+            if warning:
+                warnings.append(warning)
+            pending = []
+
+        _, reordered, warning = _flush_attraction_block(
+            day,
+            pending,
+            previous_anchor,
+            None,
+            (window_start, window_end),
+            rebuilt,
+        )
+        day_reordered = day_reordered or reordered
+        if warning:
+            warnings.append(warning)
         day["items"] = rebuilt
         day["route_optimization"] = {
             "reordered": day_reordered,
