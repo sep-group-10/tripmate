@@ -102,9 +102,12 @@ def _availability_score(
 def score_candidates(
     candidates: list[dict[str, Any]],
     preferences: dict[str, Any],
-    weights: ScoringWeights = ScoringWeights(),
+    weights: ScoringWeights | None = None,
 ) -> list[dict[str, Any]]:
     """Score and rank candidates by how well they match trip preferences."""
+
+    if weights is None:
+        weights = ScoringWeights()
 
     scored: list[dict[str, Any]] = []
 

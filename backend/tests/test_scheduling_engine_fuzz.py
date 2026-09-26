@@ -6,6 +6,7 @@ crashes, no time slot is double-booked, no place is scheduled twice, and
 day/night counts stay internally consistent.
 """
 
+import itertools
 import random
 from datetime import date, timedelta
 
@@ -102,7 +103,7 @@ def test_fuzz_never_crashes_and_stays_internally_consistent():
 
             # No time slot double-booked.
             sorted_items = sorted(items, key=lambda item: item["start_time"])
-            for first, second in zip(sorted_items, sorted_items[1:], strict=False):
+            for first, second in itertools.pairwise(sorted_items):
                 assert first["end_time"] <= second["start_time"], (trial, day)
 
             # No place scheduled twice on the same day.

@@ -83,7 +83,7 @@ class ParsedOpeningHours:
 def _parse_time_token(token: str) -> time:
     token = token.strip().lower()
     meridiem = None
-    if token.endswith("am") or token.endswith("pm"):
+    if token.endswith(("am", "pm")):
         meridiem = token[-2:]
         token = token[:-2].strip()
 

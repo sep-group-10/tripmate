@@ -4,7 +4,7 @@ from decimal import Decimal
 from app.services.tools.scoring_engine import ScoringWeights, score_candidates
 
 BASE_PREFERENCES = {
-    "budget": Decimal("500"),
+    "budget": Decimal(500),
     "duration_days": 3,
     "travelers": 2,
     "start_date": date(2026, 10, 5),
