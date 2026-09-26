@@ -30,6 +30,10 @@ class ScheduledItem:
     name: str
     start_time: time
     end_time: time
+    latitude: Any = None
+    longitude: Any = None
+    duration_minutes: int | None = None
+    opening_hours: Any = None
 
 
 @dataclass
@@ -39,6 +43,7 @@ class DayPlan:
     day_type: DayType
     items: list[ScheduledItem] = field(default_factory=list)
     hotel_id: str | None = None
+    hotel_location: dict[str, Any] | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -78,10 +83,15 @@ def _result_to_dict(result: ScheduleResult) -> dict[str, Any]:
                         "name": item.name,
                         "start_time": _to_serializable_time(item.start_time),
                         "end_time": _to_serializable_time(item.end_time),
+                        "latitude": item.latitude,
+                        "longitude": item.longitude,
+                        "duration_minutes": item.duration_minutes,
+                        "opening_hours": item.opening_hours,
                     }
                     for item in day.items
                 ],
                 "hotel_id": day.hotel_id,
+                "hotel_location": day.hotel_location,
                 "warnings": day.warnings,
             }
             for day in result.days
@@ -268,6 +278,9 @@ def _schedule_events(
                     name=event["name"],
                     start_time=event_start,
                     end_time=event_end,
+                    latitude=event.get("latitude"),
+                    longitude=event.get("longitude"),
+                    duration_minutes=_minutes_between(event_start, event_end),
                 )
             )
             scheduled_event_ids.add(event["id"])
@@ -349,6 +362,11 @@ def _schedule_meals(days: list[DayPlan], restaurants: list[dict[str, Any]]) -> N
                     name=restaurant["name"],
                     start_time=candidate_slot[0],
                     end_time=candidate_slot[1],
+                    latitude=restaurant.get("latitude"),
+                    longitude=restaurant.get("longitude"),
+                    duration_minutes=_minutes_between(
+                        candidate_slot[0], candidate_slot[1]
+                    ),
                 )
             )
 
@@ -411,6 +429,10 @@ def _schedule_attractions(
                         name=attraction["name"],
                         start_time=gap_start,
                         end_time=item_end,
+                        latitude=attraction.get("latitude"),
+                        longitude=attraction.get("longitude"),
+                        duration_minutes=duration_minutes,
+                        opening_hours=attraction.get("opening_hours"),
                     )
                 )
                 if parsed_hours.assumed_open:
@@ -461,6 +483,10 @@ def _assign_hotel(
 
     hotel = hotels[0]
     for day in days:
+        day.hotel_location = {
+            "latitude": hotel.get("latitude"),
+            "longitude": hotel.get("longitude"),
+        }
         if day.day_type != DayType.DEPARTURE:
             day.hotel_id = hotel["id"]
     return hotel["id"]
