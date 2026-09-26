@@ -16,13 +16,32 @@ from app.models.restaurant import Restaurant
 def _serialize(
     row: Attraction | Restaurant | LocalEvent | Hotel, category: str
 ) -> dict[str, Any]:
-    return {
+    base = {
         "id": str(row.id),
         "category": category,
         "name": row.name,
         "description": row.description,
         "rating": row.rating,
     }
+
+    if isinstance(row, Restaurant):
+        # avg_meal_cost and operating_hours are the correct DB column names for
+        # restaurants. They are normalized here to entry_fee and opening_hours so
+        # every candidate dict has a consistent shape regardless of entity type.
+        # ScoringEngine and all downstream tools never see raw DB rows — only this
+        # dict.
+        #
+        # TODO: avg_meal_cost is a per-person recurring cost, not a one-time entry
+        # fee. The budget scoring formula treats them the same for now (approximate
+        # but acceptable). Revisit when the budget calculator handles dining as a
+        # separate cost category.
+        base["entry_fee"] = row.avg_meal_cost
+        base["opening_hours"] = row.operating_hours
+    elif isinstance(row, Attraction | LocalEvent):
+        base["entry_fee"] = row.entry_fee
+        base["opening_hours"] = row.opening_hours
+
+    return base
 
 
 def retrieve_candidates(db: Session, destination: str | None) -> list[dict[str, Any]]:
