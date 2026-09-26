@@ -191,7 +191,7 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
         previous_anchor: dict[str, Any] | None = None
         window_start, window_end = _day_window(day)
 
-        def flush(next_anchor: dict[str, Any] | None) -> None:
+        def flush(next_anchor: dict[str, Any] | None, rebuilt_items=rebuilt) -> None:
             nonlocal pending, previous_anchor, day_reordered
             block_start = window_start
             block_end = window_end
@@ -202,12 +202,12 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
             optimized, reordered, warning = _optimise_block(
                 day, pending, previous_anchor, block_start, block_end, next_anchor
             )
-            rebuilt.extend(optimized)
+            rebuilt_items.extend(optimized)
             day_reordered = day_reordered or reordered
             if warning:
                 warnings.append(warning)
             if next_anchor is not None:
-                rebuilt.append(next_anchor)
+                rebuilt_items.append(next_anchor)
                 previous_anchor = next_anchor
             pending = []
 

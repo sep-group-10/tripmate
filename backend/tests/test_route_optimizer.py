@@ -1,6 +1,5 @@
 from app.services.tools import route_optimizer as optimizer
 
-
 OPEN_HOURS = {
     day: "08:00-20:00"
     for day in (

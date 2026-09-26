@@ -9,7 +9,7 @@ produces the same output both times.
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 from typing import Any
 
 from langchain_core.tools import tool
@@ -226,8 +226,8 @@ def _schedule_events(
         try:
             range_start = date.fromisoformat(starts_on)
             range_end = date.fromisoformat(ends_on)
-            event_start = datetime.strptime(start_time_str, "%H:%M").time()
-            event_end = datetime.strptime(end_time_str, "%H:%M").time()
+            event_start = time.fromisoformat(start_time_str)
+            event_end = time.fromisoformat(end_time_str)
         except ValueError:
             unscheduled.append(
                 UnscheduledCandidate(

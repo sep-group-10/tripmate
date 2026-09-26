@@ -1,6 +1,6 @@
 """Candidate retrieval tool for the TripMate planning graph."""
 
-from datetime import datetime
+from datetime import time
 from typing import Any
 
 from langchain_core.tools import tool
@@ -104,9 +104,11 @@ def _event_duration_minutes(schedule: dict[str, Any]) -> int:
     if not start_time or not end_time:
         return _DEFAULT_EVENT_DURATION_MINUTES
 
-    start = datetime.strptime(start_time, "%H:%M")
-    end = datetime.strptime(end_time, "%H:%M")
-    return int((end - start).seconds / 60)
+    start = time.fromisoformat(start_time)
+    end = time.fromisoformat(end_time)
+    start_minutes = start.hour * 60 + start.minute
+    end_minutes = end.hour * 60 + end.minute
+    return (end_minutes - start_minutes) % (24 * 60)
 
 
 def _serialize_event(row: LocalEvent) -> dict[str, Any]:
