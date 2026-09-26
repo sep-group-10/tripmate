@@ -415,6 +415,7 @@ def test_registered_planning_tools_expose_registry_interface():
         "scoring_engine": {"candidates", "preferences"},
         "scheduling_engine": {"candidates", "trip_requirements"},
         "route_optimizer": {"schedule"},
+        "weather_validator": {"schedule"},
     }
 
     for name, arguments in required_arguments.items():

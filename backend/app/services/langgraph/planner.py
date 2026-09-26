@@ -46,6 +46,8 @@ Decide what action should happen next based on the current session and collected
 Choose one registered tool by its exact name. Set arguments to an object matching
 that tool's argument schema, using trip requirements and prior tool results as inputs.
 Do not assume a fixed tool order; select the next useful action from the current state.
+When calling weather_validator, pass the schedule dictionary from the most recent
+scheduling_engine result in session.tool_results as its schedule argument.
 
 Return a structured PlannerDecision.
 """
