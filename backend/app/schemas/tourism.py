@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -223,4 +223,6 @@ class LocalEventResponse(BaseModel):
     duration_hours: Decimal | None
     entry_fee: Decimal
     event_schedule: dict
+    starts_on: date
+    ends_on: date
     is_active: bool

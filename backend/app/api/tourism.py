@@ -1,5 +1,6 @@
 import math
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -876,6 +877,12 @@ def delete_restaurant(
 # ============================================================
 
 
+def _event_date_from_schedule(event_schedule: dict) -> date:
+    """Derive the event's date from event_schedule until admins can set a
+    real starts_on/ends_on range for multi-day events."""
+    return date.fromisoformat(event_schedule["date"])
+
+
 @local_event_router.post(
     "",
     response_model=LocalEventResponse,
@@ -907,7 +914,9 @@ def create_local_event(
             },
         )
 
-    event = LocalEvent(**event_data.model_dump())
+    event_fields = event_data.model_dump()
+    event_date = _event_date_from_schedule(event_fields["event_schedule"])
+    event = LocalEvent(**event_fields, starts_on=event_date, ends_on=event_date)
 
     db.add(event)
     db.commit()
@@ -1036,6 +1045,11 @@ def update_local_event(
                     },
                 },
             )
+
+    if "event_schedule" in update_data:
+        event_date = _event_date_from_schedule(update_data["event_schedule"])
+        update_data["starts_on"] = event_date
+        update_data["ends_on"] = event_date
 
     for field, value in update_data.items():
         setattr(event, field, value)
