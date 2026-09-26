@@ -100,7 +100,7 @@ def _parse_time_token(token: str) -> time:
     elif meridiem == "am" and hour == 12:
         hour = 0
 
-    return time(hour=hour % 24, minute=minute)
+    return time(hour=hour, minute=minute)
 
 
 def _parse_range(range_str: str) -> tuple[time, time]:

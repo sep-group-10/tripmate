@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DestinationCreate(BaseModel):
@@ -180,6 +180,23 @@ class RestaurantResponse(BaseModel):
     is_active: bool
 
 
+def _require_iso_event_date(event_schedule: dict | None) -> dict:
+    if not isinstance(event_schedule, dict):
+        raise ValueError("event_schedule must be an object containing a date")
+    event_date = event_schedule.get("date")
+    if not isinstance(event_date, str):
+        raise ValueError("event_schedule.date must be an ISO YYYY-MM-DD date")
+    try:
+        parsed_date = date.fromisoformat(event_date)
+    except ValueError as exc:
+        raise ValueError(
+            "event_schedule.date must be a valid ISO YYYY-MM-DD date"
+        ) from exc
+    if parsed_date.isoformat() != event_date:
+        raise ValueError("event_schedule.date must use ISO YYYY-MM-DD format")
+    return event_schedule
+
+
 class LocalEventCreate(BaseModel):
     destination_id: uuid.UUID
     name: str = Field(..., max_length=255)
@@ -192,6 +209,11 @@ class LocalEventCreate(BaseModel):
     duration_hours: Decimal | None = Field(default=None, ge=0)
     entry_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
     event_schedule: dict
+
+    @field_validator("event_schedule")
+    @classmethod
+    def validate_event_schedule_date(cls, value: dict) -> dict:
+        return _require_iso_event_date(value)
 
 
 class LocalEventUpdate(BaseModel):
@@ -206,6 +228,11 @@ class LocalEventUpdate(BaseModel):
     duration_hours: Decimal | None = Field(default=None, ge=0)
     entry_fee: Decimal | None = Field(default=None, ge=0)
     event_schedule: dict | None = None
+
+    @field_validator("event_schedule")
+    @classmethod
+    def validate_event_schedule_date(cls, value: dict | None) -> dict:
+        return _require_iso_event_date(value)
 
 
 class LocalEventResponse(BaseModel):

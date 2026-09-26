@@ -311,10 +311,16 @@ def _schedule_meals(days: list[DayPlan], restaurants: list[dict[str, Any]]) -> N
     """
     config = DEFAULT_CONFIG
 
-    def _pick_restaurant(used_today: set[str]) -> dict[str, Any] | None:
+    def _pick_restaurant(
+        used_today: set[str], day: DayPlan, slot: tuple[time, time]
+    ) -> tuple[dict[str, Any], bool] | None:
         for restaurant in restaurants:
-            if restaurant["id"] not in used_today:
-                return restaurant
+            if restaurant["id"] in used_today:
+                continue
+            opening_hours = parse_opening_hours(restaurant.get("opening_hours"))
+            day_hours = opening_hours.for_date(day.date)
+            if day_hours.contains(*slot):
+                return restaurant, opening_hours.assumed_open
         return None
 
     def _slot_is_free(day: DayPlan, slot_start: time, slot_end: time) -> bool:
@@ -350,11 +356,16 @@ def _schedule_meals(days: list[DayPlan], restaurants: list[dict[str, Any]]) -> N
                 else:
                     continue
 
-            restaurant = _pick_restaurant(used_today)
-            if restaurant is None:
+            selected_restaurant = _pick_restaurant(used_today, day, candidate_slot)
+            if selected_restaurant is None:
                 continue
+            restaurant, assumed_open = selected_restaurant
 
             used_today.add(restaurant["id"])
+            if assumed_open:
+                day.warnings.append(
+                    f"{restaurant['name']}: opening hours unknown, assumed open"
+                )
             day.items.append(
                 ScheduledItem(
                     candidate_id=restaurant["id"],

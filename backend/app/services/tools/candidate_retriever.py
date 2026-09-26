@@ -23,7 +23,7 @@ def _serialize_attraction(row: Attraction) -> dict[str, Any]:
         "category": "attraction",
         "name": row.name,
         "description": row.description,
-        "rating": float(row.rating) if row.rating else 3.0,
+        "rating": float(row.rating) if row.rating is not None else 3.0,
         "entry_fee": float(row.entry_fee) if row.entry_fee else 0.0,
         "opening_hours": row.opening_hours,
         # duration_hours is NOT NULL (enforced by migration), so no fallback
@@ -56,7 +56,7 @@ def _serialize_restaurant(row: Restaurant) -> dict[str, Any]:
         "category": "restaurant",
         "name": row.name,
         "description": row.description,
-        "rating": float(row.rating) if row.rating else 3.0,
+        "rating": float(row.rating) if row.rating is not None else 3.0,
         "entry_fee": float(row.avg_meal_cost) if row.avg_meal_cost else 0.0,
         "opening_hours": row.operating_hours,
         # Restaurants don't have a duration column. 60 minutes is a
@@ -80,7 +80,7 @@ def _serialize_hotel(row: Hotel) -> dict[str, Any]:
         "category": "hotel",
         "name": row.name,
         "description": row.description,
-        "rating": float(row.rating) if row.rating else 3.0,
+        "rating": float(row.rating) if row.rating is not None else 3.0,
         # price_per_night used as the entry_fee equivalent for budget scoring.
         "entry_fee": float(row.price_per_night) if row.price_per_night else 0.0,
         # Hotels don't have opening hours — always available.
@@ -118,7 +118,7 @@ def _serialize_event(row: LocalEvent) -> dict[str, Any]:
         "category": "local_event",
         "name": row.name,
         "description": row.description,
-        "rating": float(row.rating) if row.rating else 3.0,
+        "rating": float(row.rating) if row.rating is not None else 3.0,
         "entry_fee": float(row.entry_fee) if row.entry_fee else 0.0,
         "opening_hours": row.opening_hours,
         # Duration derived from start_time/end_time in event_schedule JSONB.
@@ -149,7 +149,8 @@ def retrieve_candidates(db: Session, destination: str | None) -> list[dict[str, 
         return []
 
     matching_destination_ids = db.query(Destination.id).filter(
-        Destination.name == destination
+        Destination.name == destination,
+        Destination.is_active.is_(True),
     )
 
     candidates: list[dict[str, Any]] = []
