@@ -26,6 +26,7 @@ MISSING_FIELD_QUESTIONS = {
     "budget": "What is your budget for the trip?",
     "travelers": "How many people will be traveling?",
     "interests": "What activities or interests would you like to include?",
+    "transport_type": "Which transport type do you prefer?",
 }
 
 

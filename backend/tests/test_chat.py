@@ -53,6 +53,7 @@ def _complete_preferences() -> PreferenceResult:
         budget=Decimal("50000.00"),
         travelers=2,
         interests=["culture"],
+        transport_type="train",
         missing_fields=[],
     )
 
@@ -144,7 +145,7 @@ def test_send_message_asks_only_for_missing_trip_fields(
         PreferenceResult(
             intent="trip_planning",
             destination="Kandy",
-            missing_fields=["dates", "budget"],
+            missing_fields=["dates", "budget", "transport_type"],
         ),
     )
     factory_calls = []
@@ -169,7 +170,7 @@ def test_send_message_asks_only_for_missing_trip_fields(
     body = response.json()
     assert body["success"] is True
     assert body["data"]["assistant_message"] == (
-        "When are you planning to travel? What is your budget for the trip?"
+        "When are you planning to travel? What is your budget for the trip? Which transport type do you prefer?"
     )
     assert body["data"]["session"] == {
         "id": str(session.id),
@@ -186,7 +187,8 @@ def test_send_message_asks_only_for_missing_trip_fields(
         ("user", "I want to plan a trip to Kandy"),
         (
             "assistant",
-            "When are you planning to travel? What is your budget for the trip?",
+            "When are you planning to travel? What is your budget for the trip? "
+            "Which transport type do you prefer?",
         ),
     ]
 
@@ -200,12 +202,13 @@ def test_send_message_processes_complete_multi_turn_conversation(
         PreferenceResult(
             intent="trip_planning",
             destination="Kandy",
-            missing_fields=["dates", "travelers"],
+            missing_fields=["dates", "travelers", "transport_type"],
         ),
         PreferenceResult(
             intent="trip_planning",
             destination="Kandy",
             travelers=2,
+            transport_type="train",
             missing_fields=["budget"],
         ),
     )
@@ -216,7 +219,7 @@ def test_send_message_processes_complete_multi_turn_conversation(
     )
     second_response = client.post(
         f"{CHAT_URL}/{session.id}",
-        json={"message": "December 10-12, two people."},
+        json={"message": "December 10-12, two people. I prefer the train."},
     )
 
     assert first_response.status_code == 200
@@ -225,9 +228,10 @@ def test_send_message_processes_complete_multi_turn_conversation(
         ("human", "I want to visit Kandy."),
         (
             "ai",
-            "When are you planning to travel? How many people will be traveling?",
+            "When are you planning to travel? How many people will be traveling? "
+            "Which transport type do you prefer?",
         ),
-        ("human", "December 10-12, two people."),
+        ("human", "December 10-12, two people. I prefer the train."),
     ]
 
 
@@ -291,6 +295,7 @@ def test_complete_preferences_start_planning_and_persist_final_result(
             "budget": "50000.00",
             "travelers": 2,
             "interests": ["culture"],
+            "transport_type": "train",
             "missing_fields": [],
         }
     }

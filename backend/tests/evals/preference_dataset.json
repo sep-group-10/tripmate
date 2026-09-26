@@ -16,8 +16,14 @@
       "duration_days": 3,
       "budget": 50000,
       "travelers": 2,
-      "interests": ["culture", "nature"],
-      "missing_fields": []
+      "interests": [
+        "culture",
+        "nature"
+      ],
+      "missing_fields": [
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -35,8 +41,15 @@
       "duration_days": 5,
       "budget": 80000,
       "travelers": 4,
-      "interests": ["beaches", "history"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "beaches",
+        "history"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -56,8 +69,14 @@
       "duration_days": 3,
       "budget": 30000,
       "travelers": 2,
-      "interests": ["food", "shopping"],
-      "missing_fields": []
+      "interests": [
+        "food",
+        "shopping"
+      ],
+      "missing_fields": [
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -75,8 +94,15 @@
       "duration_days": 4,
       "budget": 40000,
       "travelers": 1,
-      "interests": ["hiking", "photography"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "hiking",
+        "photography"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -94,7 +120,12 @@
       "duration_days": 3,
       "budget": 50000,
       "travelers": 2,
-      "missing_fields": ["dates", "interests"]
+      "missing_fields": [
+        "dates",
+        "interests",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -110,8 +141,17 @@
       "intent": "trip_planning",
       "destination": "Galle",
       "travelers": 2,
-      "interests": ["beaches", "history"],
-      "missing_fields": ["dates", "duration_days", "budget"]
+      "interests": [
+        "beaches",
+        "history"
+      ],
+      "missing_fields": [
+        "dates",
+        "duration_days",
+        "budget",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -129,8 +169,15 @@
       "duration_days": 3,
       "budget": 50000,
       "travelers": 2,
-      "interests": ["culture", "nature"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "culture",
+        "nature"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -149,8 +196,15 @@
       "end_date": "2026-12-04",
       "duration_days": 4,
       "travelers": 2,
-      "interests": ["hiking", "nature"],
-      "missing_fields": ["budget"]
+      "interests": [
+        "hiking",
+        "nature"
+      ],
+      "missing_fields": [
+        "budget",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -168,8 +222,14 @@
       "duration_days": 3,
       "budget": 60000,
       "travelers": 3,
-      "interests": ["food"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "food"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -185,12 +245,14 @@
       "intent": "trip_planning",
       "destination": "Kandy",
       "missing_fields": [
-  "dates",
-  "duration_days",
-  "budget",
-  "travelers",
-  "interests"
-]
+        "dates",
+        "duration_days",
+        "budget",
+        "travelers",
+        "interests",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -206,12 +268,14 @@
       "intent": "trip_planning",
       "destination": "Galle",
       "missing_fields": [
-  "dates",
-  "duration_days",
-  "budget",
-  "travelers",
-  "interests"
-]
+        "dates",
+        "duration_days",
+        "budget",
+        "travelers",
+        "interests",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -245,8 +309,14 @@
       "duration_days": 3,
       "budget": 50000,
       "travelers": 2,
-      "interests": ["culture"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "culture"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -288,8 +358,15 @@
       "duration_days": 5,
       "budget": 90000,
       "travelers": 3,
-      "interests": ["hiking", "waterfalls"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "hiking",
+        "waterfalls"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -323,7 +400,12 @@
       "duration_days": 2,
       "budget": 25000,
       "travelers": 2,
-      "missing_fields": ["dates", "interests"]
+      "missing_fields": [
+        "dates",
+        "interests",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -341,8 +423,15 @@
       "duration_days": 3,
       "budget": 70000,
       "travelers": 2,
-      "interests": ["beaches", "local food"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "beaches",
+        "local food"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -360,8 +449,14 @@
       "duration_days": 6,
       "budget": 100000,
       "travelers": 4,
-      "interests": ["culture"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "culture"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -451,8 +546,14 @@
       "duration_days": 3,
       "budget": 45000,
       "travelers": 2,
-      "interests": ["tea plantations", "scenic places"],
-      "missing_fields": []
+      "interests": [
+        "tea plantations",
+        "scenic places"
+      ],
+      "missing_fields": [
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -469,8 +570,15 @@
       "destination": "Ella",
       "duration_days": 3,
       "travelers": 2,
-      "interests": ["hiking"],
-      "missing_fields": ["dates", "budget"]
+      "interests": [
+        "hiking"
+      ],
+      "missing_fields": [
+        "dates",
+        "budget",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   },
   {
@@ -488,8 +596,16 @@
       "duration_days": 2,
       "budget": 35000,
       "travelers": 3,
-      "interests": ["history", "wildlife", "photography"],
-      "missing_fields": ["dates"]
+      "interests": [
+        "history",
+        "wildlife",
+        "photography"
+      ],
+      "missing_fields": [
+        "dates",
+        "transport_type"
+      ],
+      "transport_type": null
     }
   }
 ]

@@ -47,6 +47,7 @@ def test_preference_processor_extracts_trip_preferences():
             budget=Decimal("50000.00"),
             travelers=2,
             interests=["culture", "nature"],
+            transport_type="train",
             missing_fields=[],
         )
     )
@@ -68,6 +69,7 @@ def test_preference_processor_extracts_trip_preferences():
     assert result.budget == Decimal("50000.00")
     assert result.travelers == 2
     assert result.interests == ["culture", "nature"]
+    assert result.transport_type == "train"
     assert result.missing_fields == []
 
 
@@ -90,7 +92,7 @@ def test_preference_processor_reports_missing_trip_preferences():
         PreferenceResult(
             intent="trip_planning",
             destination="Kandy",
-            missing_fields=["duration_days", "budget", "travelers"],
+            missing_fields=["duration_days", "budget", "travelers", "transport_type"],
         )
     )
 
@@ -98,7 +100,12 @@ def test_preference_processor_reports_missing_trip_preferences():
 
     assert result.intent == "trip_planning"
     assert result.destination == "Kandy"
-    assert result.missing_fields == ["duration_days", "budget", "travelers"]
+    assert result.missing_fields == [
+        "duration_days",
+        "budget",
+        "travelers",
+        "transport_type",
+    ]
 
 
 def test_preference_processor_rejects_invalid_model_response():
