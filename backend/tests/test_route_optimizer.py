@@ -85,6 +85,7 @@ def test_known_improvement_reorders_stops_and_recalculates_times(monkeypatch):
     assert result["days"][0]["route_optimization"] == {
         "reordered": True,
         "warning": None,
+        "local_distance_km": 3.0,
     }
     assert original["days"][0]["items"][0]["candidate_id"] == "C"
 
