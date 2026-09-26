@@ -7,7 +7,7 @@ from app.services.langgraph.state import PlanningState
 
 def create_critic_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-3.5-flash-lite",
         temperature=0,
     ).with_structured_output(CriticDecision)
 

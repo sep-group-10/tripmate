@@ -1,5 +1,10 @@
 from langchain_core.tools import BaseTool, tool
 
+from app.services.tools.candidate_retriever import candidate_retriever
+from app.services.tools.route_optimizer import route_optimizer
+from app.services.tools.scheduling_engine import scheduling_engine
+from app.services.tools.scoring_engine import scoring_engine
+
 
 @tool
 def placeholder_tool() -> str:
@@ -9,4 +14,8 @@ def placeholder_tool() -> str:
 
 TOOLS: dict[str, BaseTool] = {
     "placeholder_tool": placeholder_tool,
+    "candidate_retriever": candidate_retriever,
+    "scoring_engine": scoring_engine,
+    "scheduling_engine": scheduling_engine,
+    "route_optimizer": route_optimizer,
 }

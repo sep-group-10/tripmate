@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from app.core.database import SessionLocal
@@ -678,12 +679,16 @@ def seed_events(db, destinations):
             if existing:
                 continue
 
+            event_date = date.fromisoformat(data["event_schedule"]["date"])
+
             db.add(
                 LocalEvent(
                     destination_id=destination.id,
                     latitude=destination.latitude,
                     longitude=destination.longitude,
                     duration_hours=Decimal("3.00"),
+                    starts_on=event_date,
+                    ends_on=event_date,
                     **data,
                 )
             )

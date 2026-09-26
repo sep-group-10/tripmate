@@ -266,3 +266,160 @@ def test_same_failure_increments_consecutive_failure_count():
 
     assert result["last_failure"] == failure
     assert result["consecutive_failures"] == 2
+
+
+def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
+    from langchain_core.tools import tool
+
+    from app.services.tools import registry
+
+    calls = []
+
+    @tool
+    def candidate_retriever(destination: str) -> list[dict]:
+        """Return destination candidates."""
+        calls.append(("candidate_retriever", destination))
+        return [{"id": "place-1", "category": "attraction"}]
+
+    @tool
+    def scoring_engine(candidates: list[dict], preferences: dict) -> list[dict]:
+        """Rank candidates."""
+        calls.append(("scoring_engine", candidates, preferences))
+        return candidates
+
+    @tool
+    def scheduling_engine(candidates: list[dict], trip_requirements: dict) -> dict:
+        """Build a day schedule."""
+        calls.append(("scheduling_engine", candidates, trip_requirements))
+        return {"status": "ok", "days": [{"items": candidates}]}
+
+    @tool
+    def route_optimizer(schedule: dict) -> dict:
+        """Optimize attraction routes."""
+        calls.append(("route_optimizer", schedule))
+        return {**schedule, "route_optimized": True}
+
+    registered_stubs = {
+        "candidate_retriever": candidate_retriever,
+        "scoring_engine": scoring_engine,
+        "scheduling_engine": scheduling_engine,
+        "route_optimizer": route_optimizer,
+    }
+    for name, stub in registered_stubs.items():
+        monkeypatch.setitem(registry.TOOLS, name, stub)
+
+    requirements = {
+        "destination": "Kandy",
+        "start_date": "2026-10-05",
+        "end_date": "2026-10-07",
+        "budget": 500,
+    }
+    decisions = [
+        PlannerDecision(
+            action="candidate_retriever",
+            arguments={"destination": requirements["destination"]},
+        ),
+        PlannerDecision(
+            action="scoring_engine",
+            arguments={
+                "candidates": [{"id": "place-1", "category": "attraction"}],
+                "preferences": requirements,
+            },
+        ),
+        PlannerDecision(
+            action="scheduling_engine",
+            arguments={
+                "candidates": [{"id": "place-1", "category": "attraction"}],
+                "trip_requirements": requirements,
+            },
+        ),
+        PlannerDecision(
+            action="route_optimizer",
+            arguments={
+                "schedule": {
+                    "status": "ok",
+                    "days": [{"items": [{"id": "place-1", "category": "attraction"}]}],
+                }
+            },
+        ),
+    ]
+
+    class FakePlannerModel:
+        def __init__(self):
+            self.prompts = []
+
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
+            return decisions[len(self.prompts) - 1]
+
+    class FakeCriticModel:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, _prompt):
+            self.calls += 1
+            done = self.calls == len(decisions)
+            return CriticDecision(
+                continue_planning=not done,
+                status="completed" if done else None,
+            )
+
+    planner_model = FakePlannerModel()
+    critic_model = FakeCriticModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda: planner_model)
+    monkeypatch.setattr(critic, "create_critic_model", lambda: critic_model)
+
+    session = AgentSession(
+        goal="Plan a three-day trip to Kandy",
+        trip_requirements=requirements,
+    )
+    result = planning_graph.invoke(
+        {
+            "session": session,
+            "max_iterations": 8,
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    updated = result["session"]
+    expected_order = list(registered_stubs)
+    assert updated.tool_execution_order == expected_order
+    assert [entry["tool"] for entry in updated.tool_results] == expected_order
+    assert updated.tool_results[-1]["result"]["route_optimized"] is True
+    assert updated.status == AgentSessionStatus.COMPLETED
+    assert len(planner_model.prompts) == 4
+    assert critic_model.calls == 4
+
+    # Each new Planner turn sees current session output and tool argument schemas.
+    assert "Plan a three-day trip to Kandy" in planner_model.prompts[0]
+    assert "'destination': 'Kandy'" in planner_model.prompts[1]
+    for name in expected_order:
+        assert name in planner_model.prompts[0]
+    assert '"trip_requirements"' in planner_model.prompts[0]
+    assert calls[0] == ("candidate_retriever", "Kandy")
+    assert calls[1][0] == "scoring_engine"
+    assert calls[1][2] == requirements
+    assert calls[2][0] == "scheduling_engine"
+    assert calls[2][2] == requirements
+    assert calls[3][0] == "route_optimizer"
+
+
+def test_registered_planning_tools_expose_registry_interface():
+    from app.services.tools.registry import TOOLS
+
+    required_arguments = {
+        "candidate_retriever": {"destination"},
+        "scoring_engine": {"candidates", "preferences"},
+        "scheduling_engine": {"candidates", "trip_requirements"},
+        "route_optimizer": {"schedule"},
+    }
+
+    for name, arguments in required_arguments.items():
+        registered = TOOLS[name]
+        assert registered.name == name
+        assert registered.description
+        assert set(registered.args) == arguments
+        assert callable(registered.invoke)

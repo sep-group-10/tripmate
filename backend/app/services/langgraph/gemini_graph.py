@@ -27,14 +27,14 @@ class GeminiState(TypedDict):
 
 def get_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-3.5-flash-lite",
         temperature=0,
     ).bind_tools([get_tripmate_status])
 
 
 def get_structured_model():
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model="gemini-3.5-flash-lite",
         temperature=0,
     ).with_structured_output(GeminiResponse)
 
@@ -49,8 +49,7 @@ def call_gemini(state: GeminiState) -> dict:
 
 
 def create_structured_response(state: GeminiState) -> dict:
-    # Gemini 3.6 Flash does not support model-prefill.
-    # Send the conversation as context inside a new user message instead.
+    # Pass the conversation as user context before requesting structured output.
     structured_model = get_structured_model()
 
     conversation = "\n".join(
