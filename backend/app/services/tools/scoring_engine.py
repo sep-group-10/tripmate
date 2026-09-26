@@ -7,15 +7,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-_DAY_NAMES = (
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-)
+from app.services.opening_hours import parse_opening_hours
 
 
 @dataclass
@@ -93,9 +85,8 @@ def _availability_score(
     if not trip_days:
         return 0.5
 
-    weekdays_in_trip = {_DAY_NAMES[day.weekday()] for day in trip_days}
-
-    is_open_any_day = any(opening_hours.get(day_name) for day_name in weekdays_in_trip)
+    parsed_hours = parse_opening_hours(opening_hours)
+    is_open_any_day = any(not parsed_hours.for_date(day).is_closed for day in trip_days)
     return 1.0 if is_open_any_day else 0.0
 
 
