@@ -56,7 +56,7 @@ function RestaurantsList() {
         (r) =>
           !q ||
           r.name.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q),
+          (r.description ?? "").toLowerCase().includes(q),
       );
   }, [restaurants, query, destinationFilter, cuisineFilter]);
 
