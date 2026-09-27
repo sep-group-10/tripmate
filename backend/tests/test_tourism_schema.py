@@ -5,8 +5,13 @@ from decimal import Decimal
 from app.models.attraction import Attraction
 from app.models.destination import Destination
 from app.models.hotel import Hotel
+from app.models.itinerary import Itinerary
+from app.models.itinerary_day import ItineraryDay
 from app.models.local_event import LocalEvent
 from app.models.restaurant import Restaurant
+from app.models.trip import Trip
+from app.models.user import User
+from app.services.tools.candidate_retriever import retrieve_candidates
 
 
 def _destination_id(db_session, name):
@@ -118,3 +123,88 @@ def test_event_supports_multiday_range(db_session):
     assert saved.starts_on == date(2026, 8, 10)
     assert saved.ends_on == date(2026, 8, 20)
     assert saved.starts_on != saved.ends_on
+
+
+def test_existing_tourism_records_have_valid_weather_coordinates_and_destinations(
+    db_session,
+):
+    destination_ids = {row[0] for row in db_session.query(Destination.id).all()}
+
+    for model in (Attraction, Hotel, Restaurant, LocalEvent):
+        records = db_session.query(model).all()
+
+        assert records, f"Expected seeded {model.__tablename__} records"
+        for record in records:
+            assert record.latitude is not None
+            assert record.longitude is not None
+            assert Decimal("-90") <= record.latitude <= Decimal("90")
+            assert Decimal("-180") <= record.longitude <= Decimal("180")
+            assert record.destination_id is not None
+            assert record.destination_id in destination_ids
+
+
+def test_candidate_retrieval_preserves_destination_and_weather_coordinates(db_session):
+    destination_id = _destination_id(db_session, "Kandy")
+    candidates = retrieve_candidates(db_session, "Kandy")
+    model_category_pairs = (
+        (Attraction, "attraction"),
+        (Hotel, "hotel"),
+        (Restaurant, "restaurant"),
+        (LocalEvent, "local_event"),
+    )
+
+    assert candidates
+    for model, category in model_category_pairs:
+        records = (
+            db_session.query(model)
+            .filter(model.destination_id == destination_id, model.is_active.is_(True))
+            .all()
+        )
+        retrieved = [
+            candidate for candidate in candidates if candidate["category"] == category
+        ]
+
+        assert records, f"Expected seeded Kandy {model.__tablename__} records"
+        assert {candidate["id"] for candidate in retrieved} == {
+            str(record.id) for record in records
+        }
+        for record in records:
+            candidate = next(item for item in retrieved if item["id"] == str(record.id))
+            assert record.destination_id == destination_id
+            assert candidate["latitude"] == float(record.latitude)
+            assert candidate["longitude"] == float(record.longitude)
+
+
+def test_itinerary_day_date_is_retrievable(db_session):
+    user = db_session.query(User).filter(User.email == "tourist@demo.com").one()
+    trip = Trip(
+        user_id=user.id,
+        status="draft",
+        travel_start_date=date(2026, 10, 5),
+        travel_end_date=date(2026, 10, 5),
+        duration=1,
+        budget=Decimal("1000.00"),
+        travel_style="cultural",
+        accommodation_preference="hotel",
+    )
+    db_session.add(trip)
+    db_session.flush()
+
+    itinerary = Itinerary(trip_id=trip.id, total_estimated_cost=Decimal("0.00"))
+    db_session.add(itinerary)
+    db_session.flush()
+
+    itinerary_day = ItineraryDay(
+        itinerary_id=itinerary.id,
+        day_number=1,
+        date=date(2026, 10, 5),
+        title="Kandy day one",
+    )
+    db_session.add(itinerary_day)
+    db_session.flush()
+
+    saved_day = (
+        db_session.query(ItineraryDay).filter(ItineraryDay.id == itinerary_day.id).one()
+    )
+
+    assert saved_day.date == date(2026, 10, 5)

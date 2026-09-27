@@ -52,11 +52,25 @@ def test_critic_can_finish_with_completed_status():
         continue_planning=False,
         status="completed",
     )
+    state["session"].tool_results.append(
+        {"tool": "weather_validator", "result": {"status": "ok"}}
+    )
 
     result = route_after_critic(state)
 
     assert result == "end"
     assert state["session"].status == AgentSessionStatus.COMPLETED
+
+
+def test_critic_cannot_finish_before_weather_validation():
+    state = create_state(
+        continue_planning=False,
+        status="completed",
+    )
+
+    result = route_after_critic(state)
+
+    assert result == "planner"
 
 
 def test_graph_stops_at_maximum_iterations():
@@ -89,6 +103,9 @@ def test_critic_can_finish_with_infeasible_status():
         continue_planning=False,
         status="infeasible",
     )
+    state["session"].tool_results.append(
+        {"tool": "weather_validator", "result": {"status": "ok"}}
+    )
 
     result = route_after_critic(state)
 
@@ -112,25 +129,46 @@ def test_graph_uses_default_max_iterations():
 
 
 def test_planning_graph_flow(monkeypatch):
-    """Verify the real Planner → Tool → Critic → END flow."""
+    """Verify weather validation runs before the graph finishes."""
+    from langchain_core.tools import tool
 
-    class FakeModel:
-        def __init__(self, response):
-            self.response = response
+    from app.services.tools import registry
 
-        def invoke(self, prompt):
-            return self.response
+    @tool
+    def weather_validator(schedule: dict) -> dict:
+        """Stub the weather check without calling OpenWeather."""
+        return {"status": "ok", "schedule": schedule}
 
-    monkeypatch.setattr(
-        planner,
-        "create_planner_model",
-        lambda: FakeModel(PlannerDecision(action="placeholder_tool", arguments={})),
-    )
-    monkeypatch.setattr(
-        critic,
-        "create_critic_model",
-        lambda: FakeModel(CriticDecision(continue_planning=False, status="completed")),
-    )
+    monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
+    decisions = [
+        PlannerDecision(action="placeholder_tool", arguments={}),
+        PlannerDecision(
+            action="weather_validator",
+            arguments={"schedule": {"status": "ok", "days": []}},
+        ),
+    ]
+
+    class FakePlannerModel:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, _prompt):
+            decision = decisions[self.calls]
+            self.calls += 1
+            return decision
+
+    class FakeCriticModel:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, _prompt):
+            self.calls += 1
+            return CriticDecision(continue_planning=False, status="completed")
+
+    planner_model = FakePlannerModel()
+    critic_model = FakeCriticModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda: planner_model)
+    monkeypatch.setattr(critic, "create_critic_model", lambda: critic_model)
 
     session = AgentSession(
         goal="Plan a simple one-day trip to Kandy.",
@@ -149,12 +187,18 @@ def test_planning_graph_flow(monkeypatch):
     )
 
     assert result["session"].status == AgentSessionStatus.COMPLETED
-    assert result["session"].tool_execution_order == ["placeholder_tool"]
-    assert len(result["session"].tool_results) == 1
+    assert result["session"].tool_execution_order == [
+        "placeholder_tool",
+        "weather_validator",
+    ]
+    assert len(result["session"].tool_results) == 2
     assert (
         result["session"].tool_results[0]["result"]
         == "Placeholder tool executed successfully."
     )
+    assert result["session"].tool_results[1]["result"]["status"] == "ok"
+    assert planner_model.calls == 2
+    assert critic_model.calls == 2
 
 
 def test_real_planner_uses_current_agent_session_fields(monkeypatch):
@@ -268,12 +312,30 @@ def test_same_failure_increments_consecutive_failure_count():
     assert result["consecutive_failures"] == 2
 
 
-def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
+def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
     from langchain_core.tools import tool
 
     from app.services.tools import registry
 
     calls = []
+    scheduled_result = {
+        "status": "ok",
+        "days": [
+            {
+                "day_number": 1,
+                "date": "2026-10-05",
+                "items": [
+                    {
+                        "candidate_id": "place-1",
+                        "category": "attraction",
+                        "name": "Lake walk",
+                        "latitude": 7.2906,
+                        "longitude": 80.6337,
+                    }
+                ],
+            }
+        ],
+    }
 
     @tool
     def candidate_retriever(destination: str) -> list[dict]:
@@ -291,7 +353,7 @@ def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
     def scheduling_engine(candidates: list[dict], trip_requirements: dict) -> dict:
         """Build a day schedule."""
         calls.append(("scheduling_engine", candidates, trip_requirements))
-        return {"status": "ok", "days": [{"items": candidates}]}
+        return scheduled_result
 
     @tool
     def route_optimizer(schedule: dict) -> dict:
@@ -299,11 +361,18 @@ def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
         calls.append(("route_optimizer", schedule))
         return {**schedule, "route_optimized": True}
 
+    @tool
+    def weather_validator(schedule: dict) -> dict:
+        """Stub a successful weather validation."""
+        calls.append(("weather_validator", schedule))
+        return {"status": "ok", "schedule": schedule}
+
     registered_stubs = {
         "candidate_retriever": candidate_retriever,
         "scoring_engine": scoring_engine,
         "scheduling_engine": scheduling_engine,
         "route_optimizer": route_optimizer,
+        "weather_validator": weather_validator,
     }
     for name, stub in registered_stubs.items():
         monkeypatch.setitem(registry.TOOLS, name, stub)
@@ -335,12 +404,11 @@ def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
         ),
         PlannerDecision(
             action="route_optimizer",
-            arguments={
-                "schedule": {
-                    "status": "ok",
-                    "days": [{"items": [{"id": "place-1", "category": "attraction"}]}],
-                }
-            },
+            arguments={"schedule": scheduled_result},
+        ),
+        PlannerDecision(
+            action="weather_validator",
+            arguments={"schedule": scheduled_result},
         ),
     ]
 
@@ -388,10 +456,11 @@ def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
     expected_order = list(registered_stubs)
     assert updated.tool_execution_order == expected_order
     assert [entry["tool"] for entry in updated.tool_results] == expected_order
-    assert updated.tool_results[-1]["result"]["route_optimized"] is True
+    assert updated.tool_results[3]["result"]["route_optimized"] is True
+    assert updated.tool_results[4]["result"]["status"] == "ok"
     assert updated.status == AgentSessionStatus.COMPLETED
-    assert len(planner_model.prompts) == 4
-    assert critic_model.calls == 4
+    assert len(planner_model.prompts) == 5
+    assert critic_model.calls == 5
 
     # Each new Planner turn sees current session output and tool argument schemas.
     assert "Plan a three-day trip to Kandy" in planner_model.prompts[0]
@@ -404,7 +473,8 @@ def test_planning_graph_runs_all_four_tools_and_returns_to_planner(monkeypatch):
     assert calls[1][2] == requirements
     assert calls[2][0] == "scheduling_engine"
     assert calls[2][2] == requirements
-    assert calls[3][0] == "route_optimizer"
+    assert calls[3] == ("route_optimizer", scheduled_result)
+    assert calls[4] == ("weather_validator", scheduled_result)
 
 
 def test_registered_planning_tools_expose_registry_interface():
@@ -415,6 +485,7 @@ def test_registered_planning_tools_expose_registry_interface():
         "scoring_engine": {"candidates", "preferences"},
         "scheduling_engine": {"candidates", "trip_requirements"},
         "route_optimizer": {"schedule"},
+        "weather_validator": {"schedule"},
     }
 
     for name, arguments in required_arguments.items():
