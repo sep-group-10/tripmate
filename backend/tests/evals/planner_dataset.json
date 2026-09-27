@@ -11,7 +11,7 @@
       "budget": "50000 LKR",
       "interests": ["culture", "nature"]
     },
-    "expected_action": "placeholder_tool"
+    "expected_action": "candidate_retriever"
   },
   {
     "id": "planner_002",
@@ -22,7 +22,7 @@
       "destination": "Galle",
       "interests": ["beach"]
     },
-    "expected_action": "placeholder_tool"
+    "expected_action": "candidate_retriever"
   },
   {
     "id": "planner_003",
@@ -33,7 +33,7 @@
       "destination": "Ella",
       "budget": "40000 LKR"
     },
-    "expected_action": "placeholder_tool"
+    "expected_action": "candidate_retriever"
   },
   {
     "id": "planner_004",
@@ -44,7 +44,7 @@
       "destination": "Kandy",
       "interests": ["culture"]
     },
-    "expected_action": "placeholder_tool"
+    "expected_action": "candidate_retriever"
   },
   {
     "id": "planner_005",
@@ -54,7 +54,7 @@
     "preferences": {
       "destination": "Sri Lanka"
     },
-    "expected_action": "placeholder_tool"
+    "expected_action": "candidate_retriever"
   },
   {
     "id": "critic_001",
@@ -70,11 +70,13 @@
     },
     "tool_results": [
       {
-        "tool": "placeholder_tool",
-        "result": "Placeholder tool executed successfully."
+        "tool": "candidate_retriever",
+        "result": [
+          {"id": "place-1", "category": "attraction", "name": "Temple of the Tooth"}
+        ]
       }
     ],
-    "tool_execution_order": ["placeholder_tool"],
+    "tool_execution_order": ["candidate_retriever"],
     "expected_continue_planning": false,
     "expected_status": "completed"
   },

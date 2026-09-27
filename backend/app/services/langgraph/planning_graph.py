@@ -4,6 +4,7 @@ from app.schemas.agent_session import AgentSessionStatus
 from app.services.langgraph.critic import critic_node, route_after_critic
 from app.services.langgraph.planner import planner_node
 from app.services.langgraph.state import PlanningState
+from app.services.langgraph.state_validator import validate_planning_state
 from app.services.tools.registry import TOOLS
 
 
@@ -63,6 +64,32 @@ def tool_execution_node(state: PlanningState) -> dict:
         "last_failure": None,
         "consecutive_failures": 0,
     }
+
+
+def planning_state_validation_node(state: PlanningState) -> dict:
+    """Check the current session structure after each Planner-selected tool."""
+
+    session = state["session"]
+    result = validate_planning_state(session)
+    session.tool_results.append({"tool": "planning_state_validator", "result": result})
+    return {"session": session}
+
+
+def route_after_planning_state_validation(state: PlanningState) -> str:
+    """Replan invalid sessions, preserving graph termination guards."""
+
+    session = state["session"]
+    result = _latest_tool_result(session, "planning_state_validator") or {}
+    if result.get("status") != "pass":
+        if session.iteration_count >= state.get("max_iterations", 8):
+            session.status = AgentSessionStatus.BEST_EFFORT
+            return "end"
+        if state["consecutive_failures"] >= 2:
+            session.status = AgentSessionStatus.FAILED
+            return "end"
+        return "planner"
+
+    return route_after_tool_execution(state)
 
 
 def constraint_validation_node(state: PlanningState) -> dict:
@@ -126,17 +153,21 @@ def create_planning_graph():
 
     graph_builder.add_node("planner", planner_node)
     graph_builder.add_node("tool_execution", tool_execution_node)
+    graph_builder.add_node("planning_state_validation", planning_state_validation_node)
     graph_builder.add_node("constraint_validation", constraint_validation_node)
     graph_builder.add_node("critic", critic_node)
 
     graph_builder.add_edge(START, "planner")
     graph_builder.add_edge("planner", "tool_execution")
+    graph_builder.add_edge("tool_execution", "planning_state_validation")
     graph_builder.add_conditional_edges(
-        "tool_execution",
-        route_after_tool_execution,
+        "planning_state_validation",
+        route_after_planning_state_validation,
         {
+            "planner": "planner",
             "constraint_validation": "constraint_validation",
             "critic": "critic",
+            "end": END,
         },
     )
     graph_builder.add_conditional_edges(
