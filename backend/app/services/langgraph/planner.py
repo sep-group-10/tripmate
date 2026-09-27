@@ -48,6 +48,8 @@ that tool's argument schema, using trip requirements and prior tool results as i
 Do not assume a fixed tool order; select the next useful action from the current state.
 When calling weather_validator, pass the schedule dictionary from the most recent
 scheduling_engine result in session.tool_results as its schedule argument.
+After scheduling_engine and cost_estimator have both run, constraint_validator
+is executed automatically before the Critic; do not call it manually.
 
 Return a structured PlannerDecision.
 """

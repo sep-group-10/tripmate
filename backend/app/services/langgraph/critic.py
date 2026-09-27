@@ -30,6 +30,9 @@ Tool execution order:
 Tool results:
 {session.tool_results}
 
+Hard-constraint validation result:
+{session.constraint_result}
+
 Current iteration:
 {session.iteration_count}
 

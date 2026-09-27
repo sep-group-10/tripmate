@@ -5,6 +5,7 @@ from app.schemas.planning import CriticDecision, PlannerDecision
 from app.services.langgraph import critic, planner
 from app.services.langgraph.planning_graph import (
     planning_graph,
+    route_after_constraint_validation,
     route_after_critic,
     tool_execution_node,
 )
@@ -37,6 +38,52 @@ def create_state(
         "last_failure": None,
         "consecutive_failures": consecutive_failures,
     }
+
+
+def test_failed_constraint_validation_routes_to_planner_and_preserves_result():
+    state = create_state()
+    constraint_result = {
+        "status": "fail",
+        "failed_constraints": ["budget"],
+        "reasons": {"budget": "Maximum estimated total exceeds the trip budget."},
+    }
+    state["session"].constraint_result = constraint_result
+    state["session"].tool_results.append(
+        {"tool": "constraint_validator", "result": constraint_result}
+    )
+
+    result = route_after_constraint_validation(state)
+
+    assert result == "planner"
+    assert state["session"].constraint_result == constraint_result
+    assert state["session"].tool_results[-1]["result"] == constraint_result
+
+
+def test_failed_constraint_validation_respects_max_iteration_guard():
+    state = create_state(iteration_count=8, max_iterations=8)
+    state["session"].constraint_result = {"status": "fail"}
+
+    assert route_after_constraint_validation(state) == "end"
+    assert state["session"].status == AgentSessionStatus.BEST_EFFORT
+
+
+def test_failed_constraint_validation_respects_repeated_failure_guard():
+    state = create_state(consecutive_failures=2)
+    state["session"].constraint_result = {"status": "fail"}
+
+    assert route_after_constraint_validation(state) == "end"
+    assert state["session"].status == AgentSessionStatus.FAILED
+
+
+def test_passing_constraint_validation_routes_to_critic():
+    state = create_state()
+    state["session"].constraint_result = {
+        "status": "pass",
+        "failed_constraints": [],
+        "reasons": {},
+    }
+
+    assert route_after_constraint_validation(state) == "critic"
 
 
 def test_critic_can_route_back_to_planner():
@@ -312,7 +359,7 @@ def test_same_failure_increments_consecutive_failure_count():
     assert result["consecutive_failures"] == 2
 
 
-def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
+def test_planning_graph_validates_constraints_before_critic(monkeypatch):
     from langchain_core.tools import tool
 
     from app.services.tools import registry
@@ -333,7 +380,17 @@ def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
                         "longitude": 80.6337,
                     }
                 ],
-            }
+            },
+            {
+                "day_number": 2,
+                "date": "2026-10-06",
+                "items": [{"candidate_id": "place-1", "category": "attraction"}],
+            },
+            {
+                "day_number": 3,
+                "date": "2026-10-07",
+                "items": [{"candidate_id": "place-1", "category": "attraction"}],
+            },
         ],
     }
 
@@ -367,12 +424,21 @@ def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
         calls.append(("weather_validator", schedule))
         return {"status": "ok", "schedule": schedule}
 
+    @tool
+    def cost_estimator(
+        itinerary: dict, candidates: list[dict], trip_requirements: dict
+    ) -> dict:
+        """Stub a cost estimate for the schedule."""
+        calls.append(("cost_estimator", itinerary, candidates, trip_requirements))
+        return {"total": {"min": 100, "max": 200}}
+
     registered_stubs = {
         "candidate_retriever": candidate_retriever,
         "scoring_engine": scoring_engine,
         "scheduling_engine": scheduling_engine,
         "route_optimizer": route_optimizer,
         "weather_validator": weather_validator,
+        "cost_estimator": cost_estimator,
     }
     for name, stub in registered_stubs.items():
         monkeypatch.setitem(registry.TOOLS, name, stub)
@@ -410,6 +476,14 @@ def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
             action="weather_validator",
             arguments={"schedule": scheduled_result},
         ),
+        PlannerDecision(
+            action="cost_estimator",
+            arguments={
+                "itinerary": scheduled_result,
+                "candidates": [{"id": "place-1", "category": "attraction"}],
+                "trip_requirements": requirements,
+            },
+        ),
     ]
 
     class FakePlannerModel:
@@ -423,8 +497,10 @@ def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
     class FakeCriticModel:
         def __init__(self):
             self.calls = 0
+            self.prompts = []
 
-        def invoke(self, _prompt):
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
             self.calls += 1
             done = self.calls == len(decisions)
             return CriticDecision(
@@ -453,14 +529,18 @@ def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
     )
 
     updated = result["session"]
-    expected_order = list(registered_stubs)
+    expected_order = [*registered_stubs, "constraint_validator"]
     assert updated.tool_execution_order == expected_order
     assert [entry["tool"] for entry in updated.tool_results] == expected_order
     assert updated.tool_results[3]["result"]["route_optimized"] is True
     assert updated.tool_results[4]["result"]["status"] == "ok"
+    assert updated.tool_results[5]["result"]["total"]["max"] == 200
+    assert updated.tool_results[6]["result"] == updated.constraint_result
+    assert updated.tool_results[6]["tool"] == "constraint_validator"
+    assert "Hard-constraint validation result:" in critic_model.prompts[-1]
     assert updated.status == AgentSessionStatus.COMPLETED
-    assert len(planner_model.prompts) == 5
-    assert critic_model.calls == 5
+    assert len(planner_model.prompts) == 6
+    assert critic_model.calls == 6
 
     # Each new Planner turn sees current session output and tool argument schemas.
     assert "Plan a three-day trip to Kandy" in planner_model.prompts[0]
@@ -475,6 +555,12 @@ def test_planning_graph_runs_all_five_tools_and_returns_to_planner(monkeypatch):
     assert calls[2][2] == requirements
     assert calls[3] == ("route_optimizer", scheduled_result)
     assert calls[4] == ("weather_validator", scheduled_result)
+    assert calls[5] == (
+        "cost_estimator",
+        scheduled_result,
+        [{"id": "place-1", "category": "attraction"}],
+        requirements,
+    )
 
 
 def test_registered_planning_tools_expose_registry_interface():
@@ -486,6 +572,8 @@ def test_registered_planning_tools_expose_registry_interface():
         "scheduling_engine": {"candidates", "trip_requirements"},
         "route_optimizer": {"schedule"},
         "weather_validator": {"schedule"},
+        "cost_estimator": {"itinerary", "candidates", "trip_requirements"},
+        "constraint_validator": {"itinerary", "trip_requirements", "cost_estimate"},
     }
 
     for name, arguments in required_arguments.items():
