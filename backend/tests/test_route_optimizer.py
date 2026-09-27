@@ -140,6 +140,17 @@ def test_missing_coordinates_skips_block_and_names_place(monkeypatch):
     assert "No coords" in result["days"][0]["route_optimization"]["warning"]
 
 
+def test_single_attraction_missing_coordinates_names_place_in_warning():
+    no_coords = attraction("No coords", 0.02, latitude=None)
+    result = optimizer.optimize_routes(
+        schedule([no_coords], hotel_location={"latitude": 0, "longitude": 0})
+    )
+
+    assert result["days"][0]["items"] == [no_coords]
+    assert result["days"][0]["route_optimization"]["local_distance_km"] == 0.0
+    assert "No coords" in result["days"][0]["route_optimization"]["warning"]
+
+
 def test_routing_failure_keeps_original_block(monkeypatch):
     def fail(*_args):
         raise TimeoutError("routing timed out")
@@ -244,3 +255,68 @@ def test_large_block_skips_exhaustive_search_with_explanation():
     assert day["items"] == items
     assert day["route_optimization"]["reordered"] is False
     assert "More than four attractions" in day["route_optimization"]["warning"]
+
+
+def test_local_distance_includes_final_leg_to_next_anchor(monkeypatch):
+    monkeypatch.setattr(optimizer.routing, "estimate_travel_time", route_distance)
+    items = [
+        attraction("A", 0.01, "09:00", "09:30"),
+        attraction("B", 0.02, "09:30", "10:00"),
+        fixed("lunch", "restaurant", "12:00", "13:00", longitude=0.05),
+    ]
+
+    result = optimizer.optimize_routes(
+        schedule(items, hotel_location={"latitude": 0, "longitude": 0})
+    )
+
+    # hotel(0.00) -> A(0.01) -> B(0.02) -> lunch(0.05): 1 + 1 + 3 = 5 km.
+    assert result["days"][0]["route_optimization"]["local_distance_km"] == 5.0
+
+
+def test_single_attraction_block_counts_hotel_to_attraction_distance(monkeypatch):
+    monkeypatch.setattr(optimizer.routing, "estimate_travel_time", route_distance)
+    items = [attraction("only", 0.03)]
+
+    result = optimizer.optimize_routes(
+        schedule(items, hotel_location={"latitude": 0, "longitude": 0})
+    )
+
+    # hotel(0.00) -> only(0.03): 3 km.
+    assert result["days"][0]["route_optimization"]["local_distance_km"] == 3.0
+    assert result["days"][0]["items"] == items
+
+
+def test_single_attraction_block_routing_failure_keeps_original_and_zero_distance(
+    monkeypatch,
+):
+    def fail(*_args):
+        raise TimeoutError("routing timed out")
+
+    monkeypatch.setattr(optimizer.routing, "estimate_travel_time", fail)
+    items = [attraction("only", 0.03)]
+
+    result = optimizer.optimize_routes(
+        schedule(items, hotel_location={"latitude": 0, "longitude": 0})
+    )
+
+    assert result["days"][0]["items"] == items
+    assert result["days"][0]["route_optimization"]["local_distance_km"] == 0.0
+    assert (
+        result["days"][0]["route_optimization"]["warning"]
+        == "Routing failed; original attraction order kept"
+    )
+
+
+def test_single_attraction_block_counts_distance_to_next_anchor_too(monkeypatch):
+    monkeypatch.setattr(optimizer.routing, "estimate_travel_time", route_distance)
+    items = [
+        attraction("only", 0.03, "09:00", "09:30"),
+        fixed("lunch", "restaurant", "12:00", "13:00", longitude=0.05),
+    ]
+
+    result = optimizer.optimize_routes(
+        schedule(items, hotel_location={"latitude": 0, "longitude": 0})
+    )
+
+    # hotel(0.00) -> only(0.03) -> lunch(0.05): 3 + 2 = 5 km.
+    assert result["days"][0]["route_optimization"]["local_distance_km"] == 5.0

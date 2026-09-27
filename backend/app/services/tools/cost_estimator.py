@@ -263,8 +263,13 @@ def estimate_cost(
 
     context = _CostContext()
 
-    travellers = trip_requirements.get("travelers")
-    if not travellers or travellers < 1:
+    raw_travellers = trip_requirements.get("travelers")
+    try:
+        travellers = int(raw_travellers)
+    except (TypeError, ValueError):
+        travellers = 0
+
+    if travellers < 1:
         travellers = 1
         context.warnings.append(
             "Traveller count missing from trip requirements; assumed solo travel"
@@ -302,7 +307,7 @@ def estimate_cost(
         activities,
         dining,
     ):
-        subtotal.add(_Range(min=category.min, max=category.max))
+        subtotal.add(category)
 
     miscellaneous = _Range(
         min=(subtotal.min * _MISC_RATE), max=(subtotal.max * _MISC_RATE)
@@ -317,7 +322,7 @@ def estimate_cost(
         dining,
         miscellaneous,
     ):
-        total.add(_Range(min=category.min, max=category.max))
+        total.add(category)
 
     return {
         "transport_intercity": transport_intercity.as_dict(),

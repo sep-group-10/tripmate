@@ -63,6 +63,34 @@ def _open_at(item: dict[str, Any], day_date: date, start: time, end: time) -> bo
     return parsed.for_date(day_date).contains(start, end)
 
 
+def _single_item_distance_km(
+    item: dict[str, Any],
+    previous_anchor: dict[str, Any] | None,
+    next_anchor: dict[str, Any] | None,
+) -> float:
+    """Distance for a block with exactly one attraction: anchor -> item ->
+    next anchor, whichever legs actually have known coordinates on both ends.
+
+    Only computed from the item's own coordinates - not the block's original
+    order fallback in _optimise_block, since with one item there is nothing
+    to order.
+    """
+    current = _coordinates(item)
+    if current is None:
+        return 0.0
+
+    distance = 0.0
+    origin = _coordinates(previous_anchor)
+    if origin is not None:
+        distance += _travel(origin, current).distance_km
+
+    destination = _coordinates(next_anchor)
+    if destination is not None:
+        distance += _travel(current, destination).distance_km
+
+    return distance
+
+
 def _optimise_block(
     day: dict[str, Any],
     block: list[dict[str, Any]],
@@ -71,8 +99,30 @@ def _optimise_block(
     window_end: time,
     next_anchor: dict[str, Any] | None,
 ) -> tuple[list[dict[str, Any]], bool, str | None, float]:
-    if len(block) < 2:
+    if len(block) == 0:
         return block, False, None, 0.0
+    if len(block) == 1:
+        if _coordinates(block[0]) is None:
+            item = block[0]
+            return (
+                block,
+                False,
+                f"{item.get('name', item.get('candidate_id', 'Attraction'))}: missing coordinates; route order unchanged",
+                0.0,
+            )
+
+        origin_anchor = previous_anchor
+        if origin_anchor is None:
+            origin_anchor = day.get("hotel_location")
+        try:
+            distance = _single_item_distance_km(block[0], origin_anchor, next_anchor)
+        except Exception:
+            logger.exception(
+                "Route optimization failed for day %s; preserving original block",
+                day.get("day_number"),
+            )
+            return block, False, "Routing failed; original attraction order kept", 0.0
+        return block, False, None, distance
     if len(block) > 4:
         return (
             block,
@@ -141,6 +191,7 @@ def _optimise_block(
                 if destination is not None:
                     assert previous is not None
                     final_leg = _travel(previous, destination)
+                    distance += final_leg.distance_km
                     cursor_dt += timedelta(minutes=final_leg.duration_minutes)
                     feasible = cursor_dt <= datetime.combine(day_date, window_end)
             if feasible and distance < best_distance - 1e-9:

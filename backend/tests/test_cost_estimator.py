@@ -138,6 +138,15 @@ def test_is_estimate_true_when_any_local_leg_used_an_estimate(db_session):
     assert result["transport_local"]["is_estimate"] is True
 
 
+def test_is_estimate_propagates_from_category_to_total(db_session):
+    itinerary = _itinerary([_day(1, [], local_distance_km=Decimal("5"))])
+
+    result = estimate_cost(db_session, itinerary, [], BASE_TRIP_REQUIREMENTS)
+
+    assert result["transport_local"]["is_estimate"] is True
+    assert result["total"]["is_estimate"] is True
+
+
 def test_is_estimate_false_when_no_local_travel_recorded(db_session):
     itinerary = _itinerary([_day(1, [])])
 
@@ -174,6 +183,26 @@ def test_missing_traveller_count_defaults_to_one_with_warning(db_session):
 
     assert result["travellers"] == 1
     assert any("solo travel" in warning for warning in result["warnings"])
+
+
+def test_non_numeric_traveller_count_defaults_to_one_without_crashing(db_session):
+    requirements = {**BASE_TRIP_REQUIREMENTS, "travelers": "not-a-number"}
+    itinerary = _itinerary([_day(1, [])])
+
+    result = estimate_cost(db_session, itinerary, [], requirements)
+
+    assert result["travellers"] == 1
+    assert any("solo travel" in warning for warning in result["warnings"])
+
+
+def test_numeric_string_traveller_count_is_coerced(db_session):
+    requirements = {**BASE_TRIP_REQUIREMENTS, "travelers": "3"}
+    itinerary = _itinerary([_day(1, [])])
+
+    result = estimate_cost(db_session, itinerary, [], requirements)
+
+    assert result["travellers"] == 3
+    assert result["warnings"] == []
 
 
 def test_missing_hotel_for_destination_skips_accommodation_with_warning(db_session):
