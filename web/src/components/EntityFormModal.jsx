@@ -18,9 +18,7 @@ const noValidate = () => "";
  * 'text'|'select'|'textarea'|'number', options?, placeholder?, required?,
  * validate? } - `validate` overrides the default required/no-op validator
  * with a custom one (e.g. numeric range checks for lat/long). `helperText`
- * renders a muted note under the field - used to flag fields the backend
- * doesn't actually persist yet (e.g. Attraction category, Hotel tier) so
- * that gap is visible to the admin instead of silently dropped.
+ * renders a muted note under the field.
  * A `type: 'location'` field renders LocationPicker instead of a plain
  * input - its value is `{ latitude, longitude } | null`, not a string, and
  * `resolveInitialCenter(values)` lets the caller derive where the map

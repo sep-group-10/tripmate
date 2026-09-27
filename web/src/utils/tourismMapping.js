@@ -76,10 +76,6 @@ function requireLocation(location) {
   return location;
 }
 
-// `category` has no backend field (AttractionCreate/Update in
-// schemas/tourism.py) - deliberately left out of the payload rather than
-// sent and silently ignored by the API. AttractionsList flags this to the
-// admin via the form's helper text instead.
 export function buildAttractionPayload(values, destinations) {
   const destination = requireDestination(destinations, values.destination);
   const location = requireLocation(values.location);
@@ -110,8 +106,6 @@ export function mapAttractionFromApi(record, destinations) {
   };
 }
 
-// `tier` has no backend field (HotelCreate/Update) - same reasoning as
-// `category` above.
 export function buildHotelPayload(values, destinations) {
   const destination = requireDestination(destinations, values.destination);
   const location = requireLocation(values.location);

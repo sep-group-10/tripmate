@@ -7,14 +7,6 @@ import { useTourismData } from "../../hooks/useTourismData";
 import { parseApiError } from "../../utils/apiError";
 import { formatCurrency } from "../../utils/tourismMapping";
 
-// `tier` has no backend/app/schemas/tourism.py field (C4.2/C4.3) - kept
-// here purely as a client-side taxonomy for the form and tag color, but
-// excluded from the API payload (see utils/tourismMapping.js) rather than
-// sent and silently ignored. The filter dropdown is deliberately NOT
-// offered below, since filtering by an unpersisted field would silently
-// return nothing for every real (API-loaded) hotel.
-const TIER_OPTIONS = ["Luxury", "Boutique"];
-
 function HotelsList() {
   const {
     hotels,
@@ -87,13 +79,6 @@ function HotelsList() {
               }
             : undefined;
         },
-      },
-      {
-        name: "tier",
-        label: "Tier",
-        type: "select",
-        options: TIER_OPTIONS,
-        helperText: "Not saved yet — no backend field for this.",
       },
       {
         name: "description",
@@ -229,7 +214,6 @@ function HotelsList() {
               name={hotel.name}
               location={hotel.destination}
               rating={hotel.rating}
-              tag={hotel.tier ? { label: hotel.tier, tone: "warn" } : undefined}
               description={hotel.description}
               metrics={[
                 {

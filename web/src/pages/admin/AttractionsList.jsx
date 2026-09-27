@@ -7,21 +7,6 @@ import { useTourismData } from "../../hooks/useTourismData";
 import { parseApiError } from "../../utils/apiError";
 import { formatCurrency } from "../../utils/tourismMapping";
 
-// `category` has no backend/app/schemas/tourism.py field (C4.2/C4.3) - kept
-// here purely as a client-side taxonomy for the form and tag color, but
-// excluded from the API payload (see utils/tourismMapping.js) rather than
-// sent and silently ignored. The filter dropdown is deliberately NOT
-// offered below, since filtering by an unpersisted field would silently
-// return nothing for every real (API-loaded) attraction.
-const CATEGORY_TONES = {
-  Historical: "warn",
-  Hiking: "success",
-  Nature: "info",
-  Religious: "accent",
-};
-
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_TONES);
-
 function AttractionsList() {
   const {
     attractions,
@@ -94,13 +79,6 @@ function AttractionsList() {
               }
             : undefined;
         },
-      },
-      {
-        name: "category",
-        label: "Category",
-        type: "select",
-        options: CATEGORY_OPTIONS,
-        helperText: "Not saved yet — no backend field for this.",
       },
       {
         name: "description",
@@ -232,14 +210,6 @@ function AttractionsList() {
               name={attraction.name}
               location={attraction.destination}
               rating={attraction.rating}
-              tag={
-                attraction.category
-                  ? {
-                      label: attraction.category,
-                      tone: CATEGORY_TONES[attraction.category] || "accent",
-                    }
-                  : undefined
-              }
               description={attraction.description}
               metrics={[
                 { label: "Hours", value: attraction.opening_hours || "—" },
