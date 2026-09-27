@@ -36,6 +36,9 @@ Trip requirements:
 Tool results collected so far:
 {session.tool_results}
 
+Latest Critic assessment and actionable feedback:
+{session.critic_result}
+
 Current iteration:
 {session.iteration_count}
 

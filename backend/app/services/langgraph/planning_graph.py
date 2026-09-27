@@ -54,15 +54,20 @@ def tool_execution_node(state: PlanningState) -> dict:
         }
     )
     session.tool_execution_order.append(decision.action)
-    if decision.action in {"scheduling_engine", "cost_estimator"}:
-        session.constraint_result = None
-    elif decision.action == "constraint_validator":
-        session.constraint_result = result
-
-    return {
+    state_update = {
         "session": session,
         "last_failure": None,
         "consecutive_failures": 0,
+    }
+    if decision.action in {"scheduling_engine", "route_optimizer", "cost_estimator"}:
+        session.constraint_result = None
+        state_update["constraint_validation_current"] = False
+    elif decision.action == "constraint_validator":
+        session.constraint_result = result
+        state_update["constraint_validation_current"] = False
+
+    return {
+        **state_update,
     }
 
 
@@ -89,7 +94,25 @@ def route_after_planning_state_validation(state: PlanningState) -> str:
             return "end"
         return "planner"
 
-    return route_after_tool_execution(state)
+    next_route = route_after_tool_execution(state)
+    if next_route == "constraint_validation":
+        return next_route
+
+    # A Critic invocation is allowed only after this graph's automatic
+    # constraint node has established a passing result for current inputs.
+    constraint_result = session.constraint_result
+    validation_is_current = state.get("constraint_validation_current", False)
+    if validation_is_current and constraint_result:
+        if constraint_result.get("status") == "pass":
+            return next_route
+
+    if session.iteration_count >= state.get("max_iterations", 8):
+        session.status = AgentSessionStatus.BEST_EFFORT
+        return "end"
+    if state["consecutive_failures"] >= 2:
+        session.status = AgentSessionStatus.FAILED
+        return "end"
+    return "planner"
 
 
 def constraint_validation_node(state: PlanningState) -> dict:
@@ -108,7 +131,7 @@ def constraint_validation_node(state: PlanningState) -> dict:
     session.constraint_result = result
     session.tool_results.append({"tool": "constraint_validator", "result": result})
     session.tool_execution_order.append("constraint_validator")
-    return {"session": session}
+    return {"session": session, "constraint_validation_current": True}
 
 
 def route_after_tool_execution(state: PlanningState) -> str:
@@ -132,7 +155,11 @@ def route_after_constraint_validation(state: PlanningState) -> str:
 
     session = state["session"]
     result = session.constraint_result
-    if result is None or result.get("status") != "fail":
+    if (
+        state.get("constraint_validation_current", False)
+        and result is not None
+        and result.get("status") == "pass"
+    ):
         return "critic"
 
     if session.iteration_count >= state.get("max_iterations", 8):

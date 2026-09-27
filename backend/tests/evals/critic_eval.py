@@ -32,10 +32,11 @@ def run_critic_eval():
 
     for case in critic_cases:
         session = AgentSession(
-            user_request=case["request"],
-            trip_preferences=case["preferences"],
+            goal=case["request"],
+            trip_requirements=case["preferences"],
             tool_results=case["tool_results"],
             tool_execution_order=case["tool_execution_order"],
+            constraint_result=case.get("constraint_result"),
         )
 
         state = {

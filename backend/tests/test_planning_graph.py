@@ -12,6 +12,17 @@ from app.services.langgraph.planning_graph import (
 )
 
 
+def make_critic_decision(**kwargs):
+    assessment = {"score": 3, "reasoning": "The plan has a reasonable structure."}
+    return CriticDecision(
+        **kwargs,
+        variety=assessment,
+        daily_balance=assessment,
+        interest_match=assessment,
+        pacing=assessment,
+    )
+
+
 def create_state(
     *,
     iteration_count=1,
@@ -24,9 +35,11 @@ def create_state(
     session = AgentSession(
         goal="Plan a trip to Kandy",
         iteration_count=iteration_count,
+        constraint_result={"status": "pass"},
+        tool_results=[{"tool": "weather_validator", "result": {"status": "ok"}}],
     )
 
-    decision = CriticDecision(
+    decision = make_critic_decision(
         continue_planning=continue_planning,
         status=status,
     )
@@ -38,6 +51,7 @@ def create_state(
         "critic_decision": decision,
         "last_failure": None,
         "consecutive_failures": consecutive_failures,
+        "constraint_validation_current": True,
     }
 
 
@@ -81,12 +95,13 @@ def test_valid_planning_state_uses_existing_tool_route():
             {"tool": "planning_state_validator", "result": {"status": "pass"}},
         ]
     )
+    state["session"].constraint_result = None
     state["planner_decision"] = PlannerDecision(action="cost_estimator", arguments={})
 
     assert route_after_planning_state_validation(state) == "constraint_validation"
 
     state["planner_decision"] = PlannerDecision(action="route_optimizer", arguments={})
-    assert route_after_planning_state_validation(state) == "critic"
+    assert route_after_planning_state_validation(state) == "planner"
 
 
 def test_failed_constraint_validation_routes_to_planner_and_preserves_result():
@@ -131,6 +146,7 @@ def test_passing_constraint_validation_routes_to_critic():
         "failed_constraints": [],
         "reasons": {},
     }
+    state["constraint_validation_current"] = True
 
     assert route_after_constraint_validation(state) == "critic"
 
@@ -148,10 +164,6 @@ def test_critic_can_finish_with_completed_status():
         continue_planning=False,
         status="completed",
     )
-    state["session"].tool_results.append(
-        {"tool": "weather_validator", "result": {"status": "ok"}}
-    )
-
     result = route_after_critic(state)
 
     assert result == "end"
@@ -163,6 +175,7 @@ def test_critic_cannot_finish_before_weather_validation():
         continue_planning=False,
         status="completed",
     )
+    state["session"].tool_results.clear()
 
     result = route_after_critic(state)
 
@@ -199,10 +212,6 @@ def test_critic_can_finish_with_infeasible_status():
         continue_planning=False,
         status="infeasible",
     )
-    state["session"].tool_results.append(
-        {"tool": "weather_validator", "result": {"status": "ok"}}
-    )
-
     result = route_after_critic(state)
 
     assert result == "end"
@@ -266,11 +275,32 @@ def test_planning_graph_flow(monkeypatch):
         return schedule
 
     @tool
+    def cost_estimator(
+        itinerary: dict, candidates: list[dict], trip_requirements: dict
+    ) -> dict:
+        """Return a local deterministic estimate for the graph test."""
+        categories = (
+            "transport_intercity",
+            "transport_local",
+            "accommodation",
+            "activities",
+            "dining",
+            "miscellaneous",
+            "total",
+        )
+        return {
+            **{category: {"min": 100, "max": 200} for category in categories},
+            "travellers": 2,
+            "warnings": [],
+        }
+
+    @tool
     def weather_validator(schedule: dict) -> dict:
         """Stub the weather check without calling OpenWeather."""
         return {"status": "ok", "days": [], "warnings": []}
 
     monkeypatch.setitem(registry.TOOLS, "scheduling_engine", scheduling_engine)
+    monkeypatch.setitem(registry.TOOLS, "cost_estimator", cost_estimator)
     monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
     decisions = [
         PlannerDecision(
@@ -280,6 +310,14 @@ def test_planning_graph_flow(monkeypatch):
         PlannerDecision(
             action="weather_validator",
             arguments={"schedule": schedule},
+        ),
+        PlannerDecision(
+            action="cost_estimator",
+            arguments={
+                "itinerary": schedule,
+                "candidates": [],
+                "trip_requirements": {},
+            },
         ),
     ]
 
@@ -298,7 +336,7 @@ def test_planning_graph_flow(monkeypatch):
 
         def invoke(self, _prompt):
             self.calls += 1
-            return CriticDecision(continue_planning=False, status="completed")
+            return make_critic_decision(continue_planning=False, status="completed")
 
     planner_model = FakePlannerModel()
     critic_model = FakeCriticModel()
@@ -331,20 +369,25 @@ def test_planning_graph_flow(monkeypatch):
     assert result["session"].tool_execution_order == [
         "scheduling_engine",
         "weather_validator",
+        "cost_estimator",
+        "constraint_validator",
     ]
     assert [entry["tool"] for entry in result["session"].tool_results] == [
         "scheduling_engine",
         "planning_state_validator",
         "weather_validator",
         "planning_state_validator",
+        "cost_estimator",
+        "planning_state_validator",
+        "constraint_validator",
     ]
     assert all(
         entry["result"]["status"] == "pass"
         for entry in result["session"].tool_results
         if entry["tool"] == "planning_state_validator"
     )
-    assert planner_model.calls == 2
-    assert critic_model.calls == 2
+    assert planner_model.calls == 3
+    assert critic_model.calls == 1
 
 
 def test_invalid_state_routes_back_to_planner_and_preserves_validation_result(
@@ -378,7 +421,7 @@ def test_invalid_state_routes_back_to_planner_and_preserves_validation_result(
 
         def invoke(self, _prompt):
             self.calls += 1
-            return CriticDecision(continue_planning=False, status="completed")
+            return make_critic_decision(continue_planning=False, status="completed")
 
     planner_model = FakePlannerModel()
     critic_model = FakeCriticModel()
@@ -398,7 +441,7 @@ def test_invalid_state_routes_back_to_planner_and_preserves_validation_result(
     result = planning_graph.invoke(
         {
             "session": session,
-            "max_iterations": 2,
+            "max_iterations": 3,
             "planner_decision": None,
             "critic_decision": None,
             "last_failure": None,
@@ -406,7 +449,7 @@ def test_invalid_state_routes_back_to_planner_and_preserves_validation_result(
         }
     )
 
-    assert len(planner_model.prompts) == 2
+    assert len(planner_model.prompts) == 3
     assert "planning_state_validator" in planner_model.prompts[1]
     assert "scheduling_engine result is missing" in planner_model.prompts[1]
     assert critic_model.calls == 0
@@ -416,7 +459,7 @@ def test_invalid_state_routes_back_to_planner_and_preserves_validation_result(
         for entry in result["session"].tool_results
         if entry["tool"] == "planning_state_validator"
     ]
-    assert len(state_results) == 2
+    assert len(state_results) == 3
     assert all(result["status"] == "fail" for result in state_results)
 
 
@@ -461,13 +504,14 @@ def test_real_critic_uses_current_agent_session_fields(monkeypatch):
 
         def invoke(self, prompt):
             self.prompts.append(prompt)
-            return CriticDecision(continue_planning=False, status="completed")
+            return make_critic_decision(continue_planning=False, status="completed")
 
     model = FakeModel()
     monkeypatch.setattr(critic, "create_critic_model", lambda: model)
     session = AgentSession(
         goal="Plan a trip to Kandy",
         trip_requirements={"destination": "Kandy", "duration_days": 3},
+        constraint_result={"status": "pass"},
     )
 
     result = critic.critic_node(
@@ -481,6 +525,7 @@ def test_real_critic_uses_current_agent_session_fields(monkeypatch):
     )
 
     assert result["critic_decision"].status == "completed"
+    assert session.critic_result == result["critic_decision"].model_dump(mode="json")
     assert "Plan a trip to Kandy" in model.prompts[0]
     assert "'destination': 'Kandy'" in model.prompts[0]
 
@@ -531,6 +576,395 @@ def test_same_failure_increments_consecutive_failure_count():
 
     assert result["last_failure"] == failure
     assert result["consecutive_failures"] == 2
+
+
+def test_planner_selected_constraint_validator_cannot_bypass_automatic_gate(
+    monkeypatch,
+):
+    from langchain_core.tools import tool
+
+    from app.services.tools import registry
+
+    requirements = {
+        "destination": "Kandy",
+        "start_date": "2026-10-05",
+        "end_date": "2026-10-05",
+        "budget": 500,
+        "travelers": 2,
+    }
+    schedule = {
+        "status": "ok",
+        "days": [
+            {
+                "date": "2026-10-05",
+                "items": [
+                    {
+                        "candidate_id": "place-1",
+                        "category": "attraction",
+                        "name": "Lake walk",
+                        "latitude": 7.29,
+                        "longitude": 80.63,
+                        "start_time": "09:00",
+                        "end_time": "10:00",
+                    }
+                ],
+            }
+        ],
+        "hotel_by_destination": {},
+        "unscheduled": [],
+        "warnings": [],
+    }
+    cost_estimate = {
+        **{
+            category: {"min": 10, "max": 20}
+            for category in (
+                "transport_intercity",
+                "transport_local",
+                "accommodation",
+                "activities",
+                "dining",
+                "miscellaneous",
+                "total",
+            )
+        },
+        "travellers": 2,
+        "warnings": [],
+    }
+    validator_calls = []
+
+    @tool
+    def constraint_validator(
+        itinerary: dict, trip_requirements: dict, cost_estimate: dict
+    ) -> dict:
+        """Return a passing result for the manual Planner-selected call."""
+        validator_calls.append((itinerary, trip_requirements, cost_estimate))
+        return {
+            "status": "pass",
+            "passed": True,
+            "constraints": {},
+            "failed_constraints": [],
+            "reasons": {},
+        }
+
+    @tool
+    def weather_validator(schedule: dict) -> dict:
+        """Return a successful weather check."""
+        return {"status": "ok", "days": [], "warnings": []}
+
+    monkeypatch.setitem(registry.TOOLS, "constraint_validator", constraint_validator)
+    monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
+
+    class FakePlannerModel:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, _prompt):
+            self.calls += 1
+            if self.calls == 1:
+                return PlannerDecision(
+                    action="constraint_validator",
+                    arguments={
+                        "itinerary": schedule,
+                        "trip_requirements": requirements,
+                        "cost_estimate": cost_estimate,
+                    },
+                )
+            return PlannerDecision(
+                action="weather_validator",
+                arguments={"schedule": schedule},
+            )
+
+    class FakeCriticModel:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, _prompt):
+            self.calls += 1
+            return make_critic_decision(continue_planning=False, status="completed")
+
+    planner_model = FakePlannerModel()
+    critic_model = FakeCriticModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda: planner_model)
+    monkeypatch.setattr(critic, "create_critic_model", lambda: critic_model)
+    session = AgentSession(
+        goal="Plan a one-day trip to Kandy",
+        trip_requirements=requirements,
+        tool_results=[
+            {"tool": "scheduling_engine", "result": schedule},
+            {
+                "tool": "weather_validator",
+                "result": {"status": "ok", "days": [], "warnings": []},
+            },
+            {"tool": "cost_estimator", "result": cost_estimate},
+        ],
+    )
+
+    result = planning_graph.invoke(
+        {
+            "session": session,
+            "max_iterations": 3,
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    assert validator_calls == [(schedule, requirements, cost_estimate)]
+    assert result["session"].constraint_result["status"] == "pass"
+    assert result["constraint_validation_current"] is False
+    assert planner_model.calls == 3
+    assert critic_model.calls == 0
+    assert result["session"].status == AgentSessionStatus.BEST_EFFORT
+
+
+def test_missing_constraint_provenance_cannot_invoke_critic(monkeypatch):
+    from langchain_core.tools import tool
+
+    from app.services.tools import registry
+
+    @tool
+    def weather_validator(schedule: dict) -> dict:
+        """Return a successful weather check."""
+        return {"status": "ok", "days": [], "warnings": []}
+
+    monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
+
+    class FakePlannerModel:
+        def invoke(self, _prompt):
+            return PlannerDecision(
+                action="weather_validator", arguments={"schedule": {}}
+            )
+
+    class FakeCriticModel:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, _prompt):
+            self.calls += 1
+            return make_critic_decision(continue_planning=False, status="completed")
+
+    critic_model = FakeCriticModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda: FakePlannerModel())
+    monkeypatch.setattr(critic, "create_critic_model", lambda: critic_model)
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        constraint_result={"status": "pass"},
+        tool_results=[{"tool": "weather_validator", "result": {"status": "ok"}}],
+    )
+
+    result = planning_graph.invoke(
+        {
+            "session": session,
+            "max_iterations": 2,
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    assert "constraint_validation_current" not in result
+    assert critic_model.calls == 0
+    assert result["session"].status == AgentSessionStatus.BEST_EFFORT
+
+
+def test_schedule_and_cost_tools_invalidate_constraint_provenance(monkeypatch):
+    from app.services.tools import registry
+
+    class StubTool:
+        def invoke(self, _arguments):
+            return {"status": "ok"}
+
+    for action in ("scheduling_engine", "route_optimizer", "cost_estimator"):
+        monkeypatch.setitem(registry.TOOLS, action, StubTool())
+        state = create_state()
+        state["planner_decision"] = PlannerDecision(action=action, arguments={})
+
+        result = tool_execution_node(state)
+
+        assert result["constraint_validation_current"] is False
+        assert result["session"].constraint_result is None
+
+
+def test_critic_continuation_returns_feedback_to_planner(monkeypatch):
+    from copy import deepcopy
+    from importlib import import_module
+
+    from langchain_core.tools import tool
+
+    from app.services.tools import registry
+
+    requirements = {
+        "destination": "Kandy",
+        "start_date": "2026-10-05",
+        "end_date": "2026-10-05",
+        "budget": 500,
+        "travelers": 2,
+    }
+    schedule = {
+        "status": "ok",
+        "days": [
+            {
+                "date": "2026-10-05",
+                "items": [
+                    {
+                        "candidate_id": "place-1",
+                        "category": "attraction",
+                        "name": "Lake walk",
+                        "latitude": 7.29,
+                        "longitude": 80.63,
+                        "start_time": "09:00",
+                        "end_time": "10:00",
+                    }
+                ],
+            }
+        ],
+        "hotel_by_destination": {},
+        "unscheduled": [],
+        "warnings": [],
+    }
+    cost_estimate = {
+        **{
+            category: {"min": 10, "max": 20}
+            for category in (
+                "transport_intercity",
+                "transport_local",
+                "accommodation",
+                "activities",
+                "dining",
+                "miscellaneous",
+                "total",
+            )
+        },
+        "travellers": 2,
+        "warnings": [],
+    }
+    automatic_result = {
+        "status": "pass",
+        "passed": True,
+        "constraints": {},
+        "failed_constraints": [],
+        "reasons": {},
+    }
+    suggestion = "Add a second outdoor activity on day two."
+    constraint_calls = []
+
+    @tool
+    def cost_estimator(
+        itinerary: dict, candidates: list[dict], trip_requirements: dict
+    ) -> dict:
+        """Return a usable estimate for the existing schedule."""
+        return cost_estimate
+
+    @tool
+    def scheduling_engine(candidates: list[dict], trip_requirements: dict) -> dict:
+        """Return a valid schedule if planning continues to another tool."""
+        return schedule
+
+    @tool
+    def constraint_validator(
+        itinerary: dict, trip_requirements: dict, cost_estimate: dict
+    ) -> dict:
+        """Return a passing automatic constraint result."""
+        constraint_calls.append((itinerary, trip_requirements, cost_estimate))
+        return automatic_result
+
+    monkeypatch.setitem(registry.TOOLS, "cost_estimator", cost_estimator)
+    monkeypatch.setitem(registry.TOOLS, "scheduling_engine", scheduling_engine)
+    monkeypatch.setitem(registry.TOOLS, "constraint_validator", constraint_validator)
+
+    class FakePlannerModel:
+        def __init__(self):
+            self.prompts = []
+            self.provenance_at_second_prompt = None
+
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
+            if len(self.prompts) == 1:
+                return PlannerDecision(
+                    action="cost_estimator",
+                    arguments={
+                        "itinerary": schedule,
+                        "candidates": [],
+                        "trip_requirements": requirements,
+                    },
+                )
+            self.provenance_at_second_prompt = {
+                "constraint_result": deepcopy(session.constraint_result),
+                "latest_automatic_result": deepcopy(constraint_calls[-1]),
+            }
+            return PlannerDecision(
+                action="scheduling_engine",
+                arguments={"candidates": [], "trip_requirements": requirements},
+            )
+
+    class FakeCriticModel:
+        def __init__(self):
+            self.calls = 0
+            self.decision = make_critic_decision(
+                continue_planning=True,
+                status=None,
+                suggestions=[suggestion],
+            )
+
+        def invoke(self, _prompt):
+            self.calls += 1
+            return self.decision
+
+    planner_model = FakePlannerModel()
+    critic_model = FakeCriticModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda: planner_model)
+    monkeypatch.setattr(critic, "create_critic_model", lambda: critic_model)
+    graph_module = import_module("app.services.langgraph.planning_graph")
+    original_route_after_critic = graph_module.route_after_critic
+    critic_route_provenance = []
+
+    def capture_critic_route(state):
+        critic_route_provenance.append(
+            (
+                state.get("constraint_validation_current"),
+                deepcopy(state["session"].constraint_result),
+            )
+        )
+        return original_route_after_critic(state)
+
+    monkeypatch.setattr(graph_module, "route_after_critic", capture_critic_route)
+    session = AgentSession(
+        goal="Plan a one-day trip to Kandy",
+        trip_requirements=requirements,
+        tool_results=[
+            {"tool": "scheduling_engine", "result": schedule},
+            {
+                "tool": "weather_validator",
+                "result": {"status": "ok", "days": [], "warnings": []},
+            },
+        ],
+    )
+    state = {
+        "session": session,
+        "max_iterations": 2,
+        "planner_decision": None,
+        "critic_decision": None,
+        "last_failure": None,
+        "consecutive_failures": 0,
+    }
+
+    result = graph_module.create_planning_graph().invoke(state)
+
+    assert constraint_calls == [(schedule, requirements, cost_estimate)]
+    assert critic_route_provenance == [(True, automatic_result)]
+    assert planner_model.provenance_at_second_prompt == {
+        "constraint_result": automatic_result,
+        "latest_automatic_result": (schedule, requirements, cost_estimate),
+    }
+    # Critic ran only after the graph routed through automatic PASS, and its
+    # continuation sent the Planner the same current passing result above.
+    assert result["constraint_validation_current"] is False
+    assert critic_model.calls == 1
+    assert critic_model.decision.continue_planning is True
+    assert planner_model.prompts[1].count(suggestion) == 1
+    assert result["session"].status == AgentSessionStatus.BEST_EFFORT
 
 
 def test_planning_graph_validates_constraints_before_critic(monkeypatch):
@@ -749,8 +1183,8 @@ def test_planning_graph_validates_constraints_before_critic(monkeypatch):
         def invoke(self, prompt):
             self.prompts.append(prompt)
             self.calls += 1
-            done = self.calls == 4
-            return CriticDecision(
+            done = self.calls == 1
+            return make_critic_decision(
                 continue_planning=not done,
                 status="completed" if done else None,
             )
@@ -794,10 +1228,11 @@ def test_planning_graph_validates_constraints_before_critic(monkeypatch):
         if entry["tool"] == "planning_state_validator"
     ]
     assert validation_statuses == ["fail", "fail", "pass", "pass", "pass", "pass"]
-    assert "Hard-constraint validation result:" in critic_model.prompts[-1]
+    assert "ConstraintValidator result:" in critic_model.prompts[-1]
     assert updated.status == AgentSessionStatus.COMPLETED
+    assert result["constraint_validation_current"] is True
     assert len(planner_model.prompts) == 6
-    assert critic_model.calls == 4
+    assert critic_model.calls == 1
 
     # Each new Planner turn sees current session output and tool argument schemas.
     assert "Plan a three-day trip to Kandy" in planner_model.prompts[0]

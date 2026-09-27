@@ -1,8 +1,15 @@
+from pathlib import Path
+from string import Template
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.schemas.agent_session import AgentSessionStatus
 from app.schemas.planning import CriticDecision
 from app.services.langgraph.state import PlanningState
+
+_CRITIC_PROMPT_PATH = (
+    Path(__file__).resolve().parents[2] / "agent" / "prompts" / "critic_v1.md"
+)
 
 
 def create_critic_model():
@@ -12,55 +19,33 @@ def create_critic_model():
     ).with_structured_output(CriticDecision)
 
 
-def critic_node(state: PlanningState) -> dict:
+def _critic_prompt(state: PlanningState) -> str:
     session = state["session"]
+    template = Template(_CRITIC_PROMPT_PATH.read_text(encoding="utf-8"))
+    return template.substitute(
+        goal=session.goal,
+        trip_requirements=session.trip_requirements,
+        tool_execution_order=session.tool_execution_order,
+        tool_results=session.tool_results,
+        constraint_result=session.constraint_result,
+        iteration_count=session.iteration_count,
+    )
 
-    prompt = f"""
-You are the TripMate planning critic.
 
-Planning goal:
-{session.goal}
+def critic_node(state: PlanningState) -> dict:
+    """Assess itinerary quality and persist the full structured Critic result."""
 
-Trip requirements:
-{session.trip_requirements}
-
-Tool execution order:
-{session.tool_execution_order}
-
-Tool results:
-{session.tool_results}
-
-Hard-constraint validation result:
-{session.constraint_result}
-
-Current iteration:
-{session.iteration_count}
-
-Evaluate the current planning progress.
-
-If the available information is sufficient, finish the planning process.
-
-Use one of these terminal statuses:
-completed
-best_effort
-infeasible
-failed
-
-If more planning work is required, continue planning.
-
-Return a structured CriticDecision.
-"""
-
-    model = create_critic_model()
-    decision = model.invoke(prompt)
-
+    session = state["session"]
+    decision = create_critic_model().invoke(_critic_prompt(state))
+    session.critic_result = decision.model_dump(mode="json")
     return {
+        "session": session,
         "critic_decision": decision,
     }
 
 
 def route_after_critic(state: PlanningState) -> str:
-    """Decide whether the graph should continue or terminate."""
+    """Decide whether to continue planning or terminate the graph."""
 
     session = state["session"]
     decision = state["critic_decision"]
@@ -78,29 +63,25 @@ def route_after_critic(state: PlanningState) -> str:
     if decision is None:
         session.status = AgentSessionStatus.FAILED
         return "end"
+
+    if (
+        not state.get("constraint_validation_current", False)
+        or not session.constraint_result
+        or session.constraint_result.get("status") != "pass"
+    ):
+        return "planner"
+
     weather_validated = any(
         entry.get("tool") == "weather_validator" for entry in session.tool_results
     )
-
     if not weather_validated:
         return "planner"
 
     if not decision.continue_planning:
-        valid_statuses = {
-            AgentSessionStatus.COMPLETED,
-            AgentSessionStatus.BEST_EFFORT,
-            AgentSessionStatus.INFEASIBLE,
-            AgentSessionStatus.FAILED,
-        }
-
         try:
             status = AgentSessionStatus(decision.status or "failed")
         except ValueError:
             status = AgentSessionStatus.FAILED
-
-        if status not in valid_statuses:
-            status = AgentSessionStatus.FAILED
-
         session.status = status
         return "end"
 

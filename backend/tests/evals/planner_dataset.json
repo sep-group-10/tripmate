@@ -63,34 +63,177 @@
     "request": "Plan a 3-day trip to Kandy for 2 people.",
     "preferences": {
       "destination": "Kandy",
-      "dates": "3 days",
+      "start_date": "2026-10-05",
+      "end_date": "2026-10-07",
+      "budget": 50000,
       "travelers": 2,
-      "budget": "50000 LKR",
-      "interests": ["culture", "nature"]
+      "interests": [
+        "culture",
+        "nature"
+      ]
     },
     "tool_results": [
       {
-        "tool": "candidate_retriever",
-        "result": [
-          {"id": "place-1", "category": "attraction", "name": "Temple of the Tooth"}
-        ]
+        "tool": "scheduling_engine",
+        "result": {
+          "status": "ok",
+          "days": [
+            {
+              "date": "2026-10-05",
+              "items": [
+                {
+                  "name": "Temple of the Tooth",
+                  "category": "attraction",
+                  "latitude": 7.29,
+                  "longitude": 80.63
+                }
+              ]
+            },
+            {
+              "date": "2026-10-06",
+              "items": [
+                {
+                  "name": "Royal Botanical Gardens",
+                  "category": "park",
+                  "latitude": 7.29,
+                  "longitude": 80.63
+                }
+              ]
+            },
+            {
+              "date": "2026-10-07",
+              "items": [
+                {
+                  "name": "Kandy Lake",
+                  "category": "nature",
+                  "latitude": 7.29,
+                  "longitude": 80.63
+                }
+              ]
+            }
+          ],
+          "unscheduled": [],
+          "warnings": []
+        }
+      },
+      {
+        "tool": "weather_validator",
+        "result": {
+          "status": "ok",
+          "days": [],
+          "warnings": []
+        }
+      },
+      {
+        "tool": "constraint_validator",
+        "result": {
+          "status": "pass",
+          "failed_constraints": [],
+          "reasons": {}
+        }
       }
     ],
-    "tool_execution_order": ["candidate_retriever"],
+    "tool_execution_order": [
+      "scheduling_engine",
+      "weather_validator",
+      "constraint_validator"
+    ],
     "expected_continue_planning": false,
-    "expected_status": "completed"
+    "expected_status": "completed",
+    "constraint_result": {
+      "status": "pass",
+      "failed_constraints": [],
+      "reasons": {}
+    }
   },
   {
     "id": "critic_002",
     "type": "critic",
-    "name": "Incomplete planning result",
+    "name": "Low-variety itinerary needing improvement",
     "request": "Plan a trip to Kandy.",
     "preferences": {
-      "destination": "Kandy"
+      "destination": "Kandy",
+      "start_date": "2026-10-05",
+      "end_date": "2026-10-07",
+      "budget": 50000,
+      "travelers": 2,
+      "interests": [
+        "culture",
+        "nature"
+      ]
     },
-    "tool_results": [],
-    "tool_execution_order": [],
+    "tool_results": [
+      {
+        "tool": "scheduling_engine",
+        "result": {
+          "status": "ok",
+          "days": [
+            {
+              "date": "2026-10-05",
+              "items": [
+                {
+                  "name": "Temple of the Tooth",
+                  "category": "attraction",
+                  "latitude": 7.29,
+                  "longitude": 80.63
+                }
+              ]
+            },
+            {
+              "date": "2026-10-06",
+              "items": [
+                {
+                  "name": "Temple of the Tooth",
+                  "category": "attraction",
+                  "latitude": 7.29,
+                  "longitude": 80.63
+                }
+              ]
+            },
+            {
+              "date": "2026-10-07",
+              "items": [
+                {
+                  "name": "Temple of the Tooth",
+                  "category": "attraction",
+                  "latitude": 7.29,
+                  "longitude": 80.63
+                }
+              ]
+            }
+          ],
+          "unscheduled": [],
+          "warnings": []
+        }
+      },
+      {
+        "tool": "weather_validator",
+        "result": {
+          "status": "ok",
+          "days": [],
+          "warnings": []
+        }
+      },
+      {
+        "tool": "constraint_validator",
+        "result": {
+          "status": "pass",
+          "failed_constraints": [],
+          "reasons": {}
+        }
+      }
+    ],
+    "tool_execution_order": [
+      "scheduling_engine",
+      "weather_validator",
+      "constraint_validator"
+    ],
     "expected_continue_planning": true,
-    "expected_status": null
+    "expected_status": null,
+    "constraint_result": {
+      "status": "pass",
+      "failed_constraints": [],
+      "reasons": {}
+    }
   }
 ]
