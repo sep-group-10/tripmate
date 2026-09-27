@@ -63,6 +63,34 @@ def _open_at(item: dict[str, Any], day_date: date, start: time, end: time) -> bo
     return parsed.for_date(day_date).contains(start, end)
 
 
+def _single_item_distance_km(
+    item: dict[str, Any],
+    previous_anchor: dict[str, Any] | None,
+    next_anchor: dict[str, Any] | None,
+) -> float:
+    """Distance for a block with exactly one attraction: anchor -> item ->
+    next anchor, whichever legs actually have known coordinates on both ends.
+
+    Only computed from the item's own coordinates - not the block's original
+    order fallback in _optimise_block, since with one item there is nothing
+    to order.
+    """
+    current = _coordinates(item)
+    if current is None:
+        return 0.0
+
+    distance = 0.0
+    origin = _coordinates(previous_anchor)
+    if origin is not None:
+        distance += _travel(origin, current).distance_km
+
+    destination = _coordinates(next_anchor)
+    if destination is not None:
+        distance += _travel(current, destination).distance_km
+
+    return distance
+
+
 def _optimise_block(
     day: dict[str, Any],
     block: list[dict[str, Any]],
@@ -70,14 +98,37 @@ def _optimise_block(
     window_start: time,
     window_end: time,
     next_anchor: dict[str, Any] | None,
-) -> tuple[list[dict[str, Any]], bool, str | None]:
-    if len(block) < 2:
-        return block, False, None
+) -> tuple[list[dict[str, Any]], bool, str | None, float]:
+    if len(block) == 0:
+        return block, False, None, 0.0
+    if len(block) == 1:
+        if _coordinates(block[0]) is None:
+            item = block[0]
+            return (
+                block,
+                False,
+                f"{item.get('name', item.get('candidate_id', 'Attraction'))}: missing coordinates; route order unchanged",
+                0.0,
+            )
+
+        origin_anchor = previous_anchor
+        if origin_anchor is None:
+            origin_anchor = day.get("hotel_location")
+        try:
+            distance = _single_item_distance_km(block[0], origin_anchor, next_anchor)
+        except Exception:
+            logger.exception(
+                "Route optimization failed for day %s; preserving original block",
+                day.get("day_number"),
+            )
+            return block, False, "Routing failed; original attraction order kept", 0.0
+        return block, False, None, distance
     if len(block) > 4:
         return (
             block,
             False,
             "More than four attractions in this block; route order unchanged",
+            0.0,
         )
 
     for item in block:
@@ -86,6 +137,7 @@ def _optimise_block(
                 block,
                 False,
                 f"{item.get('name', item.get('candidate_id', 'Attraction'))}: missing coordinates; route order unchanged",
+                0.0,
             )
 
     try:
@@ -139,6 +191,7 @@ def _optimise_block(
                 if destination is not None:
                     assert previous is not None
                     final_leg = _travel(previous, destination)
+                    distance += final_leg.distance_km
                     cursor_dt += timedelta(minutes=final_leg.duration_minutes)
                     feasible = cursor_dt <= datetime.combine(day_date, window_end)
             if feasible and distance < best_distance - 1e-9:
@@ -149,7 +202,7 @@ def _optimise_block(
         if not best_times or [i["candidate_id"] for i in best] == [
             i["candidate_id"] for i in block
         ]:
-            return block, False, None
+            return block, False, None, best_distance if best_times else 0.0
         updated = []
         for item in best:
             changed = dict(item)
@@ -161,13 +214,14 @@ def _optimise_block(
             updated,
             [i["candidate_id"] for i in updated] != [i["candidate_id"] for i in block],
             None,
+            best_distance,
         )
     except Exception:
         logger.exception(
             "Route optimization failed for day %s; preserving original block",
             day.get("day_number"),
         )
-        return block, False, "Routing failed; original attraction order kept"
+        return block, False, "Routing failed; original attraction order kept", 0.0
 
 
 def _flush_attraction_block(
@@ -177,7 +231,7 @@ def _flush_attraction_block(
     next_anchor: dict[str, Any] | None,
     day_window: tuple[time, time],
     rebuilt: list[dict[str, Any]],
-) -> tuple[dict[str, Any] | None, bool, str | None]:
+) -> tuple[dict[str, Any] | None, bool, str | None, float]:
     window_start, window_end = day_window
     block_start = window_start
     block_end = window_end
@@ -186,7 +240,7 @@ def _flush_attraction_block(
     if next_anchor is not None:
         block_end = min(block_end, _clock(next_anchor["start_time"]))
 
-    optimized, reordered, warning = _optimise_block(
+    optimized, reordered, warning, distance_km = _optimise_block(
         day, pending, previous_anchor, block_start, block_end, next_anchor
     )
     rebuilt.extend(optimized)
@@ -194,7 +248,7 @@ def _flush_attraction_block(
         rebuilt.append(next_anchor)
         previous_anchor = next_anchor
 
-    return previous_anchor, reordered, warning
+    return previous_anchor, reordered, warning, distance_km
 
 
 def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
@@ -207,7 +261,11 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
     for day in days:
         items = day.get("items")
         if not isinstance(items, list):
-            day["route_optimization"] = {"reordered": False, "warning": None}
+            day["route_optimization"] = {
+                "reordered": False,
+                "warning": None,
+                "local_distance_km": 0.0,
+            }
             continue
 
         sorted_items = sorted(items, key=lambda item: item.get("start_time", "00:00"))
@@ -217,13 +275,14 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
         pending: list[dict[str, Any]] = []
         previous_anchor: dict[str, Any] | None = None
         window_start, window_end = _day_window(day)
+        total_distance_km = 0.0
 
         for item in sorted_items:
             if item.get("category") == _ATTRACTION:
                 pending.append(item)
                 continue
 
-            previous_anchor, reordered, warning = _flush_attraction_block(
+            previous_anchor, reordered, warning, distance_km = _flush_attraction_block(
                 day,
                 pending,
                 previous_anchor,
@@ -232,11 +291,12 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
                 rebuilt,
             )
             day_reordered = day_reordered or reordered
+            total_distance_km += distance_km
             if warning:
                 warnings.append(warning)
             pending = []
 
-        _, reordered, warning = _flush_attraction_block(
+        _, reordered, warning, distance_km = _flush_attraction_block(
             day,
             pending,
             previous_anchor,
@@ -245,12 +305,14 @@ def optimize_routes(schedule: dict[str, Any]) -> dict[str, Any]:
             rebuilt,
         )
         day_reordered = day_reordered or reordered
+        total_distance_km += distance_km
         if warning:
             warnings.append(warning)
         day["items"] = rebuilt
         day["route_optimization"] = {
             "reordered": day_reordered,
             "warning": "; ".join(warnings) if warnings else None,
+            "local_distance_km": round(total_distance_km, 2),
         }
     return result
 
