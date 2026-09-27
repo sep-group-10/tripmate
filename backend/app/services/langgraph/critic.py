@@ -75,6 +75,12 @@ def route_after_critic(state: PlanningState) -> str:
     if decision is None:
         session.status = AgentSessionStatus.FAILED
         return "end"
+    weather_validated = any(
+        entry.get("tool") == "weather_validator" for entry in session.tool_results
+    )
+
+    if not weather_validated:
+        return "planner"
 
     if not decision.continue_planning:
         valid_statuses = {

@@ -59,6 +59,17 @@ def test_critic_can_finish_with_completed_status():
     assert state["session"].status == AgentSessionStatus.COMPLETED
 
 
+def test_critic_cannot_finish_before_weather_validation():
+    state = create_state(
+        continue_planning=False,
+        status="completed",
+    )
+
+    result = route_after_critic(state)
+
+    assert result == "planner"
+
+
 def test_graph_stops_at_maximum_iterations():
     state = create_state(
         iteration_count=8,

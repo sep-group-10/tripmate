@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 _OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
 _REQUEST_TIMEOUT_SECONDS = 5.0
 
+
+class ForecastUnavailableError(ValueError):
+    """Raised when OpenWeather has no forecast for the requested date."""
+
+
 _OUTDOOR_KEYWORDS = (
     "hike",
     "hiking",
@@ -87,7 +92,9 @@ def _parse_forecast_for_date(
         if isinstance(entry, dict) and local_forecast_date(entry) == forecast_date
     ]
     if not matching:
-        raise ValueError("OpenWeather forecast is unavailable for itinerary date")
+        raise ForecastUnavailableError(
+            "OpenWeather forecast is unavailable for itinerary date"
+        )
 
     probabilities = [float(entry.get("pop", 0) or 0) for entry in matching]
     rain_amounts = [
@@ -251,6 +258,17 @@ def validate_schedule_weather(
                         cache[cache_key] = _fetch_forecast(
                             day_date, location[0], location[1], key
                         )
+                    except ForecastUnavailableError as exc:
+                        logger.warning(
+                            "OpenWeather forecast unavailable for %s at %s,%s",
+                            day_date,
+                            location[0],
+                            location[1],
+                        )
+                        cache[cache_key] = {
+                            "status": "could_not_check",
+                            "error": str(exc),
+                        }
                     except Exception as exc:  # weather must never block planning
                         logger.warning(
                             "OpenWeather lookup failed for %s at %s,%s (%s)",

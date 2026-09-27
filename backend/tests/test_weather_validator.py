@@ -89,6 +89,19 @@ def test_problem_weather_for_thunderstorm(monkeypatch):
     assert result["status"] == "problem"
 
 
+def test_forecast_unavailable_reports_specific_reason(monkeypatch):
+    _mock_api(monkeypatch, response=_response())
+
+    result = validate_schedule_weather(_schedule(_day("2026-10-10", _item())))
+
+    location = result["days"][0]["locations"][0]
+
+    assert location["status"] == "could_not_check"
+    assert (
+        location["reason"] == "OpenWeather forecast is unavailable for itinerary date"
+    )
+
+
 def test_weather_sensitive_outdoor_activity_is_flagged(monkeypatch):
     _mock_api(monkeypatch)
 
