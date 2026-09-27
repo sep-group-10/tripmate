@@ -8,6 +8,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useGoogleSignIn } from "../hooks/useGoogleSignIn";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
+import { ADMIN_ROLES } from "../constants/roles";
 
 const initialFormData = { email: "", password: "" };
 
@@ -75,8 +76,11 @@ function LoginPage() {
         email: values.email.trim(),
         password: values.password,
       });
-      login(response.data.data.user);
-      navigate("/profile", { replace: true });
+      const user = response.data.data.user;
+      login(user);
+      navigate(ADMIN_ROLES.includes(user.role) ? "/admin" : "/profile", {
+        replace: true,
+      });
     } catch (error) {
       // Covers INVALID_CREDENTIALS, ACCOUNT_DEACTIVATED, and anything else
       // (network error, unexpected server error) with the backend's own

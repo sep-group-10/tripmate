@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import Modal from "../components/Modal";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
@@ -8,6 +8,7 @@ import { loadProfile, saveProfile } from "../utils/profileStorage";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
+import { ADMIN_ROLES } from "../constants/roles";
 
 const BUDGET_OPTIONS = ["Budget", "Moderate", "Luxury"];
 const PACE_OPTIONS = ["Relaxed", "Balanced", "Packed"];
@@ -96,7 +97,7 @@ function SavedMessage({ show, text }) {
 }
 
 function ProfilePage() {
-  const { login, logout, clearSession } = useAuth();
+  const { login, logout, clearSession, role } = useAuth();
   const navigate = useNavigate();
 
   // Personal information comes from the real GET /users/me on mount, kept
@@ -347,6 +348,14 @@ function ProfilePage() {
             <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
               Verified traveller
             </span>
+            {ADMIN_ROLES.includes(role) && (
+              <Link
+                to="/admin"
+                className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
+              >
+                Admin
+              </Link>
+            )}
             <button
               type="button"
               onClick={handleLogout}
