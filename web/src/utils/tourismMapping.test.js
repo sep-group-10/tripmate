@@ -103,9 +103,15 @@ describe("hoursForApi", () => {
     );
   });
 
-  it("returns undefined for blank text regardless of the original dict", () => {
+  it("returns undefined for blank text on create (omitted, not sent as null)", () => {
     expect(hoursForApi("", distinctDict)).toBeUndefined();
-    expect(hoursForApi("   ", distinctDict)).toBeUndefined();
+    expect(hoursForApi("   ", distinctDict, false)).toBeUndefined();
+    expect(hoursForApi("", undefined, false)).toBeUndefined();
+  });
+
+  it("returns null for blank text on update, clearing an existing record's hours", () => {
+    expect(hoursForApi("", distinctDict, true)).toBeNull();
+    expect(hoursForApi("   ", distinctDict, true)).toBeNull();
   });
 });
 
@@ -171,6 +177,26 @@ describe("buildAttractionPayload / mapAttractionFromApi", () => {
     expect(payload.entry_fee).toBeUndefined();
     expect(payload.duration_hours).toBeUndefined();
     expect(payload.opening_hours).toBeUndefined();
+  });
+
+  it("sends null for entry_fee/duration_hours/opening_hours cleared on update (finding E1)", () => {
+    const payload = buildAttractionPayload(
+      {
+        name: "Ella Rock",
+        destination: "Ella",
+        description: "A hike.",
+        location: pickedLocation,
+        opening_hours: "",
+        opening_hours_raw: { monday: "06:00-18:00" },
+        entry_fee: "",
+        duration_hours: "",
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.entry_fee).toBeNull();
+    expect(payload.duration_hours).toBeNull();
+    expect(payload.opening_hours).toBeNull();
   });
 
   it("throws for a destination that isn't in the list", () => {
@@ -385,6 +411,42 @@ describe("buildRestaurantPayload / mapRestaurantFromApi", () => {
         destinations,
       ),
     ).toThrow(/location must be picked/);
+  });
+
+  it("sends null for operating_hours cleared on update (finding E1)", () => {
+    const payload = buildRestaurantPayload(
+      {
+        name: "Cafe Chill",
+        destination: "Ella",
+        description: "A cafe.",
+        location: pickedLocation,
+        cuisine_type: "International",
+        avg_meal_cost: "2000",
+        operating_hours: "",
+        operating_hours_raw: { monday: "08:00-22:00" },
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.operating_hours).toBeNull();
+  });
+
+  it("never sends null for the required avg_meal_cost, even on update", () => {
+    const payload = buildRestaurantPayload(
+      {
+        name: "Cafe Chill",
+        destination: "Ella",
+        description: "A cafe.",
+        location: pickedLocation,
+        cuisine_type: "International",
+        avg_meal_cost: "2000",
+        operating_hours: "08:00-22:00",
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.avg_meal_cost).toBe(2000);
+    expect(payload.avg_meal_cost).not.toBeNull();
   });
 
   it("maps an API restaurant record back to form-friendly values", () => {

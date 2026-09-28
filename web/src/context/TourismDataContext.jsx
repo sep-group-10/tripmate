@@ -167,7 +167,7 @@ export function TourismDataProvider({ children }) {
   const updateAttraction = async (id, values) => {
     const response = await api.patch(
       `/api/v1/attractions/${id}`,
-      buildAttractionPayload(values, destinations),
+      buildAttractionPayload(values, destinations, { isUpdate: true }),
     );
     const mapped = mapAttractionFromApi(response.data, destinations);
     setAttractions((prev) =>
@@ -219,7 +219,7 @@ export function TourismDataProvider({ children }) {
   const updateRestaurant = async (id, values) => {
     const response = await api.patch(
       `/api/v1/restaurants/${id}`,
-      buildRestaurantPayload(values, destinations),
+      buildRestaurantPayload(values, destinations, { isUpdate: true }),
     );
     const mapped = mapRestaurantFromApi(response.data, destinations);
     setRestaurants((prev) =>

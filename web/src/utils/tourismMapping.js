@@ -49,13 +49,30 @@ export function hoursApiToText(hoursDict) {
 // instead of collapsing every day to the one visible value. Only a real
 // edit to the text (or a brand-new record, with no original dict) causes
 // hoursTextToApi to fan the new value out to all 7 days.
-export function hoursForApi(text, originalDict) {
+// On create, a blank optional field is simply omitted (undefined - dropped
+// from the JSON body, backend applies its own default). On update, a blank
+// value means the admin actively cleared a field that used to hold
+// something, and omitting it would do nothing: the backend's update
+// endpoints read the body with exclude_unset=True, so an absent key is
+// "leave this alone," not "clear this." Only an explicit null clears it.
+export function hoursForApi(text, originalDict, isUpdate = false) {
   const trimmed = (text ?? "").trim();
-  if (!trimmed) return undefined;
+  if (!trimmed) return isUpdate ? null : undefined;
   if (originalDict && hoursApiToText(originalDict) === trimmed) {
     return originalDict;
   }
   return hoursTextToApi(trimmed);
+}
+
+// Same reasoning as hoursForApi, for the plain optional number fields
+// (entry_fee, duration_hours). Never used for a field that's required in
+// its form config (e.g. avg_meal_cost, price_per_night) - those are always
+// numeric and never blank, so they don't need this distinction.
+function optionalNumberForApi(value, isUpdate = false) {
+  if (value === "" || value === null || value === undefined) {
+    return isUpdate ? null : undefined;
+  }
+  return Number(value);
 }
 
 // Decimal fields arrive from the API as numeric-looking strings (e.g.
@@ -93,7 +110,11 @@ function requireLocation(location) {
   return location;
 }
 
-export function buildAttractionPayload(values, destinations) {
+export function buildAttractionPayload(
+  values,
+  destinations,
+  { isUpdate = false } = {},
+) {
   const destination = requireDestination(destinations, values.destination);
   const location = requireLocation(values.location);
   return {
@@ -102,10 +123,13 @@ export function buildAttractionPayload(values, destinations) {
     description: values.description.trim(),
     latitude: location.latitude,
     longitude: location.longitude,
-    opening_hours: hoursForApi(values.opening_hours, values.opening_hours_raw),
-    entry_fee: values.entry_fee === "" ? undefined : Number(values.entry_fee),
-    duration_hours:
-      values.duration_hours === "" ? undefined : Number(values.duration_hours),
+    opening_hours: hoursForApi(
+      values.opening_hours,
+      values.opening_hours_raw,
+      isUpdate,
+    ),
+    entry_fee: optionalNumberForApi(values.entry_fee, isUpdate),
+    duration_hours: optionalNumberForApi(values.duration_hours, isUpdate),
   };
 }
 
@@ -150,7 +174,11 @@ export function mapHotelFromApi(record, destinations) {
   };
 }
 
-export function buildRestaurantPayload(values, destinations) {
+export function buildRestaurantPayload(
+  values,
+  destinations,
+  { isUpdate = false } = {},
+) {
   const destination = requireDestination(destinations, values.destination);
   const location = requireLocation(values.location);
   return {
@@ -160,10 +188,13 @@ export function buildRestaurantPayload(values, destinations) {
     latitude: location.latitude,
     longitude: location.longitude,
     cuisine_type: values.cuisine_type,
+    // avg_meal_cost is required in the form (RestaurantsList.jsx), so it can
+    // never actually be blank here - no optionalNumberForApi needed.
     avg_meal_cost: Number(values.avg_meal_cost),
     operating_hours: hoursForApi(
       values.operating_hours,
       values.operating_hours_raw,
+      isUpdate,
     ),
   };
 }
