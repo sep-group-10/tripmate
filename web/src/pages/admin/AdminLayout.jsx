@@ -10,9 +10,23 @@ const NAV_ITEMS = [
   { to: "/admin/restaurants", label: "Restaurants" },
 ];
 
+function initials(name) {
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) return "?";
+  return trimmed
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
 function AdminLayout() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const displayName = user?.full_name?.trim() || "Admin";
+  const displayEmail = user?.email?.trim() || "—";
 
   const handleLogout = async () => {
     await logout();
@@ -68,12 +82,12 @@ function AdminLayout() {
           </div>
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 flex-none items-center justify-center rounded-pill bg-accent-100 text-xs font-semibold text-accent-700">
-              SA
+              {initials(user?.full_name)}
             </span>
             <div className="flex flex-col">
-              <span className="text-body-sm font-medium">Super Admin</span>
+              <span className="text-body-sm font-medium">{displayName}</span>
               <span className="text-caption text-muted-600">
-                admin@tripmate.lk
+                {displayEmail}
               </span>
             </div>
           </div>
