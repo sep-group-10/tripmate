@@ -41,6 +41,23 @@ export function hoursApiToText(hoursDict) {
   return hoursDict.monday ?? Object.values(hoursDict)[0] ?? "";
 }
 
+// The admin form only ever shows/edits a single hours string, but the
+// backend dict can hold genuinely different per-day values (set outside
+// this form, e.g. via seed data or a future per-day editor). If the
+// displayed text still matches what that original dict would produce,
+// the admin hasn't touched Hours - send the original dict back untouched
+// instead of collapsing every day to the one visible value. Only a real
+// edit to the text (or a brand-new record, with no original dict) causes
+// hoursTextToApi to fan the new value out to all 7 days.
+export function hoursForApi(text, originalDict) {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return undefined;
+  if (originalDict && hoursApiToText(originalDict) === trimmed) {
+    return originalDict;
+  }
+  return hoursTextToApi(trimmed);
+}
+
 // Decimal fields arrive from the API as numeric-looking strings (e.g.
 // "1500.00"); form number inputs want a plain numeric string.
 export function decimalToFormValue(value) {
@@ -85,7 +102,7 @@ export function buildAttractionPayload(values, destinations) {
     description: values.description.trim(),
     latitude: location.latitude,
     longitude: location.longitude,
-    opening_hours: hoursTextToApi(values.opening_hours),
+    opening_hours: hoursForApi(values.opening_hours, values.opening_hours_raw),
     entry_fee: values.entry_fee === "" ? undefined : Number(values.entry_fee),
     duration_hours:
       values.duration_hours === "" ? undefined : Number(values.duration_hours),
@@ -101,6 +118,7 @@ export function mapAttractionFromApi(record, destinations) {
       longitude: Number(record.longitude),
     },
     opening_hours: hoursApiToText(record.opening_hours),
+    opening_hours_raw: record.opening_hours,
     entry_fee: decimalToFormValue(record.entry_fee),
     duration_hours: decimalToFormValue(record.duration_hours),
   };
@@ -143,7 +161,10 @@ export function buildRestaurantPayload(values, destinations) {
     longitude: location.longitude,
     cuisine_type: values.cuisine_type,
     avg_meal_cost: Number(values.avg_meal_cost),
-    operating_hours: hoursTextToApi(values.operating_hours),
+    operating_hours: hoursForApi(
+      values.operating_hours,
+      values.operating_hours_raw,
+    ),
   };
 }
 
@@ -156,6 +177,7 @@ export function mapRestaurantFromApi(record, destinations) {
       longitude: Number(record.longitude),
     },
     operating_hours: hoursApiToText(record.operating_hours),
+    operating_hours_raw: record.operating_hours,
     avg_meal_cost: decimalToFormValue(record.avg_meal_cost),
   };
 }

@@ -140,10 +140,17 @@ function RestaurantsList() {
     setFormSubmitting(true);
     setFormError("");
     try {
+      // Carries the original per-day operating_hours dict alongside the
+      // form's single displayed value, so tourismMapping's hoursForApi can
+      // tell an untouched Hours field from a real edit (see C4.4 finding B).
+      const payloadValues = {
+        ...values,
+        operating_hours_raw: editingRecord?.operating_hours_raw,
+      };
       if (editingRecord) {
-        await updateRestaurant(editingRecord.id, values);
+        await updateRestaurant(editingRecord.id, payloadValues);
       } else {
-        await addRestaurant(values);
+        await addRestaurant(payloadValues);
       }
       setIsFormOpen(false);
     } catch (error) {

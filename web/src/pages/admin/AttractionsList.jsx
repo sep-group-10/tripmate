@@ -125,10 +125,17 @@ function AttractionsList() {
     setFormSubmitting(true);
     setFormError("");
     try {
+      // Carries the original per-day opening_hours dict alongside the
+      // form's single displayed value, so tourismMapping's hoursForApi can
+      // tell an untouched Hours field from a real edit (see C4.4 finding B).
+      const payloadValues = {
+        ...values,
+        opening_hours_raw: editingRecord?.opening_hours_raw,
+      };
       if (editingRecord) {
-        await updateAttraction(editingRecord.id, values);
+        await updateAttraction(editingRecord.id, payloadValues);
       } else {
-        await addAttraction(values);
+        await addAttraction(payloadValues);
       }
       setIsFormOpen(false);
     } catch (error) {

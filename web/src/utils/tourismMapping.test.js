@@ -4,6 +4,7 @@ import {
   findDestinationNameById,
   hoursTextToApi,
   hoursApiToText,
+  hoursForApi,
   decimalToFormValue,
   formatCurrency,
   buildAttractionPayload,
@@ -65,6 +66,46 @@ describe("hoursTextToApi / hoursApiToText", () => {
 
   it("returns an empty string for a null dict", () => {
     expect(hoursApiToText(null)).toBe("");
+  });
+});
+
+describe("hoursForApi", () => {
+  // C4.4 finding B: the admin form only ever shows/edits one hours string,
+  // but the backend dict can hold genuinely different per-day values set
+  // outside this form. hoursForApi must tell "admin left Hours alone" from
+  // "admin actually edited Hours" so the former doesn't collapse every day
+  // to the one displayed value.
+  const distinctDict = {
+    monday: "09:00-17:00",
+    tuesday: "09:00-17:00",
+    wednesday: "09:00-17:00",
+    thursday: "09:00-17:00",
+    friday: "09:00-17:00",
+    saturday: "10:00-14:00",
+    sunday: "CLOSED",
+  };
+
+  it("returns the original dict untouched when the displayed text still matches it", () => {
+    const text = hoursApiToText(distinctDict);
+    expect(hoursForApi(text, distinctDict)).toBe(distinctDict);
+  });
+
+  it("fans the new text out to all 7 days when the admin actually edited Hours", () => {
+    const result = hoursForApi("07:00-19:00", distinctDict);
+    expect(result).toEqual(hoursTextToApi("07:00-19:00"));
+    expect(result.saturday).toBe("07:00-19:00");
+    expect(result.sunday).toBe("07:00-19:00");
+  });
+
+  it("fans the text out to all 7 days for a brand-new record (no original dict)", () => {
+    expect(hoursForApi("08:00-18:00", undefined)).toEqual(
+      hoursTextToApi("08:00-18:00"),
+    );
+  });
+
+  it("returns undefined for blank text regardless of the original dict", () => {
+    expect(hoursForApi("", distinctDict)).toBeUndefined();
+    expect(hoursForApi("   ", distinctDict)).toBeUndefined();
   });
 });
 
@@ -171,9 +212,76 @@ describe("buildAttractionPayload / mapAttractionFromApi", () => {
       destination: "Kandy",
       location: { latitude: 7.2936, longitude: 80.6414 },
       opening_hours: "05:30-20:00",
+      opening_hours_raw: record.opening_hours,
       entry_fee: "1500",
       duration_hours: "2",
     });
+  });
+
+  it("round trip: editing an unrelated field preserves distinct per-day hours (C4.4 finding B)", () => {
+    const record = {
+      id: "attr-1",
+      destination_id: "dest-2",
+      name: "Temple of the Tooth",
+      description: "A historic temple.",
+      latitude: "7.2936",
+      longitude: "80.6414",
+      entry_fee: "1500.00",
+      duration_hours: "2.00",
+      opening_hours: {
+        monday: "09:00-17:00",
+        tuesday: "09:00-17:00",
+        wednesday: "09:00-17:00",
+        thursday: "09:00-17:00",
+        friday: "09:00-17:00",
+        saturday: "10:00-14:00",
+        sunday: "CLOSED",
+      },
+    };
+    const formValues = mapAttractionFromApi(record, destinations);
+
+    // Admin only changes entry_fee; Hours is never touched, so
+    // formValues.opening_hours still equals what the form displayed.
+    const payload = buildAttractionPayload(
+      {
+        ...formValues,
+        entry_fee: "1750",
+      },
+      destinations,
+    );
+
+    expect(payload.opening_hours).toBe(record.opening_hours);
+  });
+
+  it("round trip: explicitly editing Hours fans the new value out to all 7 days", () => {
+    const record = {
+      id: "attr-1",
+      destination_id: "dest-2",
+      name: "Temple of the Tooth",
+      description: "A historic temple.",
+      latitude: "7.2936",
+      longitude: "80.6414",
+      entry_fee: "1500.00",
+      duration_hours: "2.00",
+      opening_hours: {
+        monday: "09:00-17:00",
+        saturday: "10:00-14:00",
+        sunday: "CLOSED",
+      },
+    };
+    const formValues = mapAttractionFromApi(record, destinations);
+
+    const payload = buildAttractionPayload(
+      {
+        ...formValues,
+        opening_hours: "07:00-19:00",
+      },
+      destinations,
+    );
+
+    expect(payload.opening_hours).toEqual(hoursTextToApi("07:00-19:00"));
+    expect(payload.opening_hours.saturday).toBe("07:00-19:00");
+    expect(payload.opening_hours.sunday).toBe("07:00-19:00");
   });
 });
 
@@ -294,7 +402,66 @@ describe("buildRestaurantPayload / mapRestaurantFromApi", () => {
       destination: "Kandy",
       location: { latitude: 7.2914, longitude: 80.635 },
       operating_hours: "07:00-21:00",
+      operating_hours_raw: record.operating_hours,
       avg_meal_cost: "1300",
     });
+  });
+
+  it("round trip: editing an unrelated field preserves distinct per-day hours (C4.4 finding B)", () => {
+    const record = {
+      id: "rest-1",
+      destination_id: "dest-2",
+      name: "The Empire Cafe",
+      description: "A cosy cafe.",
+      latitude: "7.2914",
+      longitude: "80.6350",
+      avg_meal_cost: "1300.00",
+      operating_hours: {
+        monday: "07:00-21:00",
+        saturday: "07:00-23:00",
+        sunday: "CLOSED",
+      },
+    };
+    const formValues = mapRestaurantFromApi(record, destinations);
+
+    const payload = buildRestaurantPayload(
+      {
+        ...formValues,
+        avg_meal_cost: "1500",
+      },
+      destinations,
+    );
+
+    expect(payload.operating_hours).toBe(record.operating_hours);
+  });
+
+  it("round trip: explicitly editing Hours fans the new value out to all 7 days", () => {
+    const record = {
+      id: "rest-1",
+      destination_id: "dest-2",
+      name: "The Empire Cafe",
+      description: "A cosy cafe.",
+      latitude: "7.2914",
+      longitude: "80.6350",
+      avg_meal_cost: "1300.00",
+      operating_hours: {
+        monday: "07:00-21:00",
+        saturday: "07:00-23:00",
+        sunday: "CLOSED",
+      },
+    };
+    const formValues = mapRestaurantFromApi(record, destinations);
+
+    const payload = buildRestaurantPayload(
+      {
+        ...formValues,
+        operating_hours: "10:00-22:00",
+      },
+      destinations,
+    );
+
+    expect(payload.operating_hours).toEqual(hoursTextToApi("10:00-22:00"));
+    expect(payload.operating_hours.saturday).toBe("10:00-22:00");
+    expect(payload.operating_hours.sunday).toBe("10:00-22:00");
   });
 });
