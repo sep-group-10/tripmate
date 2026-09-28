@@ -43,7 +43,7 @@ function HotelsList() {
         (h) =>
           !q ||
           h.name.toLowerCase().includes(q) ||
-          h.description.toLowerCase().includes(q),
+          (h.description ?? "").toLowerCase().includes(q),
       );
   }, [hotels, query, destinationFilter]);
 

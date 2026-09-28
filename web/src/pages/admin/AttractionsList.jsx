@@ -43,7 +43,7 @@ function AttractionsList() {
         (a) =>
           !q ||
           a.name.toLowerCase().includes(q) ||
-          a.description.toLowerCase().includes(q),
+          (a.description ?? "").toLowerCase().includes(q),
       );
   }, [attractions, query, destinationFilter]);
 
