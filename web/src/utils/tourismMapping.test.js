@@ -7,6 +7,7 @@ import {
   hoursForApi,
   decimalToFormValue,
   formatCurrency,
+  isDescriptionRequired,
   buildAttractionPayload,
   mapAttractionFromApi,
   buildHotelPayload,
@@ -40,6 +41,26 @@ describe("findDestinationByName / findDestinationNameById", () => {
 
   it("returns an empty string for an unknown id", () => {
     expect(findDestinationNameById(destinations, "missing")).toBe("");
+  });
+});
+
+describe("isDescriptionRequired", () => {
+  it("is required for a brand-new record (no editingRecord)", () => {
+    expect(isDescriptionRequired(null)).toBe(true);
+    expect(isDescriptionRequired(undefined)).toBe(true);
+  });
+
+  it("is required when the existing record already has a description", () => {
+    expect(isDescriptionRequired({ description: "A viaduct." })).toBe(true);
+  });
+
+  it("is not required when the existing record's description is null", () => {
+    expect(isDescriptionRequired({ description: null })).toBe(false);
+  });
+
+  it("is not required when the existing record's description is whitespace-only", () => {
+    expect(isDescriptionRequired({ description: "   " })).toBe(false);
+    expect(isDescriptionRequired({ description: "" })).toBe(false);
   });
 });
 
@@ -177,6 +198,35 @@ describe("buildAttractionPayload / mapAttractionFromApi", () => {
     expect(payload.entry_fee).toBeUndefined();
     expect(payload.duration_hours).toBeUndefined();
     expect(payload.opening_hours).toBeUndefined();
+  });
+
+  it("omits description on update when blank, instead of sending an empty string (finding C)", () => {
+    const payload = buildAttractionPayload(
+      {
+        name: "Ella Rock",
+        destination: "Ella",
+        description: "   ",
+        location: pickedLocation,
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.description).toBeUndefined();
+    expect(payload.description).not.toBe("");
+  });
+
+  it("still sends a trimmed description on update when it's non-blank", () => {
+    const payload = buildAttractionPayload(
+      {
+        name: "Ella Rock",
+        destination: "Ella",
+        description: "  A hike.  ",
+        location: pickedLocation,
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.description).toBe("A hike.");
   });
 
   it("sends null for entry_fee/duration_hours/opening_hours cleared on update (finding E1)", () => {
@@ -335,6 +385,23 @@ describe("buildHotelPayload / mapHotelFromApi", () => {
     });
   });
 
+  it("omits description on update when blank, instead of sending an empty string (finding C)", () => {
+    const payload = buildHotelPayload(
+      {
+        name: "98 Acres Resort",
+        destination: "Ella",
+        description: "   ",
+        location: pickedLocation,
+        price_per_night: "42000",
+        facilities: [],
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.description).toBeUndefined();
+    expect(payload.description).not.toBe("");
+  });
+
   it("throws when no location has been picked", () => {
     expect(() =>
       buildHotelPayload(
@@ -394,6 +461,24 @@ describe("buildRestaurantPayload / mapRestaurantFromApi", () => {
       avg_meal_cost: 2000,
       operating_hours: hoursTextToApi("08:00-22:00"),
     });
+  });
+
+  it("omits description on update when blank, instead of sending an empty string (finding C)", () => {
+    const payload = buildRestaurantPayload(
+      {
+        name: "Cafe Chill",
+        destination: "Ella",
+        description: "   ",
+        location: pickedLocation,
+        cuisine_type: "International",
+        avg_meal_cost: "2000",
+        operating_hours: "",
+      },
+      destinations,
+      { isUpdate: true },
+    );
+    expect(payload.description).toBeUndefined();
+    expect(payload.description).not.toBe("");
   });
 
   it("throws when no location has been picked", () => {

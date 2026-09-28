@@ -5,7 +5,10 @@ import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
 import { parseApiError } from "../../utils/apiError";
-import { formatCurrency } from "../../utils/tourismMapping";
+import {
+  formatCurrency,
+  isDescriptionRequired,
+} from "../../utils/tourismMapping";
 
 function HotelsList() {
   const {
@@ -85,7 +88,7 @@ function HotelsList() {
         label: "Description",
         type: "textarea",
         placeholder: "Brief description shown to travellers…",
-        required: true,
+        required: isDescriptionRequired(editingRecord),
       },
       {
         name: "price_per_night",
@@ -101,7 +104,7 @@ function HotelsList() {
         placeholder: "e.g. Pool, Spa, Restaurant",
       },
     ],
-    [destinationNames, destinations],
+    [destinationNames, destinations, editingRecord],
   );
 
   const openAddForm = () => {

@@ -15,6 +15,16 @@ const WEEKDAYS = [
   "sunday",
 ];
 
+// C4.4 finding C: Description stays required for a new record, but an
+// existing record whose description is already null/blank (e.g. the 15
+// seeded restaurants with description: null) shouldn't be un-editable
+// until an admin invents text for it. Editing a record that already has
+// a real description and blanking it is still blocked.
+export function isDescriptionRequired(editingRecord) {
+  if (!editingRecord) return true;
+  return Boolean(editingRecord.description?.trim());
+}
+
 export function findDestinationByName(destinations, name) {
   return destinations.find((destination) => destination.name === name);
 }
@@ -110,6 +120,20 @@ function requireLocation(location) {
   return location;
 }
 
+// On update, a blank description means the admin left an already-blank
+// field alone (see isDescriptionRequired - editing blocks blanking a real
+// description, so this only fires for a record that had none to begin
+// with). Omit the key entirely so exclude_unset=True leaves the existing
+// null as-is, rather than overwriting it with an empty string - an empty
+// string is a valid value for this field on the backend (no min_length),
+// so sending it would silently replace null with "". Create still
+// requires text, so this is a no-op there.
+function descriptionForApi(text, isUpdate) {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed && isUpdate) return undefined;
+  return trimmed;
+}
+
 export function buildAttractionPayload(
   values,
   destinations,
@@ -120,7 +144,7 @@ export function buildAttractionPayload(
   return {
     destination_id: destination.id,
     name: values.name.trim(),
-    description: values.description.trim(),
+    description: descriptionForApi(values.description, isUpdate),
     latitude: location.latitude,
     longitude: location.longitude,
     opening_hours: hoursForApi(
@@ -148,13 +172,17 @@ export function mapAttractionFromApi(record, destinations) {
   };
 }
 
-export function buildHotelPayload(values, destinations) {
+export function buildHotelPayload(
+  values,
+  destinations,
+  { isUpdate = false } = {},
+) {
   const destination = requireDestination(destinations, values.destination);
   const location = requireLocation(values.location);
   return {
     destination_id: destination.id,
     name: values.name.trim(),
-    description: values.description.trim(),
+    description: descriptionForApi(values.description, isUpdate),
     latitude: location.latitude,
     longitude: location.longitude,
     price_per_night: Number(values.price_per_night),
@@ -184,7 +212,7 @@ export function buildRestaurantPayload(
   return {
     destination_id: destination.id,
     name: values.name.trim(),
-    description: values.description.trim(),
+    description: descriptionForApi(values.description, isUpdate),
     latitude: location.latitude,
     longitude: location.longitude,
     cuisine_type: values.cuisine_type,

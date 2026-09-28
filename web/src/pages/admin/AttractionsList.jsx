@@ -5,7 +5,10 @@ import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
 import { parseApiError } from "../../utils/apiError";
-import { formatCurrency } from "../../utils/tourismMapping";
+import {
+  formatCurrency,
+  isDescriptionRequired,
+} from "../../utils/tourismMapping";
 
 function AttractionsList() {
   const {
@@ -85,7 +88,7 @@ function AttractionsList() {
         label: "Description",
         type: "textarea",
         placeholder: "Brief description shown to travellers…",
-        required: true,
+        required: isDescriptionRequired(editingRecord),
       },
       {
         name: "opening_hours",
@@ -106,7 +109,7 @@ function AttractionsList() {
         placeholder: "e.g. 2",
       },
     ],
-    [destinationNames, destinations],
+    [destinationNames, destinations, editingRecord],
   );
 
   const openAddForm = () => {

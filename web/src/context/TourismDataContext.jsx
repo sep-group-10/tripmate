@@ -217,7 +217,7 @@ export function TourismDataProvider({ children }) {
   const updateHotel = async (id, values) => {
     const response = await api.patch(
       `/api/v1/hotels/${id}`,
-      buildHotelPayload(values, destinations),
+      buildHotelPayload(values, destinations, { isUpdate: true }),
     );
     const mapped = mapHotelFromApi(response.data, destinations);
     setHotels((prev) => prev.map((item) => (item.id === id ? mapped : item)));

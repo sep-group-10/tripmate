@@ -5,7 +5,10 @@ import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
 import { parseApiError } from "../../utils/apiError";
-import { formatCurrency } from "../../utils/tourismMapping";
+import {
+  formatCurrency,
+  isDescriptionRequired,
+} from "../../utils/tourismMapping";
 
 const CUISINE_TONES = {
   "Sri Lankan": "warn",
@@ -105,7 +108,7 @@ function RestaurantsList() {
         label: "Description",
         type: "textarea",
         placeholder: "Brief description shown to travellers…",
-        required: true,
+        required: isDescriptionRequired(editingRecord),
       },
       {
         name: "operating_hours",
@@ -121,7 +124,7 @@ function RestaurantsList() {
         required: true,
       },
     ],
-    [destinationNames, destinations],
+    [destinationNames, destinations, editingRecord],
   );
 
   const openAddForm = () => {
