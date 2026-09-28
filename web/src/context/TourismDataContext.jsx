@@ -65,6 +65,29 @@ export function TourismDataProvider({ children }) {
     };
   }, []);
 
+  // If the destinations fetch above fails, destinationsStatus never reaches
+  // "ready" - the fetch effects below wait on that and would otherwise stay
+  // in "loading" forever with no error shown. Adjusted during render (React's
+  // own pattern for deriving state from a prop/state change) rather than in
+  // an effect, since it's a plain derivation with no external system to
+  // synchronize with.
+  if (destinationsStatus === "error" && attractionsStatus !== "error") {
+    setAttractionsError(
+      "Couldn't load destinations, so attractions can't be shown.",
+    );
+    setAttractionsStatus("error");
+  }
+  if (destinationsStatus === "error" && hotelsStatus !== "error") {
+    setHotelsError("Couldn't load destinations, so hotels can't be shown.");
+    setHotelsStatus("error");
+  }
+  if (destinationsStatus === "error" && restaurantsStatus !== "error") {
+    setRestaurantsError(
+      "Couldn't load destinations, so restaurants can't be shown.",
+    );
+    setRestaurantsStatus("error");
+  }
+
   useEffect(() => {
     if (destinationsStatus !== "ready") return;
     let cancelled = false;
