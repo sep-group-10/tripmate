@@ -150,3 +150,32 @@ def test_terminal_critic_statuses_route_to_end(status, expected):
 
     assert route_after_critic(state) == "end"
     assert current.status == expected
+
+
+def test_critic_prompt_includes_planning_state_validation_result(monkeypatch):
+    captured = []
+
+    class FakeModel:
+        def invoke(self, prompt):
+            captured.append(prompt)
+            return decision()
+
+    monkeypatch.setattr(critic, "create_critic_model", lambda: FakeModel())
+    validator_result = {
+        "status": "pass",
+        "passed": True,
+        "checks": {
+            "itinerary": {
+                "status": "pass",
+                "reasons": ["critic-context-validation-marker"],
+            }
+        },
+    }
+    current = session(
+        tool_results=[{"tool": "planning_state_validator", "result": validator_result}]
+    )
+
+    critic.critic_node({"session": current})
+
+    assert "planning_state_validator" in captured[0]
+    assert "critic-context-validation-marker" in captured[0]
