@@ -4,6 +4,11 @@ import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
+import { parseApiError } from "../../utils/apiError";
+import {
+  formatCurrency,
+  isDescriptionRequired,
+} from "../../utils/tourismMapping";
 
 const CUISINE_TONES = {
   "Sri Lankan": "warn",
@@ -17,6 +22,8 @@ const CUISINE_OPTIONS = Object.keys(CUISINE_TONES);
 function RestaurantsList() {
   const {
     restaurants,
+    restaurantsStatus,
+    restaurantsError,
     destinations,
     addRestaurant,
     updateRestaurant,
@@ -27,7 +34,11 @@ function RestaurantsList() {
   const [cuisineFilter, setCuisineFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const [deletingRecord, setDeletingRecord] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -48,7 +59,7 @@ function RestaurantsList() {
         (r) =>
           !q ||
           r.name.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q),
+          (r.description ?? "").toLowerCase().includes(q),
       );
   }, [restaurants, query, destinationFilter, cuisineFilter]);
 
@@ -69,6 +80,23 @@ function RestaurantsList() {
         required: true,
       },
       {
+        name: "location",
+        label: "Location",
+        type: "location",
+        required: true,
+        resolveInitialCenter: (values) => {
+          const destination = destinations.find(
+            (d) => d.name === values.destination,
+          );
+          return destination
+            ? {
+                latitude: destination.latitude,
+                longitude: destination.longitude,
+              }
+            : undefined;
+        },
+      },
+      {
         name: "cuisine_type",
         label: "Cuisine",
         type: "select",
@@ -80,46 +108,72 @@ function RestaurantsList() {
         label: "Description",
         type: "textarea",
         placeholder: "Brief description shown to travellers…",
-        required: true,
+        required: isDescriptionRequired(editingRecord),
       },
       {
         name: "operating_hours",
         label: "Hours",
         type: "text",
-        placeholder: "e.g. 11:30–23:00",
+        placeholder: "e.g. 11:30-23:00",
       },
       {
-        name: "priceRange",
-        label: "Price range",
-        type: "text",
-        placeholder: "e.g. LKR 2,000–5,000",
+        name: "avg_meal_cost",
+        label: "Average meal cost (LKR)",
+        type: "number",
+        placeholder: "e.g. 2000",
+        required: true,
       },
     ],
-    [destinationNames],
+    [destinationNames, destinations, editingRecord],
   );
 
   const openAddForm = () => {
     setEditingRecord(null);
+    setFormError("");
     setIsFormOpen(true);
   };
 
   const openEditForm = (record) => {
     setEditingRecord(record);
+    setFormError("");
     setIsFormOpen(true);
   };
 
-  const handleSubmit = (values) => {
-    if (editingRecord) {
-      updateRestaurant(editingRecord.id, values);
-    } else {
-      addRestaurant(values);
+  const handleSubmit = async (values) => {
+    setFormSubmitting(true);
+    setFormError("");
+    try {
+      // Carries the original per-day operating_hours dict alongside the
+      // form's single displayed value, so tourismMapping's hoursForApi can
+      // tell an untouched Hours field from a real edit (see C4.4 finding B).
+      const payloadValues = {
+        ...values,
+        operating_hours_raw: editingRecord?.operating_hours_raw,
+      };
+      if (editingRecord) {
+        await updateRestaurant(editingRecord.id, payloadValues);
+      } else {
+        await addRestaurant(payloadValues);
+      }
+      setIsFormOpen(false);
+    } catch (error) {
+      setFormError(parseApiError(error).message);
+    } finally {
+      setFormSubmitting(false);
     }
-    setIsFormOpen(false);
   };
 
-  const handleConfirmDelete = () => {
-    deleteRestaurant(deletingRecord.id);
-    setDeletingRecord(null);
+  const handleConfirmDelete = async () => {
+    setDeleteSubmitting(true);
+    setDeleteError("");
+    try {
+      await deleteRestaurant(deletingRecord.id);
+      setDeletingRecord(null);
+    } catch (error) {
+      setDeleteError(parseApiError(error).message);
+    } finally {
+      setDeleteSubmitting(false);
+    }
   };
 
   return (
@@ -169,33 +223,52 @@ function RestaurantsList() {
         <button
           type="button"
           onClick={openAddForm}
-          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+          disabled={restaurantsStatus !== "ready"}
+          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           ＋ Add Restaurant
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((restaurant) => (
-          <EntityCard
-            key={restaurant.id}
-            name={restaurant.name}
-            location={restaurant.destination}
-            rating={restaurant.rating}
-            tag={{
-              label: restaurant.cuisine_type,
-              tone: CUISINE_TONES[restaurant.cuisine_type] || "accent",
-            }}
-            description={restaurant.description}
-            metrics={[
-              { label: "Hours", value: restaurant.operating_hours },
-              { label: "Price range", value: restaurant.priceRange },
-            ]}
-            onEdit={() => openEditForm(restaurant)}
-            onDelete={() => setDeletingRecord(restaurant)}
-          />
-        ))}
-      </div>
+      {restaurantsStatus === "loading" && (
+        <p className="m-0 text-sm text-muted-600">Loading restaurants…</p>
+      )}
+
+      {restaurantsStatus === "error" && (
+        <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+          {restaurantsError}
+        </p>
+      )}
+
+      {restaurantsStatus === "ready" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((restaurant) => (
+            <EntityCard
+              key={restaurant.id}
+              name={restaurant.name}
+              location={restaurant.destination}
+              rating={restaurant.rating}
+              tag={{
+                label: restaurant.cuisine_type,
+                tone: CUISINE_TONES[restaurant.cuisine_type] || "accent",
+              }}
+              description={restaurant.description}
+              metrics={[
+                { label: "Hours", value: restaurant.operating_hours || "—" },
+                {
+                  label: "Avg. meal cost",
+                  value: formatCurrency(restaurant.avg_meal_cost),
+                },
+              ]}
+              onEdit={() => openEditForm(restaurant)}
+              onDelete={() => {
+                setDeleteError("");
+                setDeletingRecord(restaurant);
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {isFormOpen && (
         <EntityFormModal
@@ -210,6 +283,8 @@ function RestaurantsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          submitting={formSubmitting}
+          submitError={formError}
         />
       )}
 
@@ -218,6 +293,8 @@ function RestaurantsList() {
           recordName={deletingRecord.name}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeletingRecord(null)}
+          submitting={deleteSubmitting}
+          submitError={deleteError}
         />
       )}
     </div>

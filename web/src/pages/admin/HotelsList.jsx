@@ -4,18 +4,31 @@ import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
 import { useTourismData } from "../../hooks/useTourismData";
-
-const TIER_OPTIONS = ["Luxury", "Boutique"];
+import { parseApiError } from "../../utils/apiError";
+import {
+  formatCurrency,
+  isDescriptionRequired,
+} from "../../utils/tourismMapping";
 
 function HotelsList() {
-  const { hotels, destinations, addHotel, updateHotel, deleteHotel } =
-    useTourismData();
+  const {
+    hotels,
+    hotelsStatus,
+    hotelsError,
+    destinations,
+    addHotel,
+    updateHotel,
+    deleteHotel,
+  } = useTourismData();
   const [query, setQuery] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("All");
-  const [tierFilter, setTierFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const [deletingRecord, setDeletingRecord] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const destinationNames = useMemo(
     () => destinations.map((d) => d.name),
@@ -29,14 +42,13 @@ function HotelsList() {
         (h) =>
           destinationFilter === "All" || h.destination === destinationFilter,
       )
-      .filter((h) => tierFilter === "All" || h.tier === tierFilter)
       .filter(
         (h) =>
           !q ||
           h.name.toLowerCase().includes(q) ||
-          h.description.toLowerCase().includes(q),
+          (h.description ?? "").toLowerCase().includes(q),
       );
-  }, [hotels, query, destinationFilter, tierFilter]);
+  }, [hotels, query, destinationFilter]);
 
   const formFields = useMemo(
     () => [
@@ -55,24 +67,35 @@ function HotelsList() {
         required: true,
       },
       {
-        name: "tier",
-        label: "Tier",
-        type: "select",
-        options: TIER_OPTIONS,
+        name: "location",
+        label: "Location",
+        type: "location",
         required: true,
+        resolveInitialCenter: (values) => {
+          const destination = destinations.find(
+            (d) => d.name === values.destination,
+          );
+          return destination
+            ? {
+                latitude: destination.latitude,
+                longitude: destination.longitude,
+              }
+            : undefined;
+        },
       },
       {
         name: "description",
         label: "Description",
         type: "textarea",
         placeholder: "Brief description shown to travellers…",
-        required: true,
+        required: isDescriptionRequired(editingRecord),
       },
       {
         name: "price_per_night",
-        label: "Price / night",
-        type: "text",
-        placeholder: "e.g. LKR 28,000–55,000",
+        label: "Price / night (LKR)",
+        type: "number",
+        placeholder: "e.g. 42000",
+        required: true,
       },
       {
         name: "facilitiesText",
@@ -81,11 +104,12 @@ function HotelsList() {
         placeholder: "e.g. Pool, Spa, Restaurant",
       },
     ],
-    [destinationNames],
+    [destinationNames, destinations, editingRecord],
   );
 
   const openAddForm = () => {
     setEditingRecord(null);
+    setFormError("");
     setIsFormOpen(true);
   };
 
@@ -94,25 +118,44 @@ function HotelsList() {
       ...record,
       facilitiesText: (record.facilities || []).join(", "),
     });
+    setFormError("");
     setIsFormOpen(true);
   };
 
-  const handleSubmit = ({ facilitiesText, ...values }) => {
+  const handleSubmit = async ({ facilitiesText, ...values }) => {
     const facilities = facilitiesText
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    if (editingRecord) {
-      updateHotel(editingRecord.id, { ...values, facilities });
-    } else {
-      addHotel({ ...values, facilities });
+    const payload = { ...values, facilities };
+
+    setFormSubmitting(true);
+    setFormError("");
+    try {
+      if (editingRecord) {
+        await updateHotel(editingRecord.id, payload);
+      } else {
+        await addHotel(payload);
+      }
+      setIsFormOpen(false);
+    } catch (error) {
+      setFormError(parseApiError(error).message);
+    } finally {
+      setFormSubmitting(false);
     }
-    setIsFormOpen(false);
   };
 
-  const handleConfirmDelete = () => {
-    deleteHotel(deletingRecord.id);
-    setDeletingRecord(null);
+  const handleConfirmDelete = async () => {
+    setDeleteSubmitting(true);
+    setDeleteError("");
+    try {
+      await deleteHotel(deletingRecord.id);
+      setDeletingRecord(null);
+    } catch (error) {
+      setDeleteError(parseApiError(error).message);
+    } finally {
+      setDeleteSubmitting(false);
+    }
   };
 
   return (
@@ -146,44 +189,51 @@ function HotelsList() {
             </option>
           ))}
         </select>
-        <select
-          value={tierFilter}
-          onChange={(event) => setTierFilter(event.target.value)}
-          aria-label="Tier"
-          className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
-        >
-          <option value="All">All tiers</option>
-          {TIER_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           onClick={openAddForm}
-          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+          disabled={hotelsStatus !== "ready"}
+          className="ml-auto rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           ＋ Add Hotel
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((hotel) => (
-          <EntityCard
-            key={hotel.id}
-            name={hotel.name}
-            location={hotel.destination}
-            rating={hotel.rating}
-            tag={{ label: hotel.tier, tone: "warn" }}
-            description={hotel.description}
-            metrics={[{ label: "Price / night", value: hotel.price_per_night }]}
-            chips={hotel.facilities}
-            onEdit={() => openEditForm(hotel)}
-            onDelete={() => setDeletingRecord(hotel)}
-          />
-        ))}
-      </div>
+      {hotelsStatus === "loading" && (
+        <p className="m-0 text-sm text-muted-600">Loading hotels…</p>
+      )}
+
+      {hotelsStatus === "error" && (
+        <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+          {hotelsError}
+        </p>
+      )}
+
+      {hotelsStatus === "ready" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((hotel) => (
+            <EntityCard
+              key={hotel.id}
+              name={hotel.name}
+              location={hotel.destination}
+              rating={hotel.rating}
+              description={hotel.description}
+              metrics={[
+                {
+                  label: "Price / night",
+                  value: formatCurrency(hotel.price_per_night),
+                },
+              ]}
+              chips={hotel.facilities}
+              onEdit={() => openEditForm(hotel)}
+              onDelete={() => {
+                setDeleteError("");
+                setDeletingRecord(hotel);
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {isFormOpen && (
         <EntityFormModal
@@ -198,6 +248,8 @@ function HotelsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          submitting={formSubmitting}
+          submitError={formError}
         />
       )}
 
@@ -206,6 +258,8 @@ function HotelsList() {
           recordName={deletingRecord.name}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeletingRecord(null)}
+          submitting={deleteSubmitting}
+          submitError={deleteError}
         />
       )}
     </div>
