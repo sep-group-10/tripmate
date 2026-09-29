@@ -31,8 +31,11 @@ function LoginPage() {
       const response = await api.post("/api/v1/auth/google", {
         id_token: idToken,
       });
-      login(response.data.data.user);
-      navigate("/profile", { replace: true });
+      const user = response.data.data.user;
+      login(user);
+      navigate(ADMIN_ROLES.includes(user.role) ? "/admin" : "/profile", {
+        replace: true,
+      });
     } catch (error) {
       setSubmitError(parseApiError(error).message);
       setStatus("error");
