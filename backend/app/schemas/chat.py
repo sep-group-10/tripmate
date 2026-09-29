@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -31,8 +32,47 @@ class PlanningSessionInfo(BaseModel):
     progress_percentage: int
 
 
+class ChatItineraryItem(BaseModel):
+    candidate_id: str
+    category: str
+    name: str
+    start_time: str
+    end_time: str
+    latitude: float | None = None
+    longitude: float | None = None
+    duration_minutes: int | None = None
+    opening_hours: Any = None
+
+
+class ChatItineraryDay(BaseModel):
+    day_number: int
+    date: str
+    day_type: str
+    items: list[ChatItineraryItem]
+    hotel_id: str | None = None
+    hotel_location: dict[str, Any] | None = None
+    warnings: list[str]
+    route_optimization: dict[str, Any] | None = None
+
+
+class ChatUnscheduledItem(BaseModel):
+    candidate_id: str
+    name: str
+    category: str
+    reason: str
+
+
+class ChatItinerary(BaseModel):
+    status: str
+    days: list[ChatItineraryDay]
+    hotel_by_destination: dict[str, str]
+    unscheduled: list[ChatUnscheduledItem]
+    warnings: list[str]
+
+
 class ChatResponse(BaseModel):
-    """Placeholder assistant reply for a planning session."""
+    """Assistant reply and any structured itinerary produced by planning."""
 
     assistant_message: str
     session: PlanningSessionInfo
+    itinerary: ChatItinerary | None = None

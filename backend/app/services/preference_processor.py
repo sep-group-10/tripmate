@@ -58,4 +58,23 @@ class PreferenceProcessor:
         if not isinstance(result, PreferenceResult):
             raise TypeError("Gemini returned an invalid preference result")
 
-        return result
+        if result.intent == "normal_conversation":
+            missing_fields = []
+        else:
+            missing_fields = []
+            if result.destination is None or not result.destination.strip():
+                missing_fields.append("destination")
+            if result.start_date is None or result.end_date is None:
+                missing_fields.append("dates")
+            if result.duration_days is None:
+                missing_fields.append("duration_days")
+            if result.budget is None:
+                missing_fields.append("budget")
+            if result.travelers is None:
+                missing_fields.append("travelers")
+            if not result.interests:
+                missing_fields.append("interests")
+            if result.transport_type is None or not result.transport_type.strip():
+                missing_fields.append("transport_type")
+
+        return result.model_copy(update={"missing_fields": missing_fields})
