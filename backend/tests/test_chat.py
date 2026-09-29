@@ -1,11 +1,12 @@
 """Integration tests for the chat preference-processing flow."""
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.tools import tool
 
 from app.core.dependencies import get_current_user
 from app.main import app
@@ -14,7 +15,13 @@ from app.models.planning_session import PlanningSession
 from app.models.trip import Trip
 from app.routers import chat as chat_router
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
+from app.schemas.planning import CriticDecision, PlannerDecision
 from app.schemas.preference import PreferenceResult
+from app.services.agent_session import create_agent_session
+from app.services.langgraph import critic as critic_module
+from app.services.langgraph import planner as planner_module
+from app.services.preference_processor import PreferenceProcessor
+from app.services.tools import registry
 
 CHAT_URL = "/api/v1/chat"
 
@@ -47,6 +54,25 @@ class FakePreferenceProcessor:
 
 def _mock_processor(monkeypatch, *results: PreferenceResult) -> FakePreferenceProcessor:
     processor = FakePreferenceProcessor(list(results))
+    monkeypatch.setattr(chat_router, "PreferenceProcessor", lambda: processor)
+    return processor
+
+
+class FakeStructuredPreferenceModel:
+    """Return structured results to the real PreferenceProcessor without Gemini."""
+
+    def __init__(self, results):
+        self.results = list(results)
+        self.prompts = []
+
+    def invoke(self, prompt):
+        self.prompts.append(prompt)
+        return self.results.pop(0)
+
+
+def _mock_real_preference_processor(monkeypatch, *results):
+    processor = PreferenceProcessor.__new__(PreferenceProcessor)
+    processor.model = FakeStructuredPreferenceModel(results)
     monkeypatch.setattr(chat_router, "PreferenceProcessor", lambda: processor)
     return processor
 
@@ -126,12 +152,146 @@ def _schedule_result(name="Temple", route_optimization=None):
     }
 
 
+def _install_deterministic_planning_graph(monkeypatch, preferences):
+    """Use the real LangGraph with deterministic Planner, Critic, and tools."""
+    agent_session = create_agent_session(preferences)
+    requirements = agent_session.trip_requirements
+    start_date = requirements["start_date"]
+    end_date = requirements["end_date"]
+    if isinstance(start_date, str):
+        start_date = date.fromisoformat(start_date)
+    if isinstance(end_date, str):
+        end_date = date.fromisoformat(end_date)
+
+    days = []
+    for day_number in range((end_date - start_date).days + 1):
+        current_date = start_date + timedelta(days=day_number)
+        days.append(
+            {
+                "day_number": day_number + 1,
+                "date": current_date.isoformat(),
+                "day_type": "day_trip",
+                "items": [
+                    {
+                        "candidate_id": f"place-{day_number + 1}",
+                        "category": "attraction",
+                        "name": f"Kandy cultural site {day_number + 1}",
+                        "start_time": "09:00",
+                        "end_time": "10:00",
+                        "latitude": 7.2906,
+                        "longitude": 80.6337,
+                        "duration_minutes": 60,
+                        "opening_hours": None,
+                    }
+                ],
+                "hotel_id": None,
+                "hotel_location": None,
+                "warnings": [],
+            }
+        )
+    schedule = {
+        "status": "ok",
+        "days": days,
+        "hotel_by_destination": {},
+        "unscheduled": [],
+        "warnings": [],
+    }
+
+    @tool
+    def scheduling_engine(candidates: list[dict], trip_requirements: dict) -> dict:
+        """Return a valid deterministic itinerary for this integration test."""
+        return schedule
+
+    @tool
+    def weather_validator(schedule: dict) -> dict:
+        """Return a deterministic successful weather result."""
+        return {"status": "ok", "days": [], "warnings": []}
+
+    @tool
+    def cost_estimator(
+        itinerary: dict, candidates: list[dict], trip_requirements: dict
+    ) -> dict:
+        """Return a deterministic cost estimate within the supplied budget."""
+        categories = (
+            "transport_intercity",
+            "transport_local",
+            "accommodation",
+            "activities",
+            "dining",
+            "miscellaneous",
+            "total",
+        )
+        return {
+            **{category: {"min": 100, "max": 200} for category in categories},
+            "travellers": 2,
+            "warnings": [],
+        }
+
+    monkeypatch.setitem(registry.TOOLS, "scheduling_engine", scheduling_engine)
+    monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
+    monkeypatch.setitem(registry.TOOLS, "cost_estimator", cost_estimator)
+
+    decisions = [
+        PlannerDecision(
+            action="scheduling_engine",
+            arguments={"candidates": [], "trip_requirements": requirements},
+        ),
+        PlannerDecision(
+            action="weather_validator",
+            arguments={"schedule": schedule},
+        ),
+        PlannerDecision(
+            action="cost_estimator",
+            arguments={
+                "itinerary": schedule,
+                "candidates": [],
+                "trip_requirements": requirements,
+            },
+        ),
+    ]
+
+    class FakePlannerModel:
+        def __init__(self):
+            self.prompts = []
+
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
+            return decisions[len(self.prompts) - 1]
+
+    class FakeCriticModel:
+        def __init__(self):
+            self.prompts = []
+
+        def invoke(self, prompt):
+            self.prompts.append(prompt)
+            assessment = {
+                "score": 4,
+                "reasoning": "The plan is balanced across all days.",
+            }
+            return CriticDecision(
+                continue_planning=False,
+                status="completed",
+                reason="The itinerary meets the requested trip constraints.",
+                variety=assessment,
+                daily_balance=assessment,
+                interest_match=assessment,
+                pacing=assessment,
+                suggestions=[],
+            )
+
+    planner_model = FakePlannerModel()
+    critic_model = FakeCriticModel()
+    monkeypatch.setattr(planner_module, "create_planner_model", lambda: planner_model)
+    monkeypatch.setattr(critic_module, "create_critic_model", lambda: critic_model)
+    return planner_model, critic_model
+
+
 def test_start_chat_processes_normal_conversation_and_stores_messages(
     client, db_session, monkeypatch
 ):
-    processor = _mock_processor(
+    processor = _mock_real_preference_processor(
         monkeypatch,
-        PreferenceResult(intent="normal_conversation"),
+        PreferenceResult(intent="normal_conversation", missing_fields=["budget"]),
     )
     response_generator = _mock_response_generator(
         monkeypatch, "Hello! I'd be happy to help with your travel questions."
@@ -151,7 +311,7 @@ def test_start_chat_processes_normal_conversation_and_stores_messages(
 
     response = client.post(
         CHAT_URL,
-        json={"message": "Hello there"},
+        json={"message": "Hi, what can you do?"},
     )
 
     assert response.status_code == 200
@@ -169,7 +329,8 @@ def test_start_chat_processes_normal_conversation_and_stores_messages(
     assert session["iteration_count"] == 0
     assert session["progress_message"] is None
     assert session["progress_percentage"] == 0
-    assert [message.content for message in processor.calls[0]] == ["Hello there"]
+    assert processor.model.prompts[0][-1].content == "human: Hi, what can you do?"
+    assert "normal_conversation" in str(processor.model.prompts[0][0].content)
     assert factory_calls == []
     assert graph_calls == []
     assert len(response_generator.calls) == 1
@@ -179,7 +340,7 @@ def test_start_chat_processes_normal_conversation_and_stores_messages(
         (entry.role, entry.message)
         for entry in _conversation(db_session, session["id"])
     ] == [
-        ("user", "Hello there"),
+        ("user", "Hi, what can you do?"),
         ("assistant", expected_reply),
     ]
 
@@ -187,33 +348,57 @@ def test_start_chat_processes_normal_conversation_and_stores_messages(
 def test_preferences_missing_required_trip_values_do_not_create_trip(
     client, db_session, monkeypatch
 ):
-    _mock_response_generator(
-        monkeypatch, "What dates, trip length, and budget work for you?"
+    response_generator = _mock_response_generator(
+        monkeypatch,
+        "What dates, trip length, budget, group size, and activities do you prefer?",
     )
-    _mock_processor(
+    processor = _mock_real_preference_processor(
         monkeypatch,
         PreferenceResult(
             intent="trip_planning",
             destination="Kandy",
-            travelers=2,
-            interests=["culture"],
-            transport_type="train",
-            missing_fields=["dates", "duration_days", "budget"],
+            missing_fields=[],
         ),
     )
+    factory_calls = []
+    graph_calls = []
+    monkeypatch.setattr(
+        chat_router,
+        "create_agent_session",
+        lambda preferences: factory_calls.append(preferences),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type("Graph", (), {"invoke": lambda self, state: graph_calls.append(state)})(),
+    )
 
-    response = client.post(CHAT_URL, json={"message": "Plan a trip to Kandy."})
+    response = client.post(CHAT_URL, json={"message": "I want to visit Kandy."})
 
     assert response.status_code == 200
-    expected_reply = "What dates, trip length, and budget work for you?"
+    expected_reply = (
+        "What dates, trip length, budget, group size, and activities do you prefer?"
+    )
     assert response.json()["data"]["assistant_message"] == expected_reply
+    assert processor.model.prompts[0][-1].content == "human: I want to visit Kandy."
+    assert processor.model.results == []
     assert response.json()["data"]["itinerary"] is None
     assert db_session.query(Trip).count() == 0
+    assert factory_calls == []
+    assert graph_calls == []
     assert [
         entry.message
         for entry in _conversation(db_session, response.json()["data"]["session"]["id"])
         if entry.role == "assistant"
     ] == [expected_reply]
+    assert response_generator.calls[0][1].missing_fields == [
+        "dates",
+        "duration_days",
+        "budget",
+        "travelers",
+        "interests",
+        "transport_type",
+    ]
 
 
 def _planning_session(db_session, user) -> PlanningSession:
@@ -312,49 +497,213 @@ def test_send_message_asks_only_for_missing_trip_fields(
     ]
 
 
-def test_send_message_processes_complete_multi_turn_conversation(
+def test_multi_message_preference_collection_starts_planning_only_when_complete(
     client, db_session, existing_user, monkeypatch
 ):
-    session = _planning_session(db_session, existing_user)
-    _mock_response_generator(
-        monkeypatch,
-        "When would you like to travel, and how many people prefer which transport?",
-        "What budget do you have in mind?",
+    preferences_by_turn = [
+        PreferenceResult(intent="trip_planning", destination="Kandy"),
+        PreferenceResult(intent="trip_planning", destination="Kandy", duration_days=3),
+        PreferenceResult(
+            intent="trip_planning", destination="Kandy", duration_days=3, travelers=2
+        ),
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            duration_days=3,
+            travelers=2,
+            budget=Decimal("50000"),
+        ),
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            duration_days=3,
+            travelers=2,
+            budget=Decimal("50000"),
+            interests=["culture"],
+        ),
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            start_date=date(2026, 10, 1),
+            end_date=date(2026, 10, 3),
+            duration_days=3,
+            travelers=2,
+            budget=Decimal("50000"),
+            interests=["culture"],
+        ),
+        _complete_preferences(),
+    ]
+    processor = _mock_real_preference_processor(monkeypatch, *preferences_by_turn)
+    clarification_texts = [f"Please share preference {index}." for index in range(1, 7)]
+    response_generator = _mock_response_generator(monkeypatch, *clarification_texts)
+    preferences = _complete_preferences()
+    planner_model, critic_model = _install_deterministic_planning_graph(
+        monkeypatch, preferences
     )
+
+    first_response = client.post(CHAT_URL, json={"message": "I want to visit Kandy."})
+    session_id = first_response.json()["data"]["session"]["id"]
+    later_messages = [
+        "For 3 days.",
+        "Two people.",
+        "My budget is 50,000.",
+        "I like cultural attractions.",
+        "October 1 to 3, 2026.",
+        "I prefer the train.",
+    ]
+    responses = [first_response]
+    for message in later_messages:
+        responses.append(
+            client.post(f"{CHAT_URL}/{session_id}", json={"message": message})
+        )
+
+    assert all(response.status_code == 200 for response in responses)
+    assert [call[1].missing_fields for call in response_generator.calls] == [
+        [
+            "dates",
+            "duration_days",
+            "budget",
+            "travelers",
+            "interests",
+            "transport_type",
+        ],
+        ["dates", "budget", "travelers", "interests", "transport_type"],
+        ["dates", "budget", "interests", "transport_type"],
+        ["dates", "interests", "transport_type"],
+        ["dates", "transport_type"],
+        ["transport_type"],
+    ]
+    assert db_session.query(Trip).count() == 1
+    assert planner_model.prompts and len(planner_model.prompts) == 3
+    assert len(critic_model.prompts) == 1
+
+    all_turns_prompt = processor.model.prompts[-1][-1].content
+    for message in ["I want to visit Kandy.", *later_messages[:-1]]:
+        assert message in all_turns_prompt
+    assert clarification_texts[-1] in all_turns_prompt
+    assert [
+        (entry.role, entry.message) for entry in _conversation(db_session, session_id)
+    ] == [
+        ("user", "I want to visit Kandy."),
+        ("assistant", clarification_texts[0]),
+        ("user", "For 3 days."),
+        ("assistant", clarification_texts[1]),
+        ("user", "Two people."),
+        ("assistant", clarification_texts[2]),
+        ("user", "My budget is 50,000."),
+        ("assistant", clarification_texts[3]),
+        ("user", "I like cultural attractions."),
+        ("assistant", clarification_texts[4]),
+        ("user", "October 1 to 3, 2026."),
+        ("assistant", clarification_texts[5]),
+        ("user", "I prefer the train."),
+        ("assistant", responses[-1].json()["data"]["assistant_message"]),
+    ]
+    assert responses[-1].json()["data"]["session"]["status"] == "completed"
+    assert (
+        responses[-1].json()["data"]["assistant_message"]
+        == _conversation(db_session, session_id)[-1].message
+    )
+
+
+def test_complete_single_message_runs_chat_api_through_real_planning_graph(
+    client, db_session, existing_user, monkeypatch
+):
+    preferences = _complete_preferences()
+    processor = _mock_real_preference_processor(monkeypatch, preferences)
+    planner_model, critic_model = _install_deterministic_planning_graph(
+        monkeypatch, preferences
+    )
+
+    response = client.post(
+        CHAT_URL,
+        json={
+            "message": (
+                "Plan a three-day trip to Kandy from October 1 to 3 for two people, "
+                "budget 50,000, focused on culture, and travel by train."
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["session"]["status"] == "completed"
+    assert "Your trip plan is ready." in body["assistant_message"]
+    assert "Kandy cultural site 1" in body["assistant_message"]
+    assert "2026-10-01" in body["assistant_message"]
+    assert "100–200" in body["assistant_message"]
+    assert body["itinerary"]["days"][0]["items"][0]["name"] == "Kandy cultural site 1"
+    assert len(planner_model.prompts) == 3
+    assert len(critic_model.prompts) == 1
+    assert "cost_estimator" in critic_model.prompts[0]
+    assert "weather_validator" in critic_model.prompts[0]
+    assert processor.model.prompts[0][-1].content.startswith(
+        "human: Plan a three-day trip"
+    )
+    assert db_session.query(Trip).count() == 1
+    assert [
+        (entry.role, entry.message)
+        for entry in _conversation(db_session, body["session"]["id"])
+    ] == [
+        (
+            "user",
+            "Plan a three-day trip to Kandy from October 1 to 3 for two people, "
+            "budget 50,000, focused on culture, and travel by train.",
+        ),
+        ("assistant", body["assistant_message"]),
+    ]
+
+
+def test_chat_sessions_keep_conversation_history_isolated(
+    client, db_session, monkeypatch
+):
     processor = _mock_processor(
         monkeypatch,
-        PreferenceResult(
-            intent="trip_planning",
-            destination="Kandy",
-            missing_fields=["dates", "travelers", "transport_type"],
-        ),
-        PreferenceResult(
-            intent="trip_planning",
-            destination="Kandy",
-            travelers=2,
-            transport_type="train",
-            missing_fields=["budget"],
-        ),
+        PreferenceResult(intent="normal_conversation"),
+        PreferenceResult(intent="normal_conversation"),
+        PreferenceResult(intent="normal_conversation"),
+    )
+    _mock_response_generator(monkeypatch, "A reply.", "B reply.", "A follow-up reply.")
+
+    response_a = client.post(CHAT_URL, json={"message": "Session A first message."})
+    response_b = client.post(CHAT_URL, json={"message": "Session B first message."})
+    session_a_id = response_a.json()["data"]["session"]["id"]
+    session_b_id = response_b.json()["data"]["session"]["id"]
+    follow_up_a = client.post(
+        f"{CHAT_URL}/{session_a_id}", json={"message": "Session A follow-up."}
     )
 
-    first_response = client.post(
-        f"{CHAT_URL}/{session.id}",
-        json={"message": "I want to visit Kandy."},
+    assert (
+        response_a.status_code
+        == response_b.status_code
+        == follow_up_a.status_code
+        == 200
     )
-    second_response = client.post(
-        f"{CHAT_URL}/{session.id}",
-        json={"message": "December 10-12, two people. I prefer the train."},
-    )
-
-    assert first_response.status_code == 200
-    assert second_response.status_code == 200
-    assert [(message.type, message.content) for message in processor.calls[1]] == [
-        ("human", "I want to visit Kandy."),
-        (
-            "ai",
-            "When would you like to travel, and how many people prefer which transport?",
-        ),
-        ("human", "December 10-12, two people. I prefer the train."),
+    assert session_a_id != session_b_id
+    assert [message.content for message in processor.calls[0]] == [
+        "Session A first message."
+    ]
+    assert [message.content for message in processor.calls[1]] == [
+        "Session B first message."
+    ]
+    assert [(message.type, message.content) for message in processor.calls[2]] == [
+        ("human", "Session A first message."),
+        ("ai", "A reply."),
+        ("human", "Session A follow-up."),
+    ]
+    assert [
+        (entry.role, entry.message) for entry in _conversation(db_session, session_a_id)
+    ] == [
+        ("user", "Session A first message."),
+        ("assistant", "A reply."),
+        ("user", "Session A follow-up."),
+        ("assistant", "A follow-up reply."),
+    ]
+    assert [
+        (entry.role, entry.message) for entry in _conversation(db_session, session_b_id)
+    ] == [
+        ("user", "Session B first message."),
+        ("assistant", "B reply."),
     ]
 
 

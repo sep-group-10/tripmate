@@ -1229,6 +1229,17 @@ def test_planning_graph_validates_constraints_before_critic(monkeypatch):
     ]
     assert validation_statuses == ["fail", "fail", "pass", "pass", "pass", "pass"]
     assert "ConstraintValidator result:" in critic_model.prompts[-1]
+    for result_name in (
+        "candidate_retriever",
+        "scoring_engine",
+        "scheduling_engine",
+        "route_optimizer",
+        "weather_validator",
+        "cost_estimator",
+        "constraint_validator",
+    ):
+        assert result_name in critic_model.prompts[-1]
+    assert "Lake walk" in critic_model.prompts[-1]
     assert updated.status == AgentSessionStatus.COMPLETED
     assert result["constraint_validation_current"] is True
     assert len(planner_model.prompts) == 6
@@ -1237,6 +1248,8 @@ def test_planning_graph_validates_constraints_before_critic(monkeypatch):
     # Each new Planner turn sees current session output and tool argument schemas.
     assert "Plan a three-day trip to Kandy" in planner_model.prompts[0]
     assert "'destination': 'Kandy'" in planner_model.prompts[1]
+    assert "candidate_retriever" in planner_model.prompts[1]
+    assert "Lake walk" in planner_model.prompts[1]
     for name in expected_order:
         assert name in planner_model.prompts[0]
     assert '"trip_requirements"' in planner_model.prompts[0]
