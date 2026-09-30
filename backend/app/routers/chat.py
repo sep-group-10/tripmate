@@ -10,7 +10,7 @@ from app.core.errors import ApiError, ErrorCode
 from app.models.conversation_history import ConversationHistory
 from app.models.planning_session import PlanningSession
 from app.models.user import User
-from app.schemas.agent_session import AgentSession
+from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.chat import (
     ChatItinerary,
     ChatRequest,
@@ -48,7 +48,10 @@ def _to_langchain_messages(
 
 
 def _itinerary_for_agent_session(session: AgentSession) -> ChatItinerary | None:
-    """Select the latest optimized schedule, falling back to the scheduler output."""
+    """Select the effective schedule unless planning failed or was infeasible."""
+
+    if session.status in {AgentSessionStatus.FAILED, AgentSessionStatus.INFEASIBLE}:
+        return None
 
     for tool_name in ("route_optimizer", "scheduling_engine"):
         result = next(
@@ -141,6 +144,7 @@ def start_chat(
 ):
     """Create a planning session and accept the user's first message."""
     planning_session = PlanningSession(
+        user_id=current_user.id,
         trip_id=None,
         status="pending",
         iteration_count=0,
@@ -165,7 +169,14 @@ def send_message(
     current_user: User = Depends(get_current_user),
 ):
     """Accept and process a message for an existing planning session."""
-    planning_session = db.get(PlanningSession, session_id)
+    planning_session = (
+        db.query(PlanningSession)
+        .filter(
+            PlanningSession.id == session_id,
+            PlanningSession.user_id == current_user.id,
+        )
+        .first()
+    )
     if planning_session is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Planning session not found")
 

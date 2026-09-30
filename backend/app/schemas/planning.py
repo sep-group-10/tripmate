@@ -17,7 +17,20 @@ class CriterionAssessment(BaseModel):
     @classmethod
     def require_one_sentence(cls, value: str) -> str:
         text = value.strip()
-        endings = re.findall(r"[.!?](?=\s|$)", text)
+        endings = []
+        for match in re.finditer(r"[.!?](?=\s|$)", text):
+            punctuation = match.group()
+            if punctuation == ".":
+                prefix = text[: match.start()]
+                if re.search(r"\d$", prefix) and re.match(r"\d", text[match.end() :]):
+                    continue
+                if re.search(
+                    r"(?i)(?:\b(?:e\.g|i\.e|etc|vs|mr|mrs|ms|dr|prof|sr|jr|st)|"
+                    r"(?:[a-z]\.){2,})\.$",
+                    text[: match.end()],
+                ):
+                    continue
+            endings.append(match)
         if len(endings) != 1 or not re.search(r"[.!?][\"')\]]?$", text):
             raise ValueError("reasoning must contain exactly one sentence")
         return text

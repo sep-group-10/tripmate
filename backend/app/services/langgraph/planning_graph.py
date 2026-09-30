@@ -4,8 +4,14 @@ from app.schemas.agent_session import AgentSessionStatus
 from app.services.langgraph.critic import critic_node, route_after_critic
 from app.services.langgraph.planner import planner_node
 from app.services.langgraph.state import PlanningState
-from app.services.langgraph.state_validator import validate_planning_state
+from app.services.langgraph.state_validator import (
+    is_valid_constraint_result,
+    is_valid_tool_result,
+    validate_planning_state,
+)
 from app.services.tools.registry import TOOLS
+
+_PLANNING_STATE_VALIDATION_FAILURE = "Planning state validation failed."
 
 
 def _latest_tool_result(session, tool_name: str):
@@ -54,17 +60,28 @@ def tool_execution_node(state: PlanningState) -> dict:
         }
     )
     session.tool_execution_order.append(decision.action)
+    tool_result_is_valid = is_valid_tool_result(decision.action, result)
+    structural_failure_is_pending = (
+        state["last_failure"] == _PLANNING_STATE_VALIDATION_FAILURE
+    )
+    preserve_structural_failure = (
+        structural_failure_is_pending and not tool_result_is_valid
+    )
     state_update = {
         "session": session,
-        "last_failure": None,
-        "consecutive_failures": 0,
+        "last_failure": state["last_failure"] if preserve_structural_failure else None,
+        "consecutive_failures": state["consecutive_failures"]
+        if preserve_structural_failure
+        else 0,
     }
     if decision.action in {"scheduling_engine", "route_optimizer", "cost_estimator"}:
         session.constraint_result = None
         state_update["constraint_validation_current"] = False
     elif decision.action == "constraint_validator":
         session.constraint_result = result
-        state_update["constraint_validation_current"] = False
+        state_update["constraint_validation_current"] = is_valid_constraint_result(
+            result
+        )
 
     return {
         **state_update,
@@ -77,6 +94,20 @@ def planning_state_validation_node(state: PlanningState) -> dict:
     session = state["session"]
     result = validate_planning_state(session)
     session.tool_results.append({"tool": "planning_state_validator", "result": result})
+    if result.get("status") != "pass":
+        consecutive_failures = (
+            state["consecutive_failures"] + 1
+            if state["last_failure"] == _PLANNING_STATE_VALIDATION_FAILURE
+            else 1
+        )
+        return {
+            "session": session,
+            "last_failure": _PLANNING_STATE_VALIDATION_FAILURE,
+            "consecutive_failures": consecutive_failures,
+        }
+
+    if state["last_failure"] == _PLANNING_STATE_VALIDATION_FAILURE:
+        return {"session": session, "last_failure": None, "consecutive_failures": 0}
     return {"session": session}
 
 
@@ -119,7 +150,9 @@ def constraint_validation_node(state: PlanningState) -> dict:
     """Validate constraints once scheduling and cost results are available."""
 
     session = state["session"]
-    itinerary = _latest_tool_result(session, "scheduling_engine")
+    itinerary = _latest_tool_result(session, "route_optimizer")
+    if itinerary is None:
+        itinerary = _latest_tool_result(session, "scheduling_engine")
     cost_estimate = _latest_tool_result(session, "cost_estimator")
     result = TOOLS["constraint_validator"].invoke(
         {

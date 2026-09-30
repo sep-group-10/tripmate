@@ -1,7 +1,8 @@
+import os
 from collections.abc import Sequence
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from app.schemas.preference import PreferenceResult
 
@@ -10,8 +11,10 @@ class PreferenceProcessor:
     """Extract structured trip preferences from conversation history."""
 
     def __init__(self) -> None:
-        self.model = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash-lite",
+        self.model = ChatOpenAI(
+            model="google/gemini-2.5-flash",
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
             temperature=0,
         ).with_structured_output(PreferenceResult)
 

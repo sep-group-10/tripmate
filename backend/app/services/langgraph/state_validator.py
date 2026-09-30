@@ -131,6 +131,18 @@ def _expected_result(tool_name: str, result: Any) -> bool:
     return False
 
 
+def is_valid_tool_result(tool_name: str, result: Any) -> bool:
+    """Return whether a tool result has the usable graph shape."""
+
+    return _expected_result(tool_name, result)
+
+
+def is_valid_constraint_result(result: Any) -> bool:
+    """Return whether a ConstraintValidator result has the usable graph shape."""
+
+    return is_valid_tool_result("constraint_validator", result)
+
+
 def _usable_time(value: Any) -> bool:
     if not isinstance(value, str):
         return False

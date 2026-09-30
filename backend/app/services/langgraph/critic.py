@@ -1,7 +1,8 @@
+import os
 from pathlib import Path
 from string import Template
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from app.schemas.agent_session import AgentSessionStatus
 from app.schemas.planning import CriticDecision
@@ -13,8 +14,10 @@ _CRITIC_PROMPT_PATH = (
 
 
 def create_critic_model():
-    return ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash-lite",
+    return ChatOpenAI(
+        model="google/gemini-2.5-flash",
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
         temperature=0,
     ).with_structured_output(CriticDecision)
 
@@ -36,7 +39,18 @@ def critic_node(state: PlanningState) -> dict:
     """Assess itinerary quality and persist the full structured Critic result."""
 
     session = state["session"]
-    decision = create_critic_model().invoke(_critic_prompt(state))
+    try:
+        decision = create_critic_model().invoke(_critic_prompt(state))
+    except Exception:
+        failure = "Critic failed to produce a valid decision."
+        return {
+            "session": session,
+            "critic_decision": None,
+            "last_failure": failure,
+            "consecutive_failures": state["consecutive_failures"] + 1
+            if state["last_failure"] == failure
+            else 1,
+        }
     session.critic_result = decision.model_dump(mode="json")
     return {
         "session": session,

@@ -99,9 +99,42 @@ def test_all_terminal_statuses_are_accepted(status):
     assert decision(status=status).status == status
 
 
-def test_criterion_reasoning_must_be_exactly_one_sentence():
+def test_criterion_reasoning_accepts_e_g_abbreviation():
+    result = decision(variety=assessment(3, "The plan includes options, e.g. museums."))
+    assert result.variety.reasoning == "The plan includes options, e.g. museums."
+
+
+def test_criterion_reasoning_accepts_decimal_number():
+    result = decision(variety=assessment(3, "The estimated walk is 3.5 kilometers."))
+    assert result.variety.reasoning == "The estimated walk is 3.5 kilometers."
+
+
+def test_criterion_reasoning_rejects_multiple_sentences():
     with pytest.raises(ValidationError):
         decision(variety=assessment(3, "First sentence. Second sentence."))
+
+
+def test_critic_failure_uses_planning_termination_path(monkeypatch):
+    class FailingModel:
+        def invoke(self, _prompt):
+            raise ValueError("invalid structured Critic output")
+
+    monkeypatch.setattr(critic, "create_critic_model", lambda: FailingModel())
+    current = session()
+    state = {
+        "session": current,
+        "critic_decision": None,
+        "last_failure": None,
+        "consecutive_failures": 0,
+        "max_iterations": 8,
+    }
+
+    result = critic.critic_node(state)
+    state.update(result)
+
+    assert result["critic_decision"] is None
+    assert route_after_critic(state) == "end"
+    assert current.status == AgentSessionStatus.FAILED
 
 
 def test_planner_prompt_contains_latest_critic_feedback(monkeypatch):

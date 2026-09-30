@@ -5,6 +5,7 @@ from app.schemas.planning import CriticDecision, PlannerDecision
 from app.services.langgraph import critic, planner
 from app.services.langgraph.planning_graph import (
     planning_graph,
+    planning_state_validation_node,
     route_after_constraint_validation,
     route_after_critic,
     route_after_planning_state_validation,
@@ -55,6 +56,72 @@ def create_state(
     }
 
 
+def _assert_constraint_validator_itinerary(monkeypatch, tool_results, expected):
+    from langchain_core.tools import tool
+
+    from app.services.langgraph.planning_graph import constraint_validation_node
+    from app.services.tools import registry
+
+    calls = []
+
+    @tool
+    def constraint_validator(
+        itinerary: dict, trip_requirements: dict, cost_estimate: dict
+    ) -> dict:
+        """Record the automatic validator's effective itinerary."""
+        calls.append((itinerary, trip_requirements, cost_estimate))
+        return {
+            "status": "pass",
+            "passed": True,
+            "constraints": {},
+            "failed_constraints": [],
+            "reasons": {},
+        }
+
+    monkeypatch.setitem(registry.TOOLS, "constraint_validator", constraint_validator)
+    session = AgentSession(
+        goal="Plan a trip",
+        trip_requirements={"destination": "Kandy"},
+        tool_results=tool_results,
+    )
+
+    constraint_validation_node({"session": session})
+
+    assert calls == [
+        (
+            expected,
+            {"destination": "Kandy"},
+            {"total": {"min": 10, "max": 20}},
+        )
+    ]
+
+
+def test_constraint_validator_uses_route_optimizer_output(monkeypatch):
+    scheduled = {"status": "ok", "days": [{"items": [{"name": "Raw order"}]}]}
+    optimized = {"status": "ok", "days": [{"items": [{"name": "Final order"}]}]}
+    _assert_constraint_validator_itinerary(
+        monkeypatch,
+        [
+            {"tool": "scheduling_engine", "result": scheduled},
+            {"tool": "route_optimizer", "result": optimized},
+            {"tool": "cost_estimator", "result": {"total": {"min": 10, "max": 20}}},
+        ],
+        optimized,
+    )
+
+
+def test_constraint_validator_falls_back_to_scheduling_engine_output(monkeypatch):
+    scheduled = {"status": "ok", "days": [{"items": [{"name": "Scheduled order"}]}]}
+    _assert_constraint_validator_itinerary(
+        monkeypatch,
+        [
+            {"tool": "scheduling_engine", "result": scheduled},
+            {"tool": "cost_estimator", "result": {"total": {"min": 10, "max": 20}}},
+        ],
+        scheduled,
+    )
+
+
 def test_planning_state_validation_routes_invalid_session_to_planner():
     state = create_state()
     result = {"status": "fail", "failed_checks": ["itinerary"]}
@@ -64,6 +131,73 @@ def test_planning_state_validation_routes_invalid_session_to_planner():
 
     assert route_after_planning_state_validation(state) == "planner"
     assert state["session"].tool_results[-1]["result"] == result
+
+
+def test_first_structural_validation_failure_increments_counter():
+    state = create_state()
+
+    result = planning_state_validation_node(state)
+
+    assert result["consecutive_failures"] == 1
+    assert result["last_failure"] == "Planning state validation failed."
+
+
+def test_second_consecutive_structural_failure_uses_failed_termination(
+    monkeypatch,
+):
+    from langchain_core.tools import tool
+
+    from app.services.tools import registry
+
+    @tool
+    def candidate_retriever(destination: str) -> list[dict]:
+        """Return candidates while leaving the invalid session incomplete."""
+        return [{"category": "attraction", "name": "Lake walk"}]
+
+    monkeypatch.setitem(registry.TOOLS, "candidate_retriever", candidate_retriever)
+    state = create_state()
+    first_validation = planning_state_validation_node(state)
+    state.update(first_validation)
+    state["planner_decision"] = PlannerDecision(
+        action="candidate_retriever", arguments={"destination": "Kandy"}
+    )
+
+    execution = tool_execution_node(state)
+    state.update(execution)
+    second_validation = planning_state_validation_node(state)
+    state.update(second_validation)
+
+    assert state["consecutive_failures"] == 2
+    assert route_after_planning_state_validation(state) == "end"
+    assert state["session"].status == AgentSessionStatus.FAILED
+
+
+def test_successful_structural_validation_resets_failure_sequence(monkeypatch):
+    from app.services.langgraph import planning_graph as graph_module
+
+    validation_results = iter(
+        [
+            {"status": "fail", "failed_checks": ["itinerary"]},
+            {"status": "pass", "failed_checks": []},
+            {"status": "fail", "failed_checks": ["itinerary"]},
+        ]
+    )
+    monkeypatch.setattr(
+        graph_module,
+        "validate_planning_state",
+        lambda _session: next(validation_results),
+    )
+    state = create_state()
+    state.update(planning_state_validation_node(state))
+    assert state["consecutive_failures"] == 1
+
+    state.update(planning_state_validation_node(state))
+
+    assert state["consecutive_failures"] == 0
+    assert state["last_failure"] is None
+
+    state.update(planning_state_validation_node(state))
+    assert state["consecutive_failures"] == 1
 
 
 def test_planning_state_validation_preserves_iteration_guard():
@@ -578,7 +712,7 @@ def test_same_failure_increments_consecutive_failure_count():
     assert result["consecutive_failures"] == 2
 
 
-def test_planner_selected_constraint_validator_cannot_bypass_automatic_gate(
+def test_planner_selected_constraint_validator_is_current_without_replanning(
     monkeypatch,
 ):
     from langchain_core.tools import tool
@@ -712,10 +846,46 @@ def test_planner_selected_constraint_validator_cannot_bypass_automatic_gate(
 
     assert validator_calls == [(schedule, requirements, cost_estimate)]
     assert result["session"].constraint_result["status"] == "pass"
+    assert result["constraint_validation_current"] is True
+    assert [
+        entry["tool"]
+        for entry in result["session"].tool_results
+        if entry["tool"] == "constraint_validator"
+    ] == ["constraint_validator"]
+    assert planner_model.calls == 1
+    assert critic_model.calls == 1
+    assert result["session"].status == AgentSessionStatus.COMPLETED
+
+
+def test_malformed_manual_constraint_result_is_not_current(monkeypatch):
+    from langchain_core.tools import tool
+
+    from app.services.tools import registry
+
+    malformed_result = {"status": "pass", "passed": True}
+
+    @tool
+    def constraint_validator(
+        itinerary: dict, trip_requirements: dict, cost_estimate: dict
+    ) -> dict:
+        """Return a malformed result missing the constraint fields."""
+        return malformed_result
+
+    monkeypatch.setitem(registry.TOOLS, "constraint_validator", constraint_validator)
+    state = create_state()
+    state["planner_decision"] = PlannerDecision(
+        action="constraint_validator",
+        arguments={
+            "itinerary": {},
+            "trip_requirements": {},
+            "cost_estimate": {},
+        },
+    )
+
+    result = tool_execution_node(state)
+
+    assert result["session"].constraint_result == malformed_result
     assert result["constraint_validation_current"] is False
-    assert planner_model.calls == 3
-    assert critic_model.calls == 0
-    assert result["session"].status == AgentSessionStatus.BEST_EFFORT
 
 
 def test_missing_constraint_provenance_cannot_invoke_critic(monkeypatch):

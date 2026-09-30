@@ -417,6 +417,7 @@ def _planning_session(db_session, user) -> PlanningSession:
     db_session.flush()
 
     session = PlanningSession(
+        user_id=user.id,
         trip_id=trip.id,
         status="pending",
         iteration_count=0,
@@ -427,6 +428,98 @@ def _planning_session(db_session, user) -> PlanningSession:
     db_session.commit()
     db_session.refresh(session)
     return session
+
+
+def test_session_owner_can_continue_their_chat_session(
+    client, db_session, existing_user, monkeypatch
+):
+    session = _planning_session(db_session, existing_user)
+    _mock_processor(
+        monkeypatch,
+        PreferenceResult(
+            intent="trip_planning", destination="Kandy", missing_fields=["dates"]
+        ),
+    )
+    _mock_response_generator(monkeypatch, "Which dates would you prefer?")
+
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "I want to visit Kandy."}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["session"]["id"] == str(session.id)
+    assert [
+        (entry.role, entry.message) for entry in _conversation(db_session, session.id)
+    ] == [
+        ("user", "I want to visit Kandy."),
+        ("assistant", "Which dates would you prefer?"),
+    ]
+
+
+def test_another_user_cannot_access_chat_session(
+    client, db_session, existing_user, other_user, monkeypatch
+):
+    session = _planning_session(db_session, existing_user)
+    _mock_processor(
+        monkeypatch,
+        PreferenceResult(
+            intent="trip_planning", destination="Kandy", missing_fields=["dates"]
+        ),
+    )
+    app.dependency_overrides[get_current_user] = lambda: other_user
+
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "Show me the plan."}
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert _conversation(db_session, session.id) == []
+
+
+def test_cross_user_chat_cannot_create_or_modify_victim_trip(
+    client, db_session, existing_user, other_user, monkeypatch
+):
+    session = _planning_session(db_session, existing_user)
+    victim_trip = db_session.get(Trip, session.trip_id)
+    session.trip_id = None
+    db_session.commit()
+    original_trip = {
+        "user_id": victim_trip.user_id,
+        "status": victim_trip.status,
+        "travel_start_date": victim_trip.travel_start_date,
+        "travel_end_date": victim_trip.travel_end_date,
+        "budget": victim_trip.budget,
+    }
+    original_trip_count = db_session.query(Trip).count()
+    create_trip_calls = []
+    monkeypatch.setattr(
+        chat_router,
+        "create_trip",
+        lambda *args, **kwargs: create_trip_calls.append((args, kwargs)),
+    )
+    _mock_processor(monkeypatch, _complete_preferences())
+    app.dependency_overrides[get_current_user] = lambda: other_user
+
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "Plan this trip for me."}
+    )
+
+    db_session.refresh(session)
+    db_session.refresh(victim_trip)
+    assert response.status_code == 404
+    assert create_trip_calls == []
+    assert db_session.query(Trip).count() == original_trip_count
+    assert session.trip_id is None
+    assert session.working_memory is None
+    assert {
+        "user_id": victim_trip.user_id,
+        "status": victim_trip.status,
+        "travel_start_date": victim_trip.travel_start_date,
+        "travel_end_date": victim_trip.travel_end_date,
+        "budget": victim_trip.budget,
+    } == original_trip
+    assert _conversation(db_session, session.id) == []
 
 
 def test_send_message_asks_only_for_missing_trip_fields(
@@ -830,7 +923,16 @@ def test_complete_preferences_start_planning_and_persist_final_result(
     ]
 
 
-def test_chat_itinerary_selects_route_optimizer_or_schedule_fallback():
+@pytest.mark.parametrize(
+    ("status", "expected_name"),
+    [
+        (AgentSessionStatus.COMPLETED, "Optimized place"),
+        (AgentSessionStatus.BEST_EFFORT, "Optimized place"),
+        (AgentSessionStatus.FAILED, None),
+        (AgentSessionStatus.INFEASIBLE, None),
+    ],
+)
+def test_chat_itinerary_selection_respects_final_status(status, expected_name):
     schedule = _schedule_result("Scheduled place")
     optimized = _schedule_result(
         "Optimized place",
@@ -838,6 +940,7 @@ def test_chat_itinerary_selects_route_optimizer_or_schedule_fallback():
     )
     session = AgentSession(
         goal="Plan a trip",
+        status=status,
         tool_results=[
             {"tool": "scheduling_engine", "result": schedule},
             {"tool": "route_optimizer", "result": optimized},
@@ -848,19 +951,27 @@ def test_chat_itinerary_selects_route_optimizer_or_schedule_fallback():
     )
 
     selected = chat_router._itinerary_for_agent_session(session)
+
+    if expected_name is None:
+        assert selected is None
+    else:
+        assert selected is not None
+        assert selected.days[0].items[0].name == expected_name
+        assert selected.days[0].route_optimization["local_distance_km"] == 1.25
+
     fallback = chat_router._itinerary_for_agent_session(
         AgentSession(
             goal="Plan a trip",
+            status=status,
             tool_results=[{"tool": "scheduling_engine", "result": schedule}],
         )
     )
-
-    assert selected is not None
-    assert selected.days[0].items[0].name == "Optimized place"
-    assert selected.days[0].route_optimization["local_distance_km"] == 1.25
-    assert fallback is not None
-    assert fallback.days[0].items[0].name == "Scheduled place"
-    assert fallback.days[0].route_optimization is None
+    if expected_name is None:
+        assert fallback is None
+    else:
+        assert fallback is not None
+        assert fallback.days[0].items[0].name == "Scheduled place"
+        assert fallback.days[0].route_optimization is None
 
 
 def test_planning_failure_uses_global_safe_error_handling(client, monkeypatch):
