@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, MapPin, SendHorizontal } from "lucide-react";
 
-const SUGGESTIONS = ["Swap a day", "Cut LKR 40,000", "Add a beach night"];
+const SUGGESTIONS = ["Swap a day", "Cut €40", "Add a beach night"];
 
 const REPLY_DELAY_MS = 1000;
 
