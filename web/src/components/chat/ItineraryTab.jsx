@@ -1,26 +1,50 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { ITINERARY_DAYS } from "../../data/tripPlanDummyData";
-import { computeBudget, dayHotel, daySpend } from "../../utils/tripBudget";
-import {
-  formatDate,
-  formatDuration,
-  formatMoney,
-} from "../../utils/tripFormat";
+import { formatDate } from "../../utils/tripFormat";
+import EmptyState from "./EmptyState";
 import PillTag from "./PillTag";
+import SectionLabel from "./SectionLabel";
 
 const CATEGORY_TAGS = {
   attraction: { label: "Attraction", tone: "info" },
   restaurant: { label: "Dining", tone: "warn" },
   hotel: { label: "Stay", tone: "outline" },
+  local_event: { label: "Event", tone: "accent" },
 };
 
-function ItineraryTab() {
-  const [activeDay, setActiveDay] = useState(1);
-  const [openDay, setOpenDay] = useState(1);
+function humanize(value) {
+  return String(value)
+    .replace(/_/g, " ")
+    .replace(/^./, (char) => char.toUpperCase());
+}
 
-  const stopCount = ITINERARY_DAYS.reduce((n, d) => n + d.items.length, 0);
-  const totalSpend = computeBudget().total;
+function categoryTag(category) {
+  return (
+    CATEGORY_TAGS[category] || {
+      label: category ? humanize(category) : "Stop",
+      tone: "outline",
+    }
+  );
+}
+
+// Renders a ChatItinerary (backend/app/schemas/chat.py). The real response has
+// no costs, travel legs, day titles or hotel names, so none are shown; every
+// field read here is either required by the schema or guarded.
+function ItineraryTab({ itinerary }) {
+  // null means "not chosen yet": default to the first day. 0 means "closed".
+  const [activeDay, setActiveDay] = useState(null);
+  const [openDay, setOpenDay] = useState(null);
+
+  const days = itinerary?.days ?? [];
+  if (days.length === 0) return <EmptyState what="itinerary" />;
+
+  const itemsOf = (day) => day.items ?? [];
+  const firstDay = days[0].day_number;
+  const currentDay = activeDay ?? firstDay;
+  const expandedDay = openDay ?? firstDay;
+  const stopCount = days.reduce((n, day) => n + itemsOf(day).length, 0);
+  const unscheduled = itinerary.unscheduled ?? [];
+  const warnings = itinerary.warnings ?? [];
 
   const pickDay = (dayNumber) => {
     setActiveDay(dayNumber);
@@ -34,7 +58,7 @@ function ItineraryTab() {
 
   const toggleDay = (dayNumber) => {
     setActiveDay(dayNumber);
-    setOpenDay(openDay === dayNumber ? 0 : dayNumber);
+    setOpenDay(expandedDay === dayNumber ? 0 : dayNumber);
   };
 
   return (
@@ -42,24 +66,20 @@ function ItineraryTab() {
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="font-heading m-0 text-[19px] font-semibold tracking-tight">
-            {ITINERARY_DAYS.length}-day itinerary
+            {days.length}-day itinerary
           </h2>
           <span className="text-helper text-muted-600">
-            {formatDate(ITINERARY_DAYS[0].date)} –{" "}
-            {formatDate(ITINERARY_DAYS.at(-1).date)}, 2026
+            {days.length > 1
+              ? `${formatDate(days[0].date)} – ${formatDate(days.at(-1).date)}`
+              : formatDate(days[0].date)}
           </span>
         </div>
-        <div className="flex items-center gap-3.5">
-          <span className="text-helper text-muted-600">{stopCount} stops</span>
-          <span className="text-body-sm font-semibold">
-            {formatMoney(totalSpend)}
-          </span>
-        </div>
+        <span className="text-helper text-muted-600">{stopCount} stops</span>
       </div>
 
       <div className="flex gap-0.5 overflow-x-auto py-0.5">
-        {ITINERARY_DAYS.map((day) => {
-          const on = activeDay === day.day_number;
+        {days.map((day) => {
+          const on = currentDay === day.day_number;
           return (
             <button
               key={day.day_number}
@@ -89,8 +109,10 @@ function ItineraryTab() {
       </div>
 
       <div className="flex flex-col gap-2.5">
-        {ITINERARY_DAYS.map((day) => {
-          const open = openDay === day.day_number;
+        {days.map((day) => {
+          const open = expandedDay === day.day_number;
+          const items = itemsOf(day);
+          const distance = day.route_optimization?.local_distance_km;
           return (
             <section
               key={day.day_number}
@@ -113,7 +135,8 @@ function ItineraryTab() {
                     Day {day.day_number}
                   </span>
                   <span className="text-label text-muted-600">
-                    {formatDate(day.date)} · {day.title}
+                    {formatDate(day.date)}
+                    {day.day_type ? ` · ${humanize(day.day_type)}` : ""}
                   </span>
                   {open ? (
                     <ChevronUp
@@ -130,88 +153,66 @@ function ItineraryTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-2.5 pl-4.5 text-helper text-muted-700">
-                  <span>{day.items.length} stops</span>
-                  <span className="text-muted-400">·</span>
-                  <span>{day.route_optimization.local_distance_km} km</span>
-                  <span className="text-muted-400">·</span>
-                  <span className="font-semibold text-ink">
-                    {formatMoney(daySpend(day))}
-                  </span>
+                  <span>{items.length} stops</span>
+                  {typeof distance === "number" && (
+                    <>
+                      <span className="text-muted-400">·</span>
+                      <span>{Number(distance.toFixed(1))} km</span>
+                    </>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-0.5 pl-4.5">
-                  {day.items.map((item, index) => (
-                    <span
-                      key={item.candidate_id}
-                      className="flex items-center gap-1.5 rounded-pill border border-border bg-surface py-[5px] pr-2.5 pl-1.5 text-helper"
-                    >
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent-100 text-[10px] font-semibold text-accent-700">
-                        {index + 1}
+                {items.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5 pl-4.5">
+                    {items.map((item, index) => (
+                      <span
+                        key={`${item.candidate_id}-${index}`}
+                        className="flex items-center gap-1.5 rounded-pill border border-border bg-surface py-[5px] pr-2.5 pl-1.5 text-helper"
+                      >
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent-100 text-[10px] font-semibold text-accent-700">
+                          {index + 1}
+                        </span>
+                        {item.name}
                       </span>
-                      {item.name}
-                    </span>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </button>
 
               {open && (
                 <div className="flex flex-col gap-2 border-t border-divider px-4.5 pt-1 pb-4.5">
-                  {day.items.map((item, index) => {
-                    const leg = day.legs[index];
-                    const tag = CATEGORY_TAGS[item.category];
+                  {items.map((item, index) => {
+                    const tag = categoryTag(item.category);
                     return (
-                      <div key={item.candidate_id} className="flex flex-col">
-                        <TimelineRow>
-                          <span className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">
-                            {index + 1}
-                          </span>
-                          <div className="mt-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-3">
+                      <TimelineRow
+                        key={`${item.candidate_id}-${index}`}
+                        isLast={index === items.length - 1}
+                      >
+                        <span className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">
+                          {index + 1}
+                        </span>
+                        <div className="mt-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-3">
+                          {item.start_time && (
                             <span className="flex-none font-mono text-[12px] text-accent-700">
-                              {item.start_time}–{item.end_time}
+                              {item.start_time}
+                              {item.end_time ? `–${item.end_time}` : ""}
                             </span>
-                            <span className="min-w-0 flex-1 text-sm font-medium">
-                              {item.name}
-                            </span>
-                            {tag && (
-                              <PillTag tone={tag.tone}>{tag.label}</PillTag>
-                            )}
-                            <span className="min-w-16 flex-none text-right text-helper text-muted-700">
-                              {formatMoney(item.cost)}
-                            </span>
-                          </div>
-                        </TimelineRow>
-                        {leg && (
-                          <TimelineRow>
-                            <span />
-                            <div className="mt-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-dashed border-muted-300 px-3.5 py-2.5">
-                              <span className="flex-none font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
-                                {leg.mode}
-                              </span>
-                              <span className="text-helper text-muted-700">
-                                {formatDuration(leg.duration_minutes)} ·{" "}
-                                {formatMoney(leg.cost)}
-                              </span>
-                            </div>
-                          </TimelineRow>
-                        )}
-                      </div>
+                          )}
+                          <span className="min-w-0 flex-1 text-sm font-medium">
+                            {item.name}
+                          </span>
+                          <PillTag tone={tag.tone}>{tag.label}</PillTag>
+                        </div>
+                      </TimelineRow>
                     );
                   })}
-                  {dayHotel(day) && (
-                    <TimelineRow>
-                      <span />
-                      <div className="mt-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-dashed border-muted-300 px-3.5 py-2.5">
-                        <span className="flex-none font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
-                          Stay
-                        </span>
-                        <span className="min-w-0 flex-1 text-helper text-muted-700">
-                          Overnight at {dayHotel(day).name}
-                        </span>
-                        <span className="flex-none text-helper text-muted-700">
-                          {formatMoney(dayHotel(day).price_per_night)}
-                        </span>
-                      </div>
-                    </TimelineRow>
-                  )}
+                  {(day.warnings ?? []).map((warning) => (
+                    <p
+                      key={warning}
+                      className="m-0 pl-9.5 text-helper text-warn"
+                    >
+                      {warning}
+                    </p>
+                  ))}
                   {/* Display-only for now, like the chat stop chips: these need
                       the backend to support editing a single day. */}
                   <div className="flex gap-2 pt-1 pl-9.5">
@@ -234,17 +235,43 @@ function ItineraryTab() {
           );
         })}
       </div>
+
+      {unscheduled.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl bg-inset p-4">
+          <SectionLabel>Couldn&apos;t fit in</SectionLabel>
+          {unscheduled.map((item, index) => (
+            <p
+              key={`${item.candidate_id}-${index}`}
+              className="m-0 text-body-sm text-muted-700"
+            >
+              <span className="font-medium text-ink">{item.name}</span>
+              {item.reason ? ` — ${item.reason}` : ""}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl bg-inset p-4">
+          <SectionLabel>Heads up</SectionLabel>
+          {warnings.map((warning) => (
+            <p key={warning} className="m-0 text-body-sm text-warn">
+              {warning}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function TimelineRow({ children }) {
+function TimelineRow({ children, isLast }) {
   const [marker, body] = children;
   return (
     <div className="flex items-stretch gap-3">
       <div className="flex w-6.5 flex-none flex-col items-center pt-3.5">
         {marker}
-        <span className="w-px flex-1 bg-border" />
+        {!isLast && <span className="w-px flex-1 bg-border" />}
       </div>
       {body}
     </div>

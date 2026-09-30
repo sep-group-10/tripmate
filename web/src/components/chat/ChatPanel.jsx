@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { SendHorizontal } from "lucide-react";
-import { DUMMY_REPLIES, INITIAL_MESSAGES } from "../../data/tripPlanDummyData";
+import api from "../../services/api";
+import { parseApiError } from "../../utils/apiError";
 
 const SUGGESTIONS = ["Swap a day", "Cut LKR 10,000", "Add a tea estate visit"];
 
-const REPLY_DELAY_MS = 1000;
+const WELCOME_MESSAGES = [
+  {
+    id: "welcome",
+    role: "assistant",
+    text: "Hi! Tell me where you'd like to go, for how long and what you enjoy, and I'll plan it for you.",
+  },
+];
 
 function ItineraryPreview({ day }) {
   return (
@@ -103,17 +110,19 @@ function SuggestionChip({ label, onClick }) {
   );
 }
 
-function ChatPanel() {
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+// `onPlan(itinerary)` is called whenever a reply carries an itinerary, so the
+// page can hand it to the tabs. Remount (change `key`) to start a new trip.
+function ChatPanel({ onPlan }) {
+  const [messages, setMessages] = useState(WELCOME_MESSAGES);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
-  // Planning-session id. Nothing sets it from a real reply yet; it will be set
-  // from ChatResponse.session.id on the first real reply, then sent back so
-  // later messages continue the same session.
+  // Planning-session id from ChatResponse.session.id. Null until the first
+  // reply; after that it is sent back so messages continue the same session.
+  // Plain state on purpose: the backend can't reload a past session yet, so a
+  // page refresh starts a new one.
   const [sessionId, setSessionId] = useState(null);
   const [error, setError] = useState(null);
   const mounted = useRef(true);
-  const replyCount = useRef(0);
   const listEndRef = useRef(null);
 
   useEffect(() => {
@@ -130,21 +139,17 @@ function ChatPanel() {
 
   const canSend = input.trim().length > 0 && !thinking;
 
-  // AI INTEGRATION POINT. Replace this function's body with a real POST to
-  // /api/v1/chat (or /api/v1/chat/{session_id} for a continuing session) once
-  // the backend planner is ready. See backend/app/schemas/chat.py for the real
-  // ChatResponse shape this page's message data already mirrors. It should
-  // resolve with a ChatResponse ({ assistant_message, session, itinerary })
-  // and reject on failure. The dummy ignores both arguments.
-  // eslint-disable-next-line no-unused-vars
-  const requestAssistantReply = (text, currentSessionId) =>
-    new Promise((resolve) => {
-      setTimeout(() => {
-        const reply = DUMMY_REPLIES[replyCount.current % DUMMY_REPLIES.length];
-        replyCount.current += 1;
-        resolve({ assistant_message: reply, session: null, itinerary: null });
-      }, REPLY_DELAY_MS);
-    });
+  // POST /api/v1/chat starts a session; POST /api/v1/chat/{session_id}
+  // continues one (see backend/app/routers/chat.py). The call is synchronous
+  // on the server and runs the full planner, so it can take a while. Resolves
+  // with a ChatResponse ({ assistant_message, session, itinerary }).
+  const requestAssistantReply = async (text, currentSessionId) => {
+    const res = await api.post(
+      currentSessionId ? `/api/v1/chat/${currentSessionId}` : "/api/v1/chat",
+      { message: text },
+    );
+    return res.data.data;
+  };
 
   const handleSend = async (event) => {
     event.preventDefault();
@@ -162,7 +167,12 @@ function ChatPanel() {
     try {
       const response = await requestAssistantReply(text, sessionId);
       if (!mounted.current) return;
-      if (response.session?.id) setSessionId(response.session.id);
+      if (response.session?.id) {
+        setSessionId((current) => current ?? response.session.id);
+      }
+      // A clarifying question or a failed plan returns itinerary: null; keep
+      // whatever itinerary was already showing in that case.
+      if (response.itinerary) onPlan(response.itinerary);
       setMessages((prev) => [
         ...prev,
         {
@@ -171,11 +181,16 @@ function ChatPanel() {
           text: response.assistant_message,
         },
       ]);
-    } catch {
-      // Unreachable today (the dummy never rejects); this is where a failed
-      // real call lands so the thinking indicator can't get stuck.
+    } catch (err) {
       if (!mounted.current) return;
-      setError("Something went wrong — try again");
+      const { message } = parseApiError(err);
+      if (err.response?.status === 404) {
+        // Session not found: drop the stale id so the next message starts fresh.
+        setSessionId(null);
+        setError(`${message}. Your next message will start a new session.`);
+      } else {
+        setError(message);
+      }
     } finally {
       if (mounted.current) setThinking(false);
     }
