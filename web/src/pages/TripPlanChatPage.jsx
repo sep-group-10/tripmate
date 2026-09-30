@@ -169,6 +169,42 @@ const CATEGORY_TAGS = {
 
 const TABS = ["Summary", "Map", "Itinerary", "Budget"];
 
+// Dummy legs between the trip's days, consistent with the day distances above.
+const ROUTE_LEGS = [
+  {
+    label: "Leg 1",
+    text: "Day 1 → Day 2 · Castle hill → Belém Tower, by tram",
+    distance_km: 6.1,
+    duration_minutes: 25,
+  },
+  {
+    label: "Leg 2",
+    text: "Day 2 → Day 3 · Belém → Sintra, by train",
+    distance_km: 28,
+    duration_minutes: 45,
+  },
+];
+
+const DAY_COLORS = ["bg-accent", "bg-info", "bg-muted-500"];
+
+// Category keys mirror cost_estimator.py's output (transport_intercity is left
+// out: this sample trip stays in one region). Each maps from an itinerary item
+// category, so the breakdown is derived from ITINERARY_DAYS and always adds up
+// to the Itinerary tab's total.
+const BUDGET_CATEGORIES = [
+  { key: "accommodation", label: "Accommodation", color: "bg-accent" },
+  { key: "dining", label: "Dining", color: "bg-info" },
+  { key: "transport_local", label: "Transport", color: "bg-warn" },
+  { key: "activities", label: "Activities", color: "bg-accent-300" },
+  { key: "miscellaneous", label: "Miscellaneous", color: "bg-muted-400" },
+];
+
+const ITEM_BUDGET_KEYS = {
+  hotel: "accommodation",
+  restaurant: "dining",
+  attraction: "activities",
+};
+
 // Dummy content is shaped loosely like ChatItineraryDay / ChatItineraryItem
 // (backend/app/schemas/chat.py) so it can be swapped for a real ChatResponse.
 // `stops` are place names (in a real response, itinerary items[].name) and
@@ -525,17 +561,132 @@ function TimelineRow({ children }) {
   );
 }
 
-function ComingSoon({ tab }) {
+function MapTab() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-inset px-6 py-16 text-center">
-      <span className="font-heading text-md font-semibold">
-        {tab} is coming soon
-      </span>
-      <span className="text-body-sm text-muted-600">
-        This tab isn&apos;t built yet. Summary and Itinerary are ready to
-        explore.
-      </span>
-    </div>
+    <>
+      {/* Placeholder on purpose: the backend has lat/lng per item but no
+          leg-by-leg route data yet (only route_optimization.local_distance_km
+          per day), so there is nothing real to draw a route from. */}
+      <div className="flex min-h-64 flex-none flex-col items-center justify-center gap-2 rounded-[14px] border border-border bg-inset px-6 text-center">
+        <MapPin size={22} className="text-muted-500" aria-hidden="true" />
+        <span className="font-heading text-md font-semibold">Route map</span>
+        <span className="max-w-[36ch] text-body-sm text-muted-600">
+          Coming once real trip data is wired up. Stops and legs will be drawn
+          here.
+        </span>
+      </div>
+
+      <div className="flex flex-none flex-wrap gap-2">
+        {ITINERARY_DAYS.map((day, index) => (
+          <span
+            key={day.day_number}
+            className="flex items-center gap-2 rounded-pill border border-border px-3 py-1.5 text-helper"
+          >
+            <span className={`h-2 w-2 rounded-full ${DAY_COLORS[index]}`} />
+            Day {day.day_number} · {formatDate(day.date)}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex flex-none flex-col">
+        {ROUTE_LEGS.map((leg) => (
+          <div
+            key={leg.label}
+            className="flex items-baseline gap-3 border-t border-divider py-2.5"
+          >
+            <span className="w-11.5 flex-none font-mono text-badge font-medium tracking-wider text-accent-700 uppercase">
+              {leg.label}
+            </span>
+            <span className="flex-1 text-body-sm text-muted-700">
+              {leg.text}
+            </span>
+            <span className="text-helper text-muted-500">
+              {leg.distance_km} km · {leg.duration_minutes} min
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function BudgetTab() {
+  // The real values come from cost_estimator.py but aren't exposed on
+  // ChatResponse yet (and there they are min/max ranges, not single numbers).
+  const amounts = Object.fromEntries(
+    BUDGET_CATEGORIES.map(({ key }) => [key, 0]),
+  );
+  ITINERARY_DAYS.forEach((day) => {
+    day.items.forEach((item) => {
+      amounts[ITEM_BUDGET_KEYS[item.category]] += item.cost;
+    });
+    day.legs.forEach((leg) => {
+      amounts.transport_local += leg.cost;
+    });
+  });
+  const total = Object.values(amounts).reduce((sum, n) => sum + n, 0);
+  const rows = BUDGET_CATEGORIES.map((category) => ({
+    ...category,
+    amount: amounts[category.key],
+    percent: total ? Math.round((amounts[category.key] / total) * 100) : 0,
+  }));
+
+  return (
+    <>
+      <div className="flex flex-none items-baseline justify-between gap-3">
+        <SectionLabel>Total planned spend</SectionLabel>
+        <span className="flex items-baseline gap-2">
+          <span className="font-heading text-[26px] font-semibold tracking-tight text-accent">
+            {formatMoney(total)}
+          </span>
+          <span className="text-helper text-muted-500">
+            {formatMoney(Math.round(total / ITINERARY_DAYS.length))} / day
+          </span>
+        </span>
+      </div>
+
+      <div
+        className="flex h-2.5 flex-none overflow-hidden rounded-pill bg-inset"
+        role="img"
+        aria-label="Spend by category"
+      >
+        {rows
+          .filter((row) => row.amount > 0)
+          .map((row) => (
+            <span
+              key={row.key}
+              className={`h-full ${row.color}`}
+              style={{ width: `${row.percent}%` }}
+            />
+          ))}
+      </div>
+
+      <div className="flex flex-none flex-col">
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            className="flex items-center gap-2.5 border-t border-divider py-2.75"
+          >
+            <span className={`h-2 w-2 flex-none rounded-full ${row.color}`} />
+            <span className="flex-1 text-body-sm text-muted-700">
+              {row.label}
+            </span>
+            <span className="text-helper text-muted-500">
+              {row.amount > 0 ? `${row.percent}%` : "—"}
+            </span>
+            <span
+              className={`min-w-22 text-right text-body-sm font-medium ${row.amount > 0 ? "" : "text-muted-500"}`}
+            >
+              {formatMoney(row.amount, "€0")}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="m-0 text-helper text-muted-600">
+        Accommodation and miscellaneous aren&apos;t part of the sample itinerary
+        yet, so they show as €0.
+      </p>
+    </>
   );
 }
 
@@ -579,7 +730,8 @@ function TabsPanel() {
       >
         {tab === "Summary" && <SummaryTab />}
         {tab === "Itinerary" && <ItineraryTab />}
-        {(tab === "Map" || tab === "Budget") && <ComingSoon tab={tab} />}
+        {tab === "Map" && <MapTab />}
+        {tab === "Budget" && <BudgetTab />}
       </div>
     </section>
   );
