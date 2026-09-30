@@ -5,130 +5,132 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, MapPin, SendHorizontal } from "lucide-react";
 
-const SUGGESTIONS = ["Swap a day", "Cut €40", "Add a beach night"];
+const SUGGESTIONS = ["Swap a day", "Cut LKR 10,000", "Add a tea estate visit"];
 
 const REPLY_DELAY_MS = 1000;
 
 // Dummy itinerary, shaped like ChatItineraryDay / ChatItineraryItem
 // (backend/app/schemas/chat.py): day_number, date, items[] with candidate_id,
 // category, name, start_time, end_time, and route_optimization.local_distance_km.
-// The real schema has NO costs, travel legs or day titles yet, so `cost` (EUR),
-// `legs` (one per gap between items) and `title` below are dummy-only extras that
-// the backend would need to add before this can be wired to a ChatResponse.
+// The real schema has NO costs, travel legs or day titles yet, so `cost` (LKR,
+// for both travellers), `legs` (one per gap between items; `intercity` marks the
+// long drive) and `title` below are dummy-only extras that the backend would need
+// to add before this can be wired to a ChatResponse. Place names come from the
+// seeded Kandy data; Ella has no seeded places yet.
 const ITINERARY_DAYS = [
   {
     day_number: 1,
     date: "2026-10-12",
-    title: "Old Town & harbour",
-    route_optimization: { local_distance_km: 3.2 },
+    title: "Kandy heritage & lake",
+    route_optimization: { local_distance_km: 4.1 },
     items: [
       {
         candidate_id: "attr-1",
         category: "attraction",
-        name: "Old Town walking tour",
-        start_time: "09:30",
-        end_time: "11:30",
-        cost: 30,
+        name: "Temple of the Sacred Tooth Relic",
+        start_time: "09:00",
+        end_time: "11:00",
+        cost: 4000,
       },
       {
         candidate_id: "rest-1",
         category: "restaurant",
-        name: "Lunch at the harbour market",
+        name: "Lunch at Kandy Spice Garden",
         start_time: "12:00",
         end_time: "13:15",
-        cost: 28,
+        cost: 3600,
       },
       {
         candidate_id: "attr-2",
         category: "attraction",
-        name: "Castle hill viewpoint",
+        name: "Kandy Lake",
         start_time: "14:00",
-        end_time: "16:00",
-        cost: 22,
+        end_time: "15:30",
+        cost: 0,
       },
     ],
     legs: [
-      { mode: "Walk", duration_minutes: 8, cost: 0 },
-      { mode: "Tram", duration_minutes: 18, cost: 3 },
+      { mode: "Tuk-tuk", duration_minutes: 10, cost: 600 },
+      { mode: "Tuk-tuk", duration_minutes: 8, cost: 500 },
     ],
   },
   {
     day_number: 2,
     date: "2026-10-13",
-    title: "Belém & the river",
-    route_optimization: { local_distance_km: 7.4 },
+    title: "Kandy to Ella",
+    route_optimization: { local_distance_km: 9.4 },
     items: [
       {
         candidate_id: "attr-3",
         category: "attraction",
-        name: "Belém Tower and monastery",
-        start_time: "09:00",
-        end_time: "12:00",
-        cost: 24,
-      },
-      {
-        candidate_id: "rest-2",
-        category: "restaurant",
-        name: "Pastel de nata tasting and lunch",
-        start_time: "12:30",
-        end_time: "14:00",
-        cost: 26,
+        name: "Royal Botanical Gardens",
+        start_time: "08:00",
+        end_time: "10:00",
+        cost: 6000,
       },
       {
         candidate_id: "attr-4",
         category: "attraction",
-        name: "Riverside sunset walk",
-        start_time: "17:30",
-        end_time: "19:00",
+        name: "Nine Arch Bridge",
+        start_time: "15:00",
+        end_time: "16:00",
         cost: 0,
+      },
+      {
+        candidate_id: "rest-2",
+        category: "restaurant",
+        name: "Dinner in Ella town",
+        start_time: "19:00",
+        end_time: "20:30",
+        cost: 5000,
       },
     ],
     legs: [
-      { mode: "Tram", duration_minutes: 22, cost: 3 },
-      { mode: "Taxi", duration_minutes: 15, cost: 9 },
+      { mode: "Car", duration_minutes: 255, cost: 24000, intercity: true },
+      { mode: "Tuk-tuk", duration_minutes: 12, cost: 1200 },
     ],
   },
   {
     day_number: 3,
     date: "2026-10-14",
-    title: "Sintra day trip",
-    route_optimization: { local_distance_km: 58 },
+    title: "Ella viewpoints",
+    route_optimization: { local_distance_km: 14.8 },
     items: [
       {
         candidate_id: "attr-5",
         category: "attraction",
-        name: "Pena Palace",
-        start_time: "09:30",
-        end_time: "12:30",
-        cost: 32,
+        name: "Ella Rock",
+        start_time: "06:30",
+        end_time: "10:30",
+        cost: 3000,
       },
       {
         candidate_id: "rest-3",
         category: "restaurant",
-        name: "Lunch in Sintra village",
-        start_time: "13:00",
-        end_time: "14:15",
-        cost: 30,
+        name: "Lunch in Ella town",
+        start_time: "12:00",
+        end_time: "13:15",
+        cost: 4500,
       },
       {
         candidate_id: "attr-6",
         category: "attraction",
-        name: "Cabo da Roca viewpoint",
-        start_time: "16:00",
+        name: "Little Adam's Peak",
+        start_time: "15:30",
         end_time: "17:30",
         cost: 0,
       },
     ],
     legs: [
-      { mode: "Bus", duration_minutes: 12, cost: 4 },
-      { mode: "Bus", duration_minutes: 40, cost: 5 },
+      { mode: "Tuk-tuk", duration_minutes: 15, cost: 1200 },
+      { mode: "Tuk-tuk", duration_minutes: 10, cost: 800 },
     ],
   },
 ];
 
 const TRIP_FACTS = {
-  title: "Three days of food and walking in Lisbon",
-  places: "Lisbon · Belém · Sintra",
+  title: "Three days from Kandy to Ella",
+  places: "Kandy · Ella",
   travellers: "2 adults",
   pace: "Relaxed",
 };
@@ -137,17 +139,17 @@ const TRADEOFFS = [
   {
     tag: "Swapped",
     tone: "info",
-    text: "Belém moved to Day 2 morning — Day 1 afternoons showed long queues at the monastery, so the earlier slot avoids the crowd.",
+    text: "The Royal Botanical Gardens moved to Day 2 morning — it sits on the road out of Kandy, so it fills the time before the long drive to Ella without backtracking.",
   },
   {
     tag: "Kept",
     tone: "success",
-    text: "The harbour market lunch stayed on Day 1 despite the detour: it's the best-rated food stop within walking distance of the Old Town tour.",
+    text: "The private car for Kandy to Ella stayed despite the cost: the drive is about four hours, while the scenic train is closer to seven.",
   },
   {
     tag: "Dropped",
     tone: "warn",
-    text: "The Évora day trip — two hours each way doesn't fit a relaxed pace with two travellers.",
+    text: "Sigiriya — it's a long detour from Kandy and doesn't fit a relaxed pace with two travellers on a three-day trip.",
   },
 ];
 
@@ -169,32 +171,43 @@ const CATEGORY_TAGS = {
 
 const TABS = ["Summary", "Map", "Itinerary", "Budget"];
 
-// Dummy legs between the trip's days, consistent with the day distances above.
+// Dummy route legs, consistent with the day data above (Kandy to Ella is about
+// 137 km and roughly four hours by road).
 const ROUTE_LEGS = [
   {
     label: "Leg 1",
-    text: "Day 1 → Day 2 · Castle hill → Belém Tower, by tram",
-    distance_km: 6.1,
-    duration_minutes: 25,
+    text: "Day 1 → Day 2 · Kandy Lake → Royal Botanical Gardens, by tuk-tuk",
+    distance_km: 6.2,
+    duration_minutes: 20,
   },
   {
     label: "Leg 2",
-    text: "Day 2 → Day 3 · Belém → Sintra, by train",
-    distance_km: 28,
-    duration_minutes: 45,
+    text: "Day 2 · Royal Botanical Gardens → Nine Arch Bridge, Kandy to Ella by car",
+    distance_km: 137,
+    duration_minutes: 255,
+  },
+  {
+    label: "Leg 3",
+    text: "Day 2 → Day 3 · Nine Arch Bridge → Ella Rock trailhead, by tuk-tuk",
+    distance_km: 4.8,
+    duration_minutes: 15,
   },
 ];
 
 const DAY_COLORS = ["bg-accent", "bg-info", "bg-muted-500"];
 
-// Category keys mirror cost_estimator.py's output (transport_intercity is left
-// out: this sample trip stays in one region). Each maps from an itinerary item
-// category, so the breakdown is derived from ITINERARY_DAYS and always adds up
-// to the Itinerary tab's total.
+// Category keys mirror cost_estimator.py's output. Each maps from an itinerary
+// item category (legs map to local or intercity transport), so the breakdown is
+// derived from ITINERARY_DAYS and always adds up to the Itinerary tab's total.
 const BUDGET_CATEGORIES = [
   { key: "accommodation", label: "Accommodation", color: "bg-accent" },
   { key: "dining", label: "Dining", color: "bg-info" },
-  { key: "transport_local", label: "Transport", color: "bg-warn" },
+  {
+    key: "transport_intercity",
+    label: "Intercity transport",
+    color: "bg-success",
+  },
+  { key: "transport_local", label: "Local transport", color: "bg-warn" },
   { key: "activities", label: "Activities", color: "bg-accent-300" },
   { key: "miscellaneous", label: "Miscellaneous", color: "bg-muted-400" },
 ];
@@ -214,14 +227,14 @@ const INITIAL_MESSAGES = [
     id: "m1",
     role: "assistant",
     text: "Hi! Tell me where you'd like to go, for how long and what you enjoy, and I'll sketch a plan. Here's a sample of what a day can look like:",
-    stops: ["Old Town", "Harbour market", "Castle hill"],
+    stops: ["Sacred Tooth Relic", "Kandy Spice Garden", "Kandy Lake"],
     actions: ["Make it cheaper", "Add a rest day", "Regenerate Day 1"],
     itineraryDay: ITINERARY_DAYS[0],
   },
   {
     id: "m2",
     role: "user",
-    text: "Plan 3 days in Lisbon for two, we love food and walking.",
+    text: "Plan 3 days in Kandy and Ella for two, we love food and walking.",
   },
 ];
 
@@ -239,7 +252,13 @@ function formatDate(iso) {
 }
 
 function formatMoney(amount, freeLabel = "Free") {
-  return amount === 0 ? freeLabel : `€${amount.toLocaleString("en-US")}`;
+  return amount === 0 ? freeLabel : `LKR ${amount.toLocaleString("en-US")}`;
+}
+
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ""}`;
 }
 
 function daySpend(day) {
@@ -315,11 +334,11 @@ function SummaryTab() {
       <div className="flex flex-none flex-col gap-2 rounded-xl bg-inset p-4.5">
         <SectionLabel>What TripMate optimised for</SectionLabel>
         <p className="m-0 text-sm leading-relaxed text-muted-700">
-          Your plan keeps every day walkable: the Old Town tour and harbour
-          lunch sit together on Day 1, Belém gets a full morning before the
-          crowds on Day 2, and the Sintra day trip is saved for Day 3 so the
-          long transfer lands on a lighter schedule. Food stops are spread
-          across all three days.
+          Your plan keeps Day 1 walkable around Kandy — the Temple of the Sacred
+          Tooth Relic, a local lunch and Kandy Lake sit within a few kilometres
+          of each other. The long drive to Ella is on Day 2 with only light
+          stops around it, and Day 3 is saved for Ella&apos;s two viewpoints so
+          both land in clear morning and late-afternoon light.
         </p>
       </div>
 
@@ -500,7 +519,7 @@ function ItineraryTab() {
                             {tag && (
                               <PillTag tone={tag.tone}>{tag.label}</PillTag>
                             )}
-                            <span className="min-w-14 flex-none text-right text-helper text-muted-700">
+                            <span className="min-w-16 flex-none text-right text-helper text-muted-700">
                               {formatMoney(item.cost)}
                             </span>
                           </div>
@@ -513,7 +532,7 @@ function ItineraryTab() {
                                 {leg.mode}
                               </span>
                               <span className="text-helper text-muted-700">
-                                {leg.duration_minutes} min ·{" "}
+                                {formatDuration(leg.duration_minutes)} ·{" "}
                                 {formatMoney(leg.cost)}
                               </span>
                             </div>
@@ -601,7 +620,7 @@ function MapTab() {
               {leg.text}
             </span>
             <span className="text-helper text-muted-500">
-              {leg.distance_km} km · {leg.duration_minutes} min
+              {leg.distance_km} km · {formatDuration(leg.duration_minutes)}
             </span>
           </div>
         ))}
@@ -621,7 +640,8 @@ function BudgetTab() {
       amounts[ITEM_BUDGET_KEYS[item.category]] += item.cost;
     });
     day.legs.forEach((leg) => {
-      amounts.transport_local += leg.cost;
+      amounts[leg.intercity ? "transport_intercity" : "transport_local"] +=
+        leg.cost;
     });
   });
   const total = Object.values(amounts).reduce((sum, n) => sum + n, 0);
@@ -677,14 +697,14 @@ function BudgetTab() {
             <span
               className={`min-w-22 text-right text-body-sm font-medium ${row.amount > 0 ? "" : "text-muted-500"}`}
             >
-              {formatMoney(row.amount, "€0")}
+              {formatMoney(row.amount, "LKR 0")}
             </span>
           </div>
         ))}
       </div>
       <p className="m-0 text-helper text-muted-600">
         Accommodation and miscellaneous aren&apos;t part of the sample itinerary
-        yet, so they show as €0.
+        yet, so they show as LKR 0.
       </p>
     </>
   );
