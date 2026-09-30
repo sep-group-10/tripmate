@@ -914,7 +914,12 @@ function TripPlanChatPage() {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
-  const replyTimer = useRef(null);
+  // Planning-session id. Nothing sets it from a real reply yet; it will be set
+  // from ChatResponse.session.id on the first real reply, then sent back so
+  // later messages continue the same session.
+  const [sessionId, setSessionId] = useState(null);
+  const [error, setError] = useState(null);
+  const mounted = useRef(true);
   const replyCount = useRef(0);
   const listEndRef = useRef(null);
 
@@ -922,11 +927,33 @@ function TripPlanChatPage() {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
 
-  useEffect(() => () => clearTimeout(replyTimer.current), []);
+  // Lets an in-flight reply be dropped if the page unmounts before it lands.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const canSend = input.trim().length > 0 && !thinking;
 
-  const handleSend = (event) => {
+  // AI INTEGRATION POINT. Replace this function's body with a real POST to
+  // /api/v1/chat (or /api/v1/chat/{session_id} for a continuing session) once
+  // the backend planner is ready. See backend/app/schemas/chat.py for the real
+  // ChatResponse shape this page's message data already mirrors. It should
+  // resolve with a ChatResponse ({ assistant_message, session, itinerary })
+  // and reject on failure. The dummy ignores both arguments.
+  // eslint-disable-next-line no-unused-vars
+  const requestAssistantReply = (text, currentSessionId) =>
+    new Promise((resolve) => {
+      setTimeout(() => {
+        const reply = DUMMY_REPLIES[replyCount.current % DUMMY_REPLIES.length];
+        replyCount.current += 1;
+        resolve({ assistant_message: reply, session: null, itinerary: null });
+      }, REPLY_DELAY_MS);
+    });
+
+  const handleSend = async (event) => {
     event.preventDefault();
     if (!canSend) return;
 
@@ -936,17 +963,29 @@ function TripPlanChatPage() {
       { id: `u-${Date.now()}`, role: "user", text },
     ]);
     setInput("");
+    setError(null);
     setThinking(true);
 
-    replyTimer.current = setTimeout(() => {
-      const reply = DUMMY_REPLIES[replyCount.current % DUMMY_REPLIES.length];
-      replyCount.current += 1;
+    try {
+      const response = await requestAssistantReply(text, sessionId);
+      if (!mounted.current) return;
+      if (response.session?.id) setSessionId(response.session.id);
       setMessages((prev) => [
         ...prev,
-        { id: `a-${Date.now()}`, role: "assistant", text: reply },
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: response.assistant_message,
+        },
       ]);
-      setThinking(false);
-    }, REPLY_DELAY_MS);
+    } catch {
+      // Unreachable today (the dummy never rejects); this is where a failed
+      // real call lands so the thinking indicator can't get stuck.
+      if (!mounted.current) return;
+      setError("Something went wrong — try again");
+    } finally {
+      if (mounted.current) setThinking(false);
+    }
   };
 
   return (
@@ -979,6 +1018,11 @@ function TripPlanChatPage() {
               />
             ))}
             {thinking && <TypingIndicator />}
+            {error && (
+              <p role="alert" className="m-0 text-body-sm text-danger">
+                {error}
+              </p>
+            )}
             <div ref={listEndRef} />
           </div>
 
