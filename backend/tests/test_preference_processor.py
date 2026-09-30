@@ -30,7 +30,25 @@ def test_preference_processor_returns_preference_result():
         destination="Kandy",
         missing_fields=[],
     )
-    processor = _processor_with_result(expected_result)
+    expected_result = expected_result.model_copy(
+        update={
+            "missing_fields": [
+                "dates",
+                "duration_days",
+                "budget",
+                "travelers",
+                "interests",
+                "transport_type",
+            ]
+        }
+    )
+    processor = _processor_with_result(
+        PreferenceResult(
+            intent="trip_planning",
+            destination="Kandy",
+            missing_fields=[],
+        )
+    )
 
     result = processor.process([HumanMessage(content="I want to visit Kandy.")])
 
@@ -70,14 +88,14 @@ def test_preference_processor_extracts_trip_preferences():
     assert result.travelers == 2
     assert result.interests == ["culture", "nature"]
     assert result.transport_type == "train"
-    assert result.missing_fields == []
+    assert result.missing_fields == ["dates"]
 
 
 def test_preference_processor_handles_normal_conversation():
     processor = _processor_with_result(
         PreferenceResult(
             intent="normal_conversation",
-            missing_fields=[],
+            missing_fields=["budget"],
         )
     )
 
@@ -101,9 +119,11 @@ def test_preference_processor_reports_missing_trip_preferences():
     assert result.intent == "trip_planning"
     assert result.destination == "Kandy"
     assert result.missing_fields == [
+        "dates",
         "duration_days",
         "budget",
         "travelers",
+        "interests",
         "transport_type",
     ]
 

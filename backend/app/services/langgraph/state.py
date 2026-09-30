@@ -9,6 +9,7 @@ class PlanningState(TypedDict):
 
     session: AgentSession
     max_iterations: NotRequired[int]
+    constraint_validation_current: NotRequired[bool]
     planner_decision: PlannerDecision | None
     critic_decision: CriticDecision | None
     last_failure: str | None

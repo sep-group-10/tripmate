@@ -16,6 +16,12 @@ class PlanningSession(Base):
         default=uuid.uuid4,
     )
 
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
     trip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("trips.id"),

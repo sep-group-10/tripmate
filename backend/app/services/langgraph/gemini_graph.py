@@ -2,11 +2,12 @@
 # including Gemini tool calling and structured responses.
 # The main TripMate planning workflow is implemented separately
 # in planning_graph.py.
+import os
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -26,15 +27,19 @@ class GeminiState(TypedDict):
 
 
 def get_model():
-    return ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash-lite",
+    return ChatOpenAI(
+        model="google/gemini-2.5-flash",
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
         temperature=0,
     ).bind_tools([get_tripmate_status])
 
 
 def get_structured_model():
-    return ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash-lite",
+    return ChatOpenAI(
+        model="google/gemini-2.5-flash",
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
         temperature=0,
     ).with_structured_output(GeminiResponse)
 

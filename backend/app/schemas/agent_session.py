@@ -20,6 +20,7 @@ class AgentSession(BaseModel):
     itinerary: dict[str, Any] | None = None
     optimised_route: dict[str, Any] | None = None
     constraint_result: dict[str, Any] | None = None
+    critic_result: dict[str, Any] | None = None
 
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
     tool_execution_order: list[str] = Field(default_factory=list)
