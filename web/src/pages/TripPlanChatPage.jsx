@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, SendHorizontal } from "lucide-react";
 
-const SUGGESTIONS = ["Make it cheaper", "Add a rest day", "More food stops"];
+const SUGGESTIONS = ["Swap a day", "Cut LKR 40,000", "Add a beach night"];
 
 const REPLY_DELAY_MS = 1000;
 
@@ -79,12 +79,17 @@ function ItineraryPreview({ day }) {
 function MessageBubble({ message }) {
   const isUser = message.role === "user";
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}
+    >
+      <span className="rounded-badge bg-muted-300 px-2 py-[3px] font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
+        {isUser ? "You" : "TripMate"}
+      </span>
       <div
-        className={`max-w-[85%] px-4 py-3 text-body-sm leading-relaxed ${
+        className={`max-w-[86%] px-4 py-3.5 text-[14.5px] leading-[1.62] ${
           isUser
-            ? "rounded-card rounded-br-badge bg-muted-900 text-white"
-            : "rounded-card rounded-bl-badge border border-border bg-surface text-ink shadow-control"
+            ? "rounded-[16px_16px_4px_16px] bg-muted-900 text-white"
+            : "rounded-[16px_16px_16px_4px] border border-border bg-inset text-ink"
         }`}
       >
         <p className="m-0">{message.text}</p>
@@ -98,16 +103,12 @@ function MessageBubble({ message }) {
 
 function TypingIndicator() {
   return (
-    <div className="flex justify-start" role="status" aria-label="Thinking">
-      <div className="flex items-center gap-1.5 rounded-card rounded-bl-badge border border-border bg-surface px-4 py-3.5 shadow-control">
-        {[0, 150, 300].map((delay) => (
-          <span
-            key={delay}
-            className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-500"
-            style={{ animationDelay: `${delay}ms` }}
-          />
-        ))}
-      </div>
+    <div
+      className="flex items-center gap-2.5 text-body-sm text-muted-600"
+      role="status"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+      <span>TripMate is thinking…</span>
     </div>
   );
 }
@@ -182,9 +183,9 @@ function TripPlanChatPage() {
       <main className="flex min-h-0 flex-1 justify-center px-6 pb-6">
         <section
           aria-label="Trip planning chat"
-          className="flex min-h-0 w-full max-w-190 flex-col overflow-hidden rounded-card bg-surface shadow-card"
+          className="flex min-h-0 w-full max-w-190 flex-col overflow-hidden rounded-[14px] bg-surface shadow-control"
         >
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-bg/60 p-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto p-5.5">
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
@@ -207,17 +208,17 @@ function TripPlanChatPage() {
                 type="text"
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="Describe your trip or ask for a change..."
+                placeholder="Ask for a change — 'swap Day 3 for something quieter'"
                 aria-label="Message"
-                className="min-h-11 flex-1 rounded-pill border border-border bg-surface px-4 py-2 text-sm text-ink shadow-inset outline-none"
+                className="min-h-10 flex-1 rounded-pill border border-border bg-surface px-4 py-2 text-sm text-ink shadow-inset outline-none"
               />
               <button
                 type="submit"
                 disabled={!canSend}
                 aria-label="Send message"
-                className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-accent text-white disabled:cursor-not-allowed disabled:bg-muted-400"
+                className="flex h-9.5 w-9.5 flex-none items-center justify-center rounded-full bg-accent text-white disabled:cursor-not-allowed disabled:bg-muted-400"
               >
-                <SendHorizontal size={18} aria-hidden="true" />
+                <SendHorizontal size={16} aria-hidden="true" />
               </button>
             </form>
           </div>

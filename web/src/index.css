@@ -18,6 +18,7 @@
 @theme {
   --color-bg: #eceded;
   --color-surface: #ffffff;
+  --color-inset: #f5f6f6;
   --color-ink: #17191a;
   --color-accent: #e8532b;
   --color-accent-100: #fdefeb;
