@@ -10,11 +10,15 @@ const REPLY_DELAY_MS = 1000;
 
 // Dummy content is shaped loosely like ChatItineraryDay / ChatItineraryItem
 // (backend/app/schemas/chat.py) so it can be swapped for a real ChatResponse.
+// `stops` are place names (in a real response, itinerary items[].name) and
+// `actions` are short follow-up prompts shown under an assistant message.
 const INITIAL_MESSAGES = [
   {
     id: "m1",
     role: "assistant",
     text: "Hi! Tell me where you'd like to go, for how long and what you enjoy, and I'll sketch a plan. Here's a sample of what a day can look like:",
+    stops: ["Old Town", "Harbour market", "Castle hill"],
+    actions: ["Make it cheaper", "Add a rest day", "Regenerate Day 1"],
     itineraryDay: {
       day_number: 1,
       date: "2026-10-12",
@@ -76,7 +80,7 @@ function ItineraryPreview({ day }) {
   );
 }
 
-function MessageBubble({ message }) {
+function MessageBubble({ message, onAction }) {
   const isUser = message.role === "user";
   return (
     <div
@@ -96,7 +100,35 @@ function MessageBubble({ message }) {
         {message.itineraryDay && (
           <ItineraryPreview day={message.itineraryDay} />
         )}
+        {message.stops?.length > 0 && (
+          // Display-only for now: these become real buttons once the
+          // Itinerary/Map tabs exist and a stop can be focused there.
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {message.stops.map((stop) => (
+              <span
+                key={stop}
+                className="rounded-pill bg-success-100 px-2.5 py-1 text-caption font-medium text-success-700"
+              >
+                {stop}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
+      {message.actions?.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {message.actions.map((action) => (
+            <button
+              key={action}
+              type="button"
+              onClick={() => onAction(action)}
+              className="rounded-pill bg-accent-100 px-3.25 py-1.75 text-[13px] font-medium text-accent-700"
+            >
+              {action}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -187,7 +219,11 @@ function TripPlanChatPage() {
         >
           <div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto p-5.5">
             {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onAction={setInput}
+              />
             ))}
             {thinking && <TypingIndicator />}
             <div ref={listEndRef} />
