@@ -99,6 +99,11 @@ class User(Base):
         nullable=True,
     )
 
+    preferred_pace: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
     preferred_accommodation: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,

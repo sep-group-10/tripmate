@@ -6,11 +6,9 @@ import Button from "../components/Button";
 import SectionCard from "../components/SectionCard";
 import ChoiceChip from "../components/ChoiceChip";
 import SavedMessage from "../components/SavedMessage";
-import ToggleSwitch from "../components/ToggleSwitch";
 import PasswordChangeForm from "../components/PasswordChangeForm";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { validateFullName } from "../utils/validation";
-import { loadProfile, saveProfile } from "../utils/profileStorage";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
@@ -27,22 +25,7 @@ const INTEREST_OPTIONS = [
   "Nightlife",
 ];
 
-// Email is deliberately excluded from the PUT body below: the real
-// PUT /users/me contract (backend/app/schemas/profile.py) only allows
-// full_name and preference fields, with extra="forbid" - sending email
-// would reject the whole request. Email is shown read-only for this
-// reason, not as an oversight.
-//
-// Account Settings: password change now calls the real
-// POST /auth/change-password. Email notifications still has no backend
-// field (no notifications column on User yet), so it stays on the
-// local-only profileStorage behavior below. Travel Preferences partially
-// overlaps the real contract
-// (typical_budget_range and interests both exist on ProfileUpdateRequest)
-// but "pace" has no backend equivalent, and this issue (C4.1) is scoped to
-// register -> login -> profile's Personal Information section only, so
-// full preference wiring is left for a later issue; it also stays
-// local-only for now.
+// Travel preferences are stored on the authenticated user profile.
 const personalValidators = { fullName: validateFullName };
 
 function useFlash(duration = 2000) {
@@ -69,8 +52,7 @@ function ProfilePage() {
   const { login, logout, clearSession, role } = useAuth();
   const navigate = useNavigate();
 
-  // Personal information comes from the real GET /users/me on mount, kept
-  // separate from the localStorage-backed prefs below.
+  // Profile information and travel preferences come from GET /users/me.
   const [email, setEmail] = useState("");
   const [loginProvider, setLoginProvider] = useState("local");
   const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
@@ -89,6 +71,13 @@ function ProfilePage() {
   const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | error
   const [saveError, setSaveError] = useState("");
 
+  const [budget, setBudget] = useState("Moderate");
+  const [pace, setPace] = useState("Relaxed");
+  const [interests, setInterests] = useState(["Culture", "Nature", "Food"]);
+  const [savedPrefs, flashPrefs] = useFlash();
+  const [prefsSaveStatus, setPrefsSaveStatus] = useState("idle");
+  const [prefsSaveError, setPrefsSaveError] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     api
@@ -99,15 +88,15 @@ function ProfilePage() {
         setPersonalValues({ fullName: me.full_name });
         setEmail(me.email);
         setLoginProvider(me.login_provider);
+        setBudget(me.typical_budget_range || "Moderate");
+        setPace(me.preferred_pace || "Relaxed");
+        setInterests(me.interests || ["Culture", "Nature", "Food"]);
         setLoadStatus("ready");
       })
       .catch((error) => {
         if (cancelled) return;
         const { code, message } = parseApiError(error);
         if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
-          // See AuthContext's clearSession() comment: no refresh endpoint
-          // exists yet, so this is treated as a full session expiry.
-          // ProtectedRoute redirects to /login once isAuthenticated flips.
           clearSession();
           return;
         }
@@ -160,22 +149,6 @@ function ProfilePage() {
     navigate("/login", { replace: true });
   };
 
-  const [localPrefs, setLocalPrefs] = useState(() => loadProfile());
-  const [emailNotifications, setEmailNotifications] = useState(
-    localPrefs.emailNotifications,
-  );
-
-  const handleToggleEmailNotifications = () => {
-    const next = saveProfile({ emailNotifications: !emailNotifications });
-    setLocalPrefs(next);
-    setEmailNotifications(next.emailNotifications);
-  };
-
-  const [budget, setBudget] = useState(localPrefs.budget);
-  const [pace, setPace] = useState(localPrefs.pace);
-  const [interests, setInterests] = useState(localPrefs.interests);
-  const [savedPrefs, flashPrefs] = useFlash();
-
   const toggleInterest = (label) => {
     setInterests((prev) =>
       prev.includes(label)
@@ -184,10 +157,28 @@ function ProfilePage() {
     );
   };
 
-  const handleSavePreferences = (event) => {
+  const handleSavePreferences = async (event) => {
     event.preventDefault();
-    setLocalPrefs(saveProfile({ budget, pace, interests }));
-    flashPrefs();
+    setPrefsSaveStatus("saving");
+    setPrefsSaveError("");
+    try {
+      const response = await api.put("/api/v1/users/me", {
+        typical_budget_range: budget,
+        preferred_pace: pace,
+        interests,
+      });
+      login(response.data.data);
+      flashPrefs();
+      setPrefsSaveStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setPrefsSaveError(message);
+      setPrefsSaveStatus("error");
+    }
   };
 
   const [exportStatus, setExportStatus] = useState("idle"); // idle | exporting | error
@@ -372,15 +363,6 @@ function ProfilePage() {
               onSessionExpired={clearSession}
             />
           )}
-
-          <div className="rounded-lg bg-bg p-4">
-            <ToggleSwitch
-              checked={emailNotifications}
-              onChange={handleToggleEmailNotifications}
-              label="Email notifications"
-              description="Trip updates, price drops and itinerary reminders"
-            />
-          </div>
         </SectionCard>
 
         <SectionCard title="Travel preferences" badge="Planning">
@@ -440,9 +422,25 @@ function ProfilePage() {
               </span>
             </div>
 
+            {prefsSaveError && (
+              <p
+                className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger"
+                role="alert"
+              >
+                {prefsSaveError}
+              </p>
+            )}
+
             <div className="flex items-center justify-end gap-3">
               <SavedMessage show={savedPrefs} text="Preferences saved" />
-              <Button type="submit">Save preferences</Button>
+              <Button
+                type="submit"
+                disabled={
+                  prefsSaveStatus === "saving" || loadStatus !== "ready"
+                }
+              >
+                {prefsSaveStatus === "saving" ? "Saving…" : "Save preferences"}
+              </Button>
             </div>
           </form>
         </SectionCard>

@@ -58,6 +58,7 @@ class UserResponse(BaseModel):
     is_email_verified: bool
     login_provider: str
     preferred_travel_style: str | None
+    preferred_pace: str | None
     preferred_accommodation: str | None
     typical_budget_range: str | None
     interests: list[str] | None
