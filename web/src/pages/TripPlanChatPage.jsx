@@ -23,6 +23,7 @@ const ITINERARY_DAYS = [
     date: "2026-10-12",
     title: "Kandy heritage & lake",
     route_optimization: { local_distance_km: 4.1 },
+    hotel_id: "hotel-kandy",
     items: [
       {
         candidate_id: "attr-1",
@@ -59,6 +60,7 @@ const ITINERARY_DAYS = [
     date: "2026-10-13",
     title: "Kandy to Ella",
     route_optimization: { local_distance_km: 9.4 },
+    hotel_id: "hotel-ella",
     items: [
       {
         candidate_id: "attr-3",
@@ -95,6 +97,7 @@ const ITINERARY_DAYS = [
     date: "2026-10-14",
     title: "Ella viewpoints",
     route_optimization: { local_distance_km: 14.8 },
+    hotel_id: null, // departure day: no overnight stay
     items: [
       {
         candidate_id: "attr-5",
@@ -127,6 +130,21 @@ const ITINERARY_DAYS = [
     ],
   },
 ];
+
+// Hotel data as cost_estimator.py sees it: each day carries the hotel_id of the
+// night it ends with, the itinerary maps destination -> hotel_id
+// (hotel_by_destination), and the nightly price lives on the hotel candidate,
+// which is stood in for by HOTELS here. ChatItineraryDay's hotel_location is
+// left out because nothing on this page draws it yet. 3 days = 2 nights.
+const HOTEL_BY_DESTINATION = { Kandy: "hotel-kandy", Ella: "hotel-ella" };
+
+const HOTELS = {
+  "hotel-kandy": { name: "Hill View Kandy", price_per_night: 14000 },
+  "hotel-ella": { name: "Ella guesthouse", price_per_night: 12000 },
+};
+
+// Same rate as _MISC_RATE in cost_estimator.py.
+const MISC_RATE = 0.1;
 
 const TRIP_FACTS = {
   title: "Three days from Kandy to Ella",
@@ -261,8 +279,48 @@ function formatDuration(minutes) {
   return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ""}`;
 }
 
+function dayHotel(day) {
+  return day.hotel_id ? HOTELS[day.hotel_id] : null;
+}
+
+// One night per day that has a hotel_id, priced per night, like
+// _accommodation_cost in cost_estimator.py.
 function daySpend(day) {
-  return [...day.items, ...day.legs].reduce((sum, row) => sum + row.cost, 0);
+  const hotel = dayHotel(day);
+  return (
+    [...day.items, ...day.legs].reduce((sum, row) => sum + row.cost, 0) +
+    (hotel ? hotel.price_per_night : 0)
+  );
+}
+
+// Shared by the Itinerary and Budget tabs so their totals always agree.
+// Miscellaneous is MISC_RATE of the other categories' subtotal, as in
+// cost_estimator.py. The real values exist there but aren't exposed on
+// ChatResponse yet (and there they are min/max ranges, not single numbers).
+function computeBudget() {
+  const amounts = Object.fromEntries(
+    BUDGET_CATEGORIES.map(({ key }) => [key, 0]),
+  );
+  ITINERARY_DAYS.forEach((day) => {
+    day.items.forEach((item) => {
+      amounts[ITEM_BUDGET_KEYS[item.category]] += item.cost;
+    });
+    day.legs.forEach((leg) => {
+      amounts[leg.intercity ? "transport_intercity" : "transport_local"] +=
+        leg.cost;
+    });
+  });
+  // Nights per hotel = days sharing its hotel_id, like _nights_per_destination.
+  amounts.accommodation = Object.values(HOTEL_BY_DESTINATION).reduce(
+    (sum, hotelId) =>
+      sum +
+      HOTELS[hotelId].price_per_night *
+        ITINERARY_DAYS.filter((day) => day.hotel_id === hotelId).length,
+    0,
+  );
+  const subtotal = Object.values(amounts).reduce((sum, n) => sum + n, 0);
+  amounts.miscellaneous = Math.round(subtotal * MISC_RATE);
+  return { amounts, total: subtotal + amounts.miscellaneous };
 }
 
 function SectionLabel({ children }) {
@@ -365,7 +423,7 @@ function ItineraryTab() {
   const [openDay, setOpenDay] = useState(1);
 
   const stopCount = ITINERARY_DAYS.reduce((n, d) => n + d.items.length, 0);
-  const totalSpend = ITINERARY_DAYS.reduce((n, d) => n + daySpend(d), 0);
+  const totalSpend = computeBudget().total;
 
   const pickDay = (dayNumber) => {
     setActiveDay(dayNumber);
@@ -541,6 +599,22 @@ function ItineraryTab() {
                       </div>
                     );
                   })}
+                  {dayHotel(day) && (
+                    <TimelineRow>
+                      <span />
+                      <div className="mt-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-dashed border-muted-300 px-3.5 py-2.5">
+                        <span className="flex-none font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
+                          Stay
+                        </span>
+                        <span className="min-w-0 flex-1 text-helper text-muted-700">
+                          Overnight at {dayHotel(day).name}
+                        </span>
+                        <span className="flex-none text-helper text-muted-700">
+                          {formatMoney(dayHotel(day).price_per_night)}
+                        </span>
+                      </div>
+                    </TimelineRow>
+                  )}
                   {/* Display-only for now, like the chat stop chips: these need
                       the backend to support editing a single day. */}
                   <div className="flex gap-2 pt-1 pl-9.5">
@@ -630,21 +704,7 @@ function MapTab() {
 }
 
 function BudgetTab() {
-  // The real values come from cost_estimator.py but aren't exposed on
-  // ChatResponse yet (and there they are min/max ranges, not single numbers).
-  const amounts = Object.fromEntries(
-    BUDGET_CATEGORIES.map(({ key }) => [key, 0]),
-  );
-  ITINERARY_DAYS.forEach((day) => {
-    day.items.forEach((item) => {
-      amounts[ITEM_BUDGET_KEYS[item.category]] += item.cost;
-    });
-    day.legs.forEach((leg) => {
-      amounts[leg.intercity ? "transport_intercity" : "transport_local"] +=
-        leg.cost;
-    });
-  });
-  const total = Object.values(amounts).reduce((sum, n) => sum + n, 0);
+  const { amounts, total } = computeBudget();
   const rows = BUDGET_CATEGORIES.map((category) => ({
     ...category,
     amount: amounts[category.key],
@@ -702,10 +762,6 @@ function BudgetTab() {
           </div>
         ))}
       </div>
-      <p className="m-0 text-helper text-muted-600">
-        Accommodation and miscellaneous aren&apos;t part of the sample itinerary
-        yet, so they show as LKR 0.
-      </p>
     </>
   );
 }
