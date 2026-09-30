@@ -7,6 +7,7 @@ import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ProfilePage from "../pages/ProfilePage";
+import TripPlanChatPage from "../pages/TripPlanChatPage";
 import AdminLayout from "../pages/admin/AdminLayout";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import DestinationsList from "../pages/admin/DestinationsList";
@@ -31,6 +32,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trip-plan"
+        element={
+          <ProtectedRoute>
+            <TripPlanChatPage />
           </ProtectedRoute>
         }
       />
