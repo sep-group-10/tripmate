@@ -2,8 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import Modal from "../components/Modal";
+import Button from "../components/Button";
+import SectionCard from "../components/SectionCard";
+import ChoiceChip from "../components/ChoiceChip";
+import SavedMessage from "../components/SavedMessage";
+import ToggleSwitch from "../components/ToggleSwitch";
+import PasswordChangeForm from "../components/PasswordChangeForm";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
-import { validateFullName, validatePassword } from "../utils/validation";
+import { validateFullName } from "../utils/validation";
 import { loadProfile, saveProfile } from "../utils/profileStorage";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
@@ -57,43 +63,6 @@ function initials(name) {
     .map((word) => word[0])
     .join("")
     .toUpperCase();
-}
-
-function SectionCard({ title, badge, children }) {
-  return (
-    <section className="overflow-hidden rounded-card bg-surface shadow-control">
-      <div className="flex items-center justify-between gap-4 border-b border-divider px-7 py-4.5">
-        <h2 className="font-heading m-0 text-[17px] font-semibold tracking-tight">
-          {title}
-        </h2>
-        <span className="rounded-badge bg-muted-300 px-2 py-[3px] font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
-          {badge}
-        </span>
-      </div>
-      <div className="flex flex-col gap-6 p-7">{children}</div>
-    </section>
-  );
-}
-
-function ChoiceChip({ label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${
-        active
-          ? "bg-accent-100 text-accent-700"
-          : "border border-border bg-surface text-ink shadow-control"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SavedMessage({ show, text }) {
-  if (!show) return null;
-  return <span className="text-helper text-success">{text}</span>;
 }
 
 function ProfilePage() {
@@ -192,61 +161,9 @@ function ProfilePage() {
   };
 
   const [localPrefs, setLocalPrefs] = useState(() => loadProfile());
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [currentPasswordError, setCurrentPasswordError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordStatus, setPasswordStatus] = useState("idle"); // idle | saving | error
-  const [savedPassword, flashPassword] = useFlash();
   const [emailNotifications, setEmailNotifications] = useState(
     localPrefs.emailNotifications,
   );
-
-  const handleUpdatePassword = async (event) => {
-    event.preventDefault();
-
-    if (!currentPassword) {
-      setCurrentPasswordError("Enter your current password");
-      return;
-    }
-    const newPasswordError = validatePassword(newPassword);
-    if (newPasswordError) {
-      setPasswordError(newPasswordError);
-      return;
-    }
-
-    setCurrentPasswordError("");
-    setPasswordError("");
-    setPasswordStatus("saving");
-    try {
-      const response = await api.post("/api/v1/auth/change-password", {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-      login(response.data.data.user);
-      setCurrentPassword("");
-      setNewPassword("");
-      setPasswordStatus("idle");
-      flashPassword();
-    } catch (error) {
-      const { code, message, details } = parseApiError(error);
-      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
-        clearSession();
-        return;
-      }
-      if (code === "INVALID_CREDENTIALS") {
-        setCurrentPasswordError(message);
-      } else if (code === "VALIDATION_ERROR" && details.length > 0) {
-        const newPasswordDetail = details.find(
-          (detail) => detail.field === "new_password",
-        );
-        setPasswordError(newPasswordDetail?.message ?? message);
-      } else {
-        setPasswordError(message);
-      }
-      setPasswordStatus("error");
-    }
-  };
 
   const handleToggleEmailNotifications = () => {
     const next = saveProfile({ emailNotifications: !emailNotifications });
@@ -345,9 +262,9 @@ function ProfilePage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
+            {/* <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
               Verified traveller
-            </span>
+            </span> */}
             {ADMIN_ROLES.includes(role) && (
               <Link
                 to="/admin"
@@ -356,13 +273,13 @@ function ProfilePage() {
                 Admin
               </Link>
             )}
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleLogout}
-              className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
+              className="px-3.5 py-1.5 text-xs"
             >
               Log out
-            </button>
+            </Button>
           </div>
         </header>
 
@@ -373,18 +290,12 @@ function ProfilePage() {
             </span>
             <div className="flex flex-col gap-1.5">
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
-                >
+                <Button variant="outline" className="px-3.5 py-1.5 text-xs">
                   Change photo
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-700"
-                >
+                </Button>
+                <Button variant="ghost" className="px-3.5 py-1.5 text-xs">
                   Remove
-                </button>
+                </Button>
               </div>
               <span className="text-helper text-muted-600">
                 JPG or PNG, up to 2 MB.
@@ -441,103 +352,35 @@ function ProfilePage() {
 
               <div className="flex items-center justify-end gap-3">
                 <SavedMessage show={savedProfile} text="Saved" />
-                <button
-                  type="submit"
-                  disabled={saveStatus === "saving"}
-                  className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
+                <Button type="submit" disabled={saveStatus === "saving"}>
                   {saveStatus === "saving" ? "Saving…" : "Save changes"}
-                </button>
+                </Button>
               </div>
             </form>
           )}
         </SectionCard>
 
         <SectionCard title="Account settings" badge="Security">
-          <form
-            onSubmit={handleUpdatePassword}
-            noValidate
-            className="flex flex-col gap-6"
-          >
-            {loginProvider === "google" ? (
-              <p className="m-0 rounded-lg bg-bg px-4 py-3 text-sm text-muted-600">
-                You signed in with Google, so there&apos;s no password to update
-                here.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormInput
-                  id="currentPassword"
-                  label="Current password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={currentPassword}
-                  onChange={(event) => {
-                    setCurrentPassword(event.target.value);
-                    setCurrentPasswordError("");
-                  }}
-                  error={currentPasswordError}
-                />
-                <FormInput
-                  id="newPassword"
-                  label="New password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters"
-                  value={newPassword}
-                  onChange={(event) => {
-                    setNewPassword(event.target.value);
-                    setPasswordError("");
-                  }}
-                  error={passwordError}
-                />
-              </div>
-            )}
+          {loginProvider === "google" ? (
+            <p className="m-0 rounded-lg bg-bg px-4 py-3 text-sm text-muted-600">
+              You signed in with Google, so there&apos;s no password to update
+              here.
+            </p>
+          ) : (
+            <PasswordChangeForm
+              onSuccess={(user) => login(user)}
+              onSessionExpired={clearSession}
+            />
+          )}
 
-            <div className="flex flex-col gap-3.5 rounded-lg bg-bg p-4">
-              <div className="flex items-center justify-between gap-6">
-                <div>
-                  <div className="text-sm font-medium">Email notifications</div>
-                  <div className="text-helper text-muted-600">
-                    Trip updates, price drops and itinerary reminders
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={emailNotifications}
-                  onClick={handleToggleEmailNotifications}
-                  className={`relative h-[22px] w-[38px] flex-none rounded-pill transition-colors ${
-                    emailNotifications ? "bg-accent" : "bg-muted-400"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow-control transition-transform ${
-                      emailNotifications
-                        ? "translate-x-[19px]"
-                        : "translate-x-[3px]"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {loginProvider !== "google" && (
-              <div className="flex items-center justify-end gap-3">
-                <SavedMessage show={savedPassword} text="Password updated" />
-                <button
-                  type="submit"
-                  disabled={passwordStatus === "saving"}
-                  className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {passwordStatus === "saving"
-                    ? "Updating…"
-                    : "Update password"}
-                </button>
-              </div>
-            )}
-          </form>
+          <div className="rounded-lg bg-bg p-4">
+            <ToggleSwitch
+              checked={emailNotifications}
+              onChange={handleToggleEmailNotifications}
+              label="Email notifications"
+              description="Trip updates, price drops and itinerary reminders"
+            />
+          </div>
         </SectionCard>
 
         <SectionCard title="Travel preferences" badge="Planning">
@@ -599,12 +442,7 @@ function ProfilePage() {
 
             <div className="flex items-center justify-end gap-3">
               <SavedMessage show={savedPrefs} text="Preferences saved" />
-              <button
-                type="submit"
-                className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
-              >
-                Save preferences
-              </button>
+              <Button type="submit">Save preferences</Button>
             </div>
           </form>
         </SectionCard>
@@ -618,14 +456,14 @@ function ProfilePage() {
                 file.
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleExportData}
               disabled={exportStatus === "exporting"}
-              className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+              className="px-4 py-2"
             >
               {exportStatus === "exporting" ? "Preparing…" : "Export data"}
-            </button>
+            </Button>
           </div>
           {exportStatus === "error" && (
             <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
@@ -642,13 +480,13 @@ function ProfilePage() {
                 Permanently deactivates your account. This cannot be undone.
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="dangerOutline"
               onClick={() => setShowDeleteModal(true)}
-              className="rounded-full border border-danger px-4 py-2 text-sm font-medium text-danger shadow-control"
+              className="px-4 py-2"
             >
               Delete account
-            </button>
+            </Button>
           </div>
         </SectionCard>
       </div>
@@ -664,29 +502,29 @@ function ProfilePage() {
           }}
           footer={
             <>
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeletePassword("");
                   setDeleteError("");
                 }}
                 disabled={deleteStatus === "deleting"}
-                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+                className="px-4 py-2"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={handleDeleteAccount}
                 disabled={
                   deleteStatus === "deleting" ||
                   (loginProvider !== "google" && !deletePassword)
                 }
-                className="rounded-full bg-danger px-4 py-2 text-sm font-medium text-white shadow-control hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                className="px-4 py-2"
               >
                 {deleteStatus === "deleting" ? "Deleting…" : "Delete account"}
-              </button>
+              </Button>
             </>
           }
         >
