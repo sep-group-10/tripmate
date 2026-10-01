@@ -187,7 +187,7 @@ def _install_deterministic_planning_graph(
                     }
                 ],
                 "hotel_id": "hotel-1",
-                "hotel_location": "None",
+                "hotel_location": None,
                 "warnings": [],
             }
         )
