@@ -1,3 +1,5 @@
+import EntityPhotoCarousel from "./EntityPhotoCarousel";
+
 const TAG_TONE_CLASSES = {
   accent: "bg-accent-100 text-accent-700",
   warn: "bg-warn-100 text-warn",
@@ -5,15 +7,17 @@ const TAG_TONE_CLASSES = {
   success: "bg-success-100 text-success",
 };
 
-/** Shared admin list card: name/location/rating header, a tone-coded tag,
- * a description, a metrics row, optional chips (e.g. amenities), and the
- * standard Edit/Preview/Delete row. Used by all 4 entity lists in C3.1 so
- * the layout isn't duplicated per entity. */
+/** Shared admin list card: photo carousel, name/location/rating header, a
+ * tone-coded tag, a description, a metrics row, optional chips (e.g.
+ * amenities), and an Edit/Delete row. Used by all 4 entity lists in C3.1
+ * so the layout isn't duplicated per entity. Clicking anywhere on the
+ * card opens Edit, except the carousel's own arrow/dot controls. */
 function EntityCard({
   name,
   location,
   rating,
   tag,
+  photoUrls,
   description,
   metrics = [],
   chips,
@@ -21,7 +25,12 @@ function EntityCard({
   onDelete,
 }) {
   return (
-    <article className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-control">
+    <article
+      onClick={onEdit}
+      className="flex cursor-pointer flex-col gap-3 rounded-lg bg-surface p-4 shadow-control sm:p-5"
+    >
+      <EntityPhotoCarousel photoUrls={photoUrls} name={name} />
+
       <div className="flex items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="font-heading m-0 text-base font-semibold tracking-tight">
@@ -84,13 +93,10 @@ function EntityCard({
         </button>
         <button
           type="button"
-          className="rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-700"
-        >
-          Preview
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
           className="ml-auto rounded-full px-3.5 py-1.5 text-xs font-medium text-danger"
         >
           Delete

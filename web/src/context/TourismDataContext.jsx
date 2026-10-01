@@ -219,6 +219,20 @@ export function TourismDataProvider({ children }) {
     setAttractions((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const addAttractionPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(
+      `/api/v1/attractions/${id}/photos`,
+      formData,
+    );
+    const mapped = mapAttractionFromApi(response.data, destinations);
+    setAttractions((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const addHotel = async (values) => {
     const response = await api.post(
       "/api/v1/hotels",
@@ -242,6 +256,15 @@ export function TourismDataProvider({ children }) {
   const deleteHotel = async (id) => {
     await api.delete(`/api/v1/hotels/${id}`);
     setHotels((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const addHotelPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(`/api/v1/hotels/${id}/photos`, formData);
+    const mapped = mapHotelFromApi(response.data, destinations);
+    setHotels((prev) => prev.map((item) => (item.id === id ? mapped : item)));
+    return mapped;
   };
 
   const addRestaurant = async (values) => {
@@ -271,6 +294,20 @@ export function TourismDataProvider({ children }) {
     setRestaurants((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const addRestaurantPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(
+      `/api/v1/restaurants/${id}/photos`,
+      formData,
+    );
+    const mapped = mapRestaurantFromApi(response.data, destinations);
+    setRestaurants((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const value = {
     destinations,
     destinationsTotal,
@@ -285,17 +322,20 @@ export function TourismDataProvider({ children }) {
     addAttraction,
     updateAttraction,
     deleteAttraction,
+    addAttractionPhoto,
     hotels,
     hotelsStatus,
     hotelsError,
     addHotel,
     updateHotel,
     deleteHotel,
+    addHotelPhoto,
     restaurants,
     restaurantsStatus,
     restaurantsError,
     addRestaurant,
     updateRestaurant,
+    addRestaurantPhoto,
     deleteRestaurant,
   };
 

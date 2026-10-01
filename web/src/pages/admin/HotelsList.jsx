@@ -22,6 +22,7 @@ function HotelsList() {
     addHotel,
     updateHotel,
     deleteHotel,
+    addHotelPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -234,6 +235,7 @@ function HotelsList() {
                 name={hotel.name}
                 location={hotel.destination}
                 rating={hotel.rating}
+                photoUrls={hotel.photo_urls}
                 description={hotel.description}
                 metrics={[
                   {
@@ -272,6 +274,11 @@ function HotelsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          onUploadPhoto={
+            editingRecord
+              ? (file) => addHotelPhoto(editingRecord.id, file)
+              : undefined
+          }
           submitting={formSubmitting}
           submitError={formError}
         />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import Modal from "../components/Modal";
@@ -55,8 +55,13 @@ function ProfilePage() {
   // Profile information and travel preferences come from GET /users/me.
   const [email, setEmail] = useState("");
   const [loginProvider, setLoginProvider] = useState("local");
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
   const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
+
+  const photoInputRef = useRef(null);
+  const [photoStatus, setPhotoStatus] = useState("idle"); // idle | uploading | removing | error
+  const [photoError, setPhotoError] = useState("");
 
   const {
     values: personalValues,
@@ -88,6 +93,7 @@ function ProfilePage() {
         setPersonalValues({ fullName: me.full_name });
         setEmail(me.email);
         setLoginProvider(me.login_provider);
+        setProfilePictureUrl(me.profile_picture_url);
         setBudget(me.typical_budget_range || "Moderate");
         setPace(me.preferred_pace || "Relaxed");
         setInterests(me.interests || ["Culture", "Nature", "Food"]);
@@ -147,6 +153,53 @@ function ProfilePage() {
   const handleLogout = async () => {
     await logout();
     navigate("/login", { replace: true });
+  };
+
+  const handlePhotoChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setPhotoStatus("uploading");
+    setPhotoError("");
+    try {
+      const response = await api.post(
+        "/api/v1/users/me/profile-picture",
+        (() => {
+          const formData = new FormData();
+          formData.append("file", file);
+          return formData;
+        })(),
+      );
+      setProfilePictureUrl(response.data.data.profile_picture_url);
+      setPhotoStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setPhotoError(message);
+      setPhotoStatus("error");
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setPhotoStatus("removing");
+    setPhotoError("");
+    try {
+      const response = await api.delete("/api/v1/users/me/profile-picture");
+      setProfilePictureUrl(response.data.data.profile_picture_url);
+      setPhotoStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setPhotoError(message);
+      setPhotoStatus("error");
+    }
   };
 
   const toggleInterest = (label) => {
@@ -276,21 +329,51 @@ function ProfilePage() {
 
         <SectionCard title="Personal information" badge="Account">
           <div className="flex items-center gap-4">
-            <span className="flex h-[60px] w-[60px] items-center justify-center rounded-pill bg-accent-100 text-xl font-semibold tracking-wide text-accent-700">
-              {initials(personalValues.fullName)}
-            </span>
+            {profilePictureUrl ? (
+              <img
+                src={profilePictureUrl}
+                alt=""
+                className="h-[60px] w-[60px] flex-none rounded-pill object-cover"
+              />
+            ) : (
+              <span className="flex h-[60px] w-[60px] flex-none items-center justify-center rounded-pill bg-accent-100 text-xl font-semibold tracking-wide text-accent-700">
+                {initials(personalValues.fullName)}
+              </span>
+            )}
             <div className="flex flex-col gap-1.5">
               <div className="flex gap-2">
-                <Button variant="outline" className="px-3.5 py-1.5 text-xs">
-                  Change photo
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoStatus === "uploading"}
+                  className="px-3.5 py-1.5 text-xs"
+                >
+                  {photoStatus === "uploading" ? "Uploading…" : "Change photo"}
                 </Button>
-                <Button variant="ghost" className="px-3.5 py-1.5 text-xs">
-                  Remove
-                </Button>
+                {profilePictureUrl && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleRemovePhoto}
+                    disabled={photoStatus === "removing"}
+                    className="px-3.5 py-1.5 text-xs"
+                  >
+                    {photoStatus === "removing" ? "Removing…" : "Remove"}
+                  </Button>
+                )}
               </div>
               <span className="text-helper text-muted-600">
-                JPG or PNG, up to 2 MB.
+                JPG, PNG, or WebP, up to 8 MB.
               </span>
+              {photoError && (
+                <span className="text-helper text-danger">{photoError}</span>
+              )}
             </div>
           </div>
 

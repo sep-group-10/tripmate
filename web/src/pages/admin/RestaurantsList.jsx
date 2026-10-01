@@ -31,6 +31,7 @@ function RestaurantsList() {
     addRestaurant,
     updateRestaurant,
     deleteRestaurant,
+    addRestaurantPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -272,6 +273,7 @@ function RestaurantsList() {
                   label: restaurant.cuisine_type,
                   tone: CUISINE_TONES[restaurant.cuisine_type] || "accent",
                 }}
+                photoUrls={restaurant.photo_urls}
                 description={restaurant.description}
                 metrics={[
                   { label: "Hours", value: restaurant.operating_hours || "—" },
@@ -310,6 +312,11 @@ function RestaurantsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          onUploadPhoto={
+            editingRecord
+              ? (file) => addRestaurantPhoto(editingRecord.id, file)
+              : undefined
+          }
           submitting={formSubmitting}
           submitError={formError}
         />

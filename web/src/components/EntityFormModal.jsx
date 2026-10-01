@@ -1,9 +1,13 @@
+import { useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
 import Modal from "./Modal";
 import FormInput from "./FormInput";
 import LocationPicker from "./LocationPicker";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { validateRequired, validateLocation } from "../utils/validation";
+import { parseApiError } from "../utils/apiError";
+
+const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp";
 
 const SELECT_CLASSES =
   "min-h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none";
@@ -39,6 +43,7 @@ function EntityFormModal({
   initialValues,
   onSubmit,
   onClose,
+  onUploadPhoto,
   submitting = false,
   submitError = "",
 }) {
@@ -63,11 +68,33 @@ function EntityFormModal({
   const { values, errors, setValues, handleChange, handleBlur, validateAll } =
     useFormValidation(defaultValues, validators);
 
+  const fileInputRef = useRef(null);
+  const [photoStatus, setPhotoStatus] = useState("idle"); // idle | uploading | error
+  const [photoError, setPhotoError] = useState("");
+  const [photoUrls, setPhotoUrls] = useState(initialValues?.photo_urls || []);
+
   const handleSubmit = (event) => {
     event.preventDefault();
     const newErrors = validateAll();
     if (hasErrors(newErrors)) return;
     onSubmit(values);
+  };
+
+  const handlePhotoChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setPhotoStatus("uploading");
+    setPhotoError("");
+    try {
+      const updated = await onUploadPhoto(file);
+      setPhotoUrls(updated.photo_urls || []);
+      setPhotoStatus("idle");
+    } catch (error) {
+      setPhotoError(parseApiError(error).message);
+      setPhotoStatus("error");
+    }
   };
 
   return (
@@ -194,21 +221,54 @@ function EntityFormModal({
           );
         })}
 
-        <div>
-          <span className="mb-1.5 block text-label text-muted-700">
-            Cover image
-          </span>
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-muted-400 bg-bg px-4 py-6 text-center">
-            <ImagePlus
-              size={20}
-              aria-hidden="true"
-              className="text-muted-500"
-            />
-            <span className="text-label text-muted-600">
-              Click to upload or drag and drop
+        {onUploadPhoto && (
+          <div>
+            <span className="mb-1.5 block text-label text-muted-700">
+              Photos
             </span>
+            {photoError && (
+              <p className="m-0 mb-2 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
+                {photoError}
+              </p>
+            )}
+
+            {photoUrls.length > 0 && (
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                {photoUrls.map((url) => (
+                  <img
+                    key={url}
+                    src={url}
+                    alt=""
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                ))}
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES}
+              onChange={handlePhotoChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={photoStatus === "uploading"}
+              className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-muted-400 bg-bg px-4 py-6 text-center disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <ImagePlus
+                size={20}
+                aria-hidden="true"
+                className="text-muted-500"
+              />
+              <span className="text-label text-muted-600">
+                {photoStatus === "uploading" ? "Uploading…" : "Add photo"}
+              </span>
+            </button>
           </div>
-        </div>
+        )}
       </form>
     </Modal>
   );

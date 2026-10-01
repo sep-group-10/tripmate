@@ -22,6 +22,7 @@ function AttractionsList() {
     addAttraction,
     updateAttraction,
     deleteAttraction,
+    addAttractionPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -237,6 +238,7 @@ function AttractionsList() {
                 name={attraction.name}
                 location={attraction.destination}
                 rating={attraction.rating}
+                photoUrls={attraction.photo_urls}
                 description={attraction.description}
                 metrics={[
                   { label: "Hours", value: attraction.opening_hours || "—" },
@@ -281,6 +283,11 @@ function AttractionsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          onUploadPhoto={
+            editingRecord
+              ? (file) => addAttractionPhoto(editingRecord.id, file)
+              : undefined
+          }
           submitting={formSubmitting}
           submitError={formError}
         />
