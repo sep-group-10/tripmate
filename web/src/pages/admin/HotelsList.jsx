@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import EntityCard from "../../components/EntityCard";
+import ListPagination from "../../components/ListPagination";
 import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
@@ -9,6 +10,8 @@ import {
   formatCurrency,
   isDescriptionRequired,
 } from "../../utils/tourismMapping";
+
+const PAGE_SIZE = 50;
 
 function HotelsList() {
   const {
@@ -21,6 +24,7 @@ function HotelsList() {
     deleteHotel,
   } = useTourismData();
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -49,6 +53,12 @@ function HotelsList() {
           (h.description ?? "").toLowerCase().includes(q),
       );
   }, [hotels, query, destinationFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRecords = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
 
   const formFields = useMemo(
     () => [
@@ -172,13 +182,19 @@ function HotelsList() {
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(1);
+          }}
           placeholder="Search hotels…"
           className="w-search"
         />
         <select
           value={destinationFilter}
-          onChange={(event) => setDestinationFilter(event.target.value)}
+          onChange={(event) => {
+            setDestinationFilter(event.target.value);
+            setPage(1);
+          }}
           aria-label="Destination"
           className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
@@ -210,29 +226,37 @@ function HotelsList() {
       )}
 
       {hotelsStatus === "ready" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((hotel) => (
-            <EntityCard
-              key={hotel.id}
-              name={hotel.name}
-              location={hotel.destination}
-              rating={hotel.rating}
-              description={hotel.description}
-              metrics={[
-                {
-                  label: "Price / night",
-                  value: formatCurrency(hotel.price_per_night),
-                },
-              ]}
-              chips={hotel.facilities}
-              onEdit={() => openEditForm(hotel)}
-              onDelete={() => {
-                setDeleteError("");
-                setDeletingRecord(hotel);
-              }}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {visibleRecords.map((hotel) => (
+              <EntityCard
+                key={hotel.id}
+                name={hotel.name}
+                location={hotel.destination}
+                rating={hotel.rating}
+                description={hotel.description}
+                metrics={[
+                  {
+                    label: "Price / night",
+                    value: formatCurrency(hotel.price_per_night),
+                  },
+                ]}
+                chips={hotel.facilities}
+                onEdit={() => openEditForm(hotel)}
+                onDelete={() => {
+                  setDeleteError("");
+                  setDeletingRecord(hotel);
+                }}
+              />
+            ))}
+          </div>
+          <ListPagination
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+          />
+        </>
       )}
 
       {isFormOpen && (
