@@ -3,7 +3,10 @@
 // and the chat flow never persists Itinerary/ItineraryDay rows (see
 // backend/app/routers/chat.py - the day-by-day plan is returned in the
 // API response only and thrown away). Replace these imports once that
-// backend work lands.
+// backend work lands. services/tripsService.js seeds its in-memory store from
+// MY_TRIPS, which holds every trip with a `status` (DRAFT, GENERATED, SAVED).
+
+import { TRIP_STATUS } from "../constants/tripStatus";
 
 export const STATS = [
   {
@@ -32,9 +35,10 @@ export const STATS = [
   },
 ];
 
-export const DRAFT_TRIPS = [
+const DRAFT_TRIPS = [
   {
     id: "draft-1",
+    status: TRIP_STATUS.DRAFT,
     title: "Untitled trip",
     where: "Destination not set",
     edited: "2 hours ago",
@@ -46,6 +50,7 @@ export const DRAFT_TRIPS = [
   },
   {
     id: "draft-2",
+    status: TRIP_STATUS.DRAFT,
     title: "Hill country loop",
     where: "Nuwara Eliya · Kandy · Ella",
     edited: "yesterday",
@@ -57,6 +62,7 @@ export const DRAFT_TRIPS = [
   },
   {
     id: "draft-3",
+    status: TRIP_STATUS.DRAFT,
     title: "Sri Lanka adventure",
     where: "Yala · Mirissa · Galle",
     edited: "3 days ago",
@@ -89,9 +95,10 @@ function buildGeneratedTrip({
   };
 }
 
-export const GENERATED_TRIPS = [
+const GENERATED_AND_SAVED_TRIPS = [
   buildGeneratedTrip({
     id: "generated-1",
+    status: TRIP_STATUS.GENERATED,
     title: "7 days in the Cultural Triangle",
     where: "Sigiriya · Polonnaruwa · Kandy",
     coverImageUrl: null,
@@ -108,6 +115,7 @@ export const GENERATED_TRIPS = [
   }),
   buildGeneratedTrip({
     id: "generated-2",
+    status: TRIP_STATUS.GENERATED,
     title: "5 days on the south coast",
     where: "Galle · Mirissa · Tangalle",
     coverImageUrl: null,
@@ -121,4 +129,40 @@ export const GENERATED_TRIPS = [
       ["Day 2", "Mirissa whale watching · Coconut Tree Hill sunset"],
     ],
   }),
+  buildGeneratedTrip({
+    id: "saved-1",
+    status: TRIP_STATUS.SAVED,
+    title: "4 days in Kandy and Ella",
+    where: "Kandy · Nuwara Eliya · Ella",
+    coverImageUrl: null,
+    coverHint: "Nine Arch Bridge cover photo",
+    dayCount: 4,
+    travellers: 2,
+    budget: "LKR 240,000",
+    generated: "last week",
+    plan: [
+      ["Day 1", "Temple of the Sacred Tooth Relic · Kandy Lake · Dinner"],
+      ["Day 2", "Royal Botanical Gardens · Scenic drive to Nuwara Eliya"],
+      ["Day 3", "Nine Arch Bridge at dawn · Little Adam's Peak"],
+    ],
+  }),
+  buildGeneratedTrip({
+    id: "saved-2",
+    status: TRIP_STATUS.SAVED,
+    title: "6 days of beaches and culture",
+    where: "Negombo · Galle · Unawatuna",
+    coverImageUrl: null,
+    coverHint: "Unawatuna cover photo",
+    dayCount: 6,
+    travellers: 4,
+    budget: "LKR 380,000",
+    generated: "2 weeks ago",
+    plan: [
+      ["Day 1", "Negombo fish market · Lagoon sunset"],
+      ["Day 2", "Galle Fort walk · Dutch Reformed Church"],
+    ],
+  }),
 ];
+
+// Every trip with its `status`, in no particular order: the page groups them.
+export const MY_TRIPS = [...GENERATED_AND_SAVED_TRIPS, ...DRAFT_TRIPS];

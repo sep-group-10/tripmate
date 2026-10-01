@@ -1,56 +1,43 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import StatRow from "../components/StatRow";
 import DraftTripCard from "../components/DraftTripCard";
 import GeneratedTripCard from "../components/GeneratedTripCard";
-import { STATS, DRAFT_TRIPS, GENERATED_TRIPS } from "../data/myTripsDummyData";
-
-function tripLength(trip) {
-  return trip.dayCount ?? trip.days;
-}
-
-const SORTS = {
-  Recent: null,
-  Name: (a, b) => a.title.localeCompare(b.title),
-  Longest: (a, b) => tripLength(b) - tripLength(a),
-};
-
-const FILTERS = ["All", "Drafts", "Generated"];
-
-function matchesQuery(trip, query, extraFields = []) {
-  if (!query) return true;
-  const haystack = [trip.title, trip.where, ...extraFields]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
-}
+import { STATS } from "../data/myTripsDummyData";
+import { listTrips, saveTrip, unsaveTrip } from "../services/tripsService";
+import { parseApiError } from "../utils/apiError";
+import { TRIP_FILTERS, TRIP_SORTS, groupTrips } from "../utils/tripFilters";
 
 function MyTripsPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("Recent");
   const [filter, setFilter] = useState("All");
+  // Mock data for now; TODO(backend): load with GET /api/v1/trips.
+  const [trips, setTrips] = useState(() => listTrips());
 
   const q = query.trim().toLowerCase();
-  const sortFn = SORTS[sort];
+  const sortFn = TRIP_SORTS[sort];
 
-  const drafts = useMemo(() => {
-    const filtered = DRAFT_TRIPS.filter((trip) =>
-      matchesQuery(trip, q, [trip.prompt, trip.stage]),
-    );
-    return sortFn ? [...filtered].sort(sortFn) : filtered;
-  }, [q, sortFn]);
-
-  const generated = useMemo(() => {
-    const filtered = GENERATED_TRIPS.filter((trip) => matchesQuery(trip, q));
-    return sortFn ? [...filtered].sort(sortFn) : filtered;
-  }, [q, sortFn]);
-
-  const showDrafts = filter !== "Generated" && drafts.length > 0;
-  const showGenerated = filter !== "Drafts" && generated.length > 0;
-  const shownCount =
-    (filter !== "Generated" ? drafts.length : 0) +
-    (filter !== "Drafts" ? generated.length : 0);
+  const { saved, generated, drafts, shownCount } = useMemo(
+    () => groupTrips(trips, { filter, query: q, sort: sortFn }),
+    [trips, filter, q, sortFn],
+  );
   const isEmpty = shownCount === 0;
+
+  // Both actions call the (mock) service, then re-read the list so the card
+  // moves between sections right away. A rejected call shows its message.
+  const changeSaved = async (action, trip, successMessage) => {
+    try {
+      await action(trip.id);
+      setTrips(listTrips());
+      if (successMessage) toast.success(successMessage);
+    } catch (error) {
+      toast.error(parseApiError(error).message);
+    }
+  };
+  const handleSave = (trip) => changeSaved(saveTrip, trip, "Trip saved");
+  const handleUnsave = (trip) => changeSaved(unsaveTrip, trip);
 
   const clearFilters = () => {
     setQuery("");
@@ -103,7 +90,7 @@ function MyTripsPage() {
             <option value="Longest">Longest trip</option>
           </select>
           <span className="inline-flex gap-0.5 rounded-pill bg-muted-300 p-0.75">
-            {FILTERS.map((label) => (
+            {TRIP_FILTERS.map((label) => (
               <button
                 key={label}
                 type="button"
@@ -123,7 +110,61 @@ function MyTripsPage() {
           </span>
         </div>
 
-        {showDrafts && (
+        {saved.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2.5">
+                <h2 className="font-heading text-lg font-semibold tracking-tight text-ink">
+                  Saved trips
+                </h2>
+                <span className="rounded-pill border border-border bg-surface px-2.5 py-0.5 text-caption font-medium tabular-nums text-muted-700">
+                  {saved.length}
+                </span>
+              </div>
+              <p className="text-body-sm text-muted-600">
+                Itineraries you've kept. Ready to view, share or export.
+              </p>
+            </div>
+            <div className="flex flex-col gap-4">
+              {saved.map((trip) => (
+                <GeneratedTripCard
+                  key={trip.id}
+                  trip={trip}
+                  onUnsave={handleUnsave}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {generated.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2.5">
+                <h2 className="font-heading text-lg font-semibold tracking-tight text-ink">
+                  Generated itineraries
+                </h2>
+                <span className="rounded-pill border border-border bg-surface px-2.5 py-0.5 text-caption font-medium tabular-nums text-muted-700">
+                  {generated.length}
+                </span>
+              </div>
+              <p className="text-body-sm text-muted-600">
+                Complete day-by-day plans, ready to review, refine or save.
+              </p>
+            </div>
+            <div className="flex flex-col gap-4">
+              {generated.map((trip) => (
+                <GeneratedTripCard
+                  key={trip.id}
+                  trip={trip}
+                  onSave={handleSave}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {drafts.length > 0 && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
@@ -141,29 +182,6 @@ function MyTripsPage() {
             <div className="flex flex-col gap-4">
               {drafts.map((trip) => (
                 <DraftTripCard key={trip.id} trip={trip} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {showGenerated && (
-          <section className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2.5">
-                <h2 className="font-heading text-lg font-semibold tracking-tight text-ink">
-                  Generated itineraries
-                </h2>
-                <span className="rounded-pill border border-border bg-surface px-2.5 py-0.5 text-caption font-medium tabular-nums text-muted-700">
-                  {generated.length}
-                </span>
-              </div>
-              <p className="text-body-sm text-muted-600">
-                Complete day-by-day plans — ready to review, refine or book.
-              </p>
-            </div>
-            <div className="flex flex-col gap-4">
-              {generated.map((trip) => (
-                <GeneratedTripCard key={trip.id} trip={trip} />
               ))}
             </div>
           </section>
