@@ -10,6 +10,7 @@ import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ProfilePage from "../pages/ProfilePage";
 import TripPlanChatPage from "../pages/TripPlanChatPage";
 import MyTripsPage from "../pages/MyTripsPage";
+import UserLayout from "../pages/UserLayout";
 import AdminLayout from "../pages/admin/AdminLayout";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import DestinationsList from "../pages/admin/DestinationsList";
@@ -35,29 +36,16 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
-        path="/profile"
         element={
           <ProtectedRoute>
-            <ProfilePage />
+            <UserLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/chat"
-        element={
-          <ProtectedRoute>
-            <TripPlanChatPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/trips"
-        element={
-          <ProtectedRoute>
-            <MyTripsPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/chat" element={<TripPlanChatPage />} />
+        <Route path="/trips" element={<MyTripsPage />} />
+      </Route>
       <Route
         path="/admin"
         element={

@@ -68,14 +68,35 @@ export const DRAFT_TRIPS = [
   },
 ];
 
+function buildGeneratedTrip({
+  dayCount,
+  travellers,
+  budget,
+  generated,
+  plan,
+  ...rest
+}) {
+  return {
+    ...rest,
+    dayCount,
+    facts: [
+      { label: "Length", value: `${dayCount} days` },
+      { label: "Travellers", value: String(travellers) },
+      { label: "Budget", value: budget },
+      { label: "Generated", value: generated },
+    ],
+    days: plan.map(([label, stops]) => ({ label, stops })),
+  };
+}
+
 export const GENERATED_TRIPS = [
-  {
+  buildGeneratedTrip({
     id: "generated-1",
     title: "7 days in the Cultural Triangle",
     where: "Sigiriya · Polonnaruwa · Kandy",
     coverImageUrl: null,
     coverHint: "Sigiriya cover photo",
-    days: 7,
+    dayCount: 7,
     travellers: 2,
     budget: "LKR 310,000",
     generated: "yesterday",
@@ -84,14 +105,14 @@ export const GENERATED_TRIPS = [
       ["Day 2", "Pidurangala sunrise · Minneriya safari · Village lunch"],
       ["Day 3", "Polonnaruwa ruins · Gal Vihara · Cycle the sacred quadrangle"],
     ],
-  },
-  {
+  }),
+  buildGeneratedTrip({
     id: "generated-2",
     title: "5 days on the south coast",
     where: "Galle · Mirissa · Tangalle",
     coverImageUrl: null,
     coverHint: "Galle Fort cover photo",
-    days: 5,
+    dayCount: 5,
     travellers: 2,
     budget: "LKR 195,000",
     generated: "4 days ago",
@@ -99,5 +120,5 @@ export const GENERATED_TRIPS = [
       ["Day 1", "Galle Fort ramparts · Sea Spray dinner · Amangalla"],
       ["Day 2", "Mirissa whale watching · Coconut Tree Hill sunset"],
     ],
-  },
+  }),
 ];

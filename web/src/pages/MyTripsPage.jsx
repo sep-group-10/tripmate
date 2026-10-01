@@ -1,15 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin } from "lucide-react";
 import StatRow from "../components/StatRow";
 import DraftTripCard from "../components/DraftTripCard";
 import GeneratedTripCard from "../components/GeneratedTripCard";
 import { STATS, DRAFT_TRIPS, GENERATED_TRIPS } from "../data/myTripsDummyData";
 
+function tripLength(trip) {
+  return trip.dayCount ?? trip.days;
+}
+
 const SORTS = {
   Recent: null,
   Name: (a, b) => a.title.localeCompare(b.title),
-  Longest: (a, b) => b.days - a.days,
+  Longest: (a, b) => tripLength(b) - tripLength(a),
 };
 
 const FILTERS = ["All", "Drafts", "Generated"];
@@ -55,19 +58,8 @@ function MyTripsPage() {
   };
 
   return (
-    <div className="font-body min-h-screen bg-bg text-ink">
-      <header className="flex items-center gap-2.5 px-6 py-4">
-        <Link to="/" className="flex items-center gap-2.5">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-md font-semibold tracking-tight">
-            TripMate
-          </span>
-        </Link>
-      </header>
-
-      <main className="mx-auto flex max-w-245 flex-col gap-7 px-6 pb-24">
+    <div className="font-body bg-bg text-ink">
+      <main className="mx-auto flex max-w-245 flex-col gap-7 px-6 py-14">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
