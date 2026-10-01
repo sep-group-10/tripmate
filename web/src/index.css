@@ -18,9 +18,12 @@
 @theme {
   --color-bg: #eceded;
   --color-surface: #ffffff;
+  --color-inset: #f5f6f6;
   --color-ink: #17191a;
   --color-accent: #e8532b;
   --color-accent-100: #fdefeb;
+  --color-accent-200: #fbdcd3;
+  --color-accent-300: #f8bda9;
   --color-accent-600: #cf4220;
   --color-accent-700: #a9331a;
   --color-border: #e2e4e5;
@@ -35,6 +38,7 @@
 
   --color-success: #12a26a;
   --color-success-100: #e7f7f0;
+  --color-success-700: #0a6b45;
   --color-danger: #d92d20;
   --color-danger-100: #fdeceb;
   --color-warn: #d68a00;
