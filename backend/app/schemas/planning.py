@@ -1,12 +1,19 @@
 import re
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 
 class PlannerDecision(BaseModel):
-    action: str
-    arguments: dict[str, Any] = Field(default_factory=dict)
+    action: Literal[
+        "candidate_retriever",
+        "scoring_engine",
+        "scheduling_engine",
+        "route_optimizer",
+        "weather_validator",
+        "cost_estimator",
+        "constraint_validator",
+    ]
 
 
 class CriterionAssessment(BaseModel):
