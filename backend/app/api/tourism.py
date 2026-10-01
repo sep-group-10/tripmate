@@ -32,6 +32,7 @@ from app.schemas.tourism import (
     RestaurantResponse,
     RestaurantUpdate,
 )
+from app.services.activity_log import log_activity
 from app.services.image_upload import upload_image
 
 destination_router = APIRouter(
@@ -101,6 +102,8 @@ def create_destination(
     db.add(destination)
     db.commit()
     db.refresh(destination)
+
+    log_activity(db, "Destination", f"{destination.name} added", destination.country)
 
     return destination
 
@@ -214,6 +217,8 @@ def update_destination(
     db.commit()
     db.refresh(destination)
 
+    log_activity(db, "Destination", f"{destination.name} updated")
+
     return destination
 
 
@@ -251,6 +256,8 @@ def delete_destination(
 
     db.commit()
     db.refresh(destination)
+
+    log_activity(db, "Destination", f"{destination.name} removed")
 
     return destination
 
@@ -296,6 +303,8 @@ def create_attraction(
     db.add(attraction)
     db.commit()
     db.refresh(attraction)
+
+    log_activity(db, "Attraction", f"{attraction.name} added", destination.name)
 
     return attraction
 
@@ -427,6 +436,8 @@ def update_attraction(
     db.commit()
     db.refresh(attraction)
 
+    log_activity(db, "Attraction", f"{attraction.name} updated")
+
     return attraction
 
 
@@ -464,6 +475,8 @@ def delete_attraction(
 
     db.commit()
     db.refresh(attraction)
+
+    log_activity(db, "Attraction", f"{attraction.name} removed")
 
     return attraction
 
@@ -532,6 +545,8 @@ def create_hotel(
     db.add(hotel)
     db.commit()
     db.refresh(hotel)
+
+    log_activity(db, "Hotel", f"{hotel.name} added", destination.name)
 
     return hotel
 
@@ -663,6 +678,8 @@ def update_hotel(
     db.commit()
     db.refresh(hotel)
 
+    log_activity(db, "Hotel", f"{hotel.name} updated")
+
     return hotel
 
 
@@ -700,6 +717,8 @@ def delete_hotel(
 
     db.commit()
     db.refresh(hotel)
+
+    log_activity(db, "Hotel", f"{hotel.name} removed")
 
     return hotel
 
@@ -764,6 +783,8 @@ def create_restaurant(
     db.add(restaurant)
     db.commit()
     db.refresh(restaurant)
+
+    log_activity(db, "Restaurant", f"{restaurant.name} added", destination.name)
 
     return restaurant
 
@@ -895,6 +916,8 @@ def update_restaurant(
     db.commit()
     db.refresh(restaurant)
 
+    log_activity(db, "Restaurant", f"{restaurant.name} updated")
+
     return restaurant
 
 
@@ -932,6 +955,8 @@ def delete_restaurant(
 
     db.commit()
     db.refresh(restaurant)
+
+    log_activity(db, "Restaurant", f"{restaurant.name} removed")
 
     return restaurant
 
@@ -1008,6 +1033,8 @@ def create_local_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    log_activity(db, "Local event", f"{event.name} added", destination.name)
 
     return event
 
@@ -1144,6 +1171,8 @@ def update_local_event(
     db.commit()
     db.refresh(event)
 
+    log_activity(db, "Local event", f"{event.name} updated")
+
     return event
 
 
@@ -1181,6 +1210,8 @@ def delete_local_event(
 
     db.commit()
     db.refresh(event)
+
+    log_activity(db, "Local event", f"{event.name} removed")
 
     return event
 
