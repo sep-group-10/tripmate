@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { formatDate } from "../../utils/tripFormat";
 import EmptyState from "./EmptyState";
+import { TAB_EMPTY_STATES } from "./tabEmptyStates";
 import PillTag from "./PillTag";
 import SectionLabel from "./SectionLabel";
 
@@ -36,7 +37,7 @@ function ItineraryTab({ itinerary }) {
   const [openDay, setOpenDay] = useState(null);
 
   const days = itinerary?.days ?? [];
-  if (days.length === 0) return <EmptyState what="itinerary" />;
+  if (days.length === 0) return <EmptyState {...TAB_EMPTY_STATES.Itinerary} />;
 
   const itemsOf = (day) => day.items ?? [];
   const firstDay = days[0].day_number;

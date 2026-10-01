@@ -3,15 +3,29 @@
 // show placeholder content from data/tripPlanDummyData.js. Session list and
 // mobile layout come in later steps. The pieces live in components/chat/.
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ChatPanel from "../components/chat/ChatPanel";
 import TabsPanel from "../components/chat/TabsPanel";
+import { DEMO_ITINERARY } from "../data/tripPlanDummyData";
 
 function TripPlanChatPage() {
   // Owned here so the chat (which produces plans) and the tabs (which show
   // them) can share it. Bumping chatKey remounts ChatPanel, which resets its
   // messages and session id.
-  const [itinerary, setItinerary] = useState(null);
+  // Development only: ?demo=1 starts with the sample trip loaded so the Summary
+  // and Budget tabs can be previewed without a real plan. import.meta.env.DEV is
+  // false in production builds, so this and the sample data are dropped there.
+  const [searchParams] = useSearchParams();
+  const [itinerary, setItinerary] = useState(() =>
+    import.meta.env.DEV && searchParams.get("demo") === "1"
+      ? DEMO_ITINERARY
+      : null,
+  );
   const [chatKey, setChatKey] = useState(0);
+
+  const loadSampleTrip = import.meta.env.DEV
+    ? () => setItinerary(DEMO_ITINERARY)
+    : undefined;
 
   const handleNewTrip = () => {
     setItinerary(null);
@@ -34,9 +48,14 @@ function TripPlanChatPage() {
       </header>
 
       <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] grid-rows-[minmax(0,1fr)] gap-3.5 px-6 pb-6">
-        <ChatPanel key={chatKey} onPlan={setItinerary} />
+        <ChatPanel key={`chat-${chatKey}`} onPlan={setItinerary} />
 
-        <TabsPanel itinerary={itinerary} />
+        {/* key resets the tab (back to Summary) on "New trip" */}
+        <TabsPanel
+          key={`tabs-${chatKey}`}
+          itinerary={itinerary}
+          onLoadSample={loadSampleTrip}
+        />
       </main>
     </div>
   );

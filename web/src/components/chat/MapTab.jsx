@@ -1,5 +1,6 @@
 import { formatDate } from "../../utils/tripFormat";
 import EmptyState from "./EmptyState";
+import { TAB_EMPTY_STATES } from "./tabEmptyStates";
 import TripMap from "./TripMap";
 
 // One entry per day, in order, reused when there are more days than colors.
@@ -45,7 +46,7 @@ function straightLineKm(a, b) {
 // computed here.
 function MapTab({ itinerary }) {
   const days = itinerary?.days ?? [];
-  if (days.length === 0) return <EmptyState what="route map" />;
+  if (days.length === 0) return <EmptyState {...TAB_EMPTY_STATES.Map} />;
 
   // `number` is the stop's position in its day (counting stops with no
   // coordinates too) so pins match the numbering on the Itinerary tab.
