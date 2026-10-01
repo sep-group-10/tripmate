@@ -123,20 +123,19 @@ def validate_constraints(
     status = itinerary.get("status")
     if status in {"infeasible", "invalid_input"}:
         feasibility_reasons.append(f"SchedulingEngine returned status '{status}'.")
-    elif status == "partial":
-        feasibility_reasons.append(
-            "SchedulingEngine returned partial; its semantics indicate an empty day, missing required hotel, or unscheduled candidate."
-        )
     if not isinstance(days, list) or not days:
         feasibility_reasons.append("Itinerary has no scheduled days.")
     elif any(not isinstance(day, dict) or not day.get("items") for day in days):
         feasibility_reasons.append("Itinerary contains a day with no scheduled items.")
-    if itinerary.get("unscheduled"):
-        feasibility_reasons.append("SchedulingEngine reports unscheduled candidates.")
+    elif len(days) != 1 or days[0].get("day_type") != "day_trip":
+        if not any(day.get("hotel_id") for day in days):
+            feasibility_reasons.append(
+                "Itinerary is missing a required hotel for an overnight trip."
+            )
     checks["feasibility"] = (
         _check("fail", " ".join(feasibility_reasons))
         if feasibility_reasons
-        else _check("pass", "Schedule has days and no reported feasibility gaps.")
+        else _check("pass", "Schedule has populated days and any required hotel.")
     )
 
     checks["travelers"] = _check(

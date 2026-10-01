@@ -23,6 +23,7 @@ from app.services.agent_session import create_agent_session
 from app.services.chat_response_generator import ChatResponseGenerator
 from app.services.conversation_history import get_conversation, save_message
 from app.services.final_response_generator import FinalResponseGenerator
+from app.services.langgraph.context import PlanningContext
 from app.services.langgraph.planning_graph import planning_graph
 from app.services.preference_processor import PreferenceProcessor
 from app.services.trip_service import create_trip
@@ -102,15 +103,24 @@ def _process_chat_message(
             db.refresh(planning_session)
         _prepare_preferences_for_planning(db, planning_session, preferences)
         agent_session = create_agent_session(preferences)
-        planning_result = planning_graph.invoke(
-            {
-                "session": agent_session,
-                "planner_decision": None,
-                "critic_decision": None,
-                "last_failure": None,
-                "consecutive_failures": 0,
-            }
-        )
+        try:
+            planning_result = planning_graph.invoke(
+                {
+                    "session": agent_session,
+                    "planner_decision": None,
+                    "critic_decision": None,
+                    "last_failure": None,
+                    "consecutive_failures": 0,
+                },
+                context=PlanningContext(
+                    db=db,
+                    planning_session_id=planning_session.id,
+                ),
+            )
+        except Exception:
+            # Preserve failed tool traces before propagating the graph exception.
+            db.commit()
+            raise
         final_agent_session = planning_result["session"]
 
         planning_session.status = final_agent_session.status.value
