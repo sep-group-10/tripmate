@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Link, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { MapPin } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 
@@ -69,9 +69,6 @@ function AdminLayout() {
 
         <div className="mt-auto flex flex-col gap-3 border-t border-divider px-2 pt-4">
           <div className="flex items-center justify-between gap-3">
-            <Link to="/" className="text-left text-label text-muted-700">
-              Exit admin
-            </Link>
             <button
               type="button"
               onClick={handleLogout}

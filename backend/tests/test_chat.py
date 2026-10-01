@@ -152,7 +152,9 @@ def _schedule_result(name="Temple", route_optimization=None):
     }
 
 
-def _install_deterministic_planning_graph(monkeypatch, preferences):
+def _install_deterministic_planning_graph(
+    monkeypatch, preferences, *, include_weather=True
+):
     """Use the real LangGraph with deterministic Planner, Critic, and tools."""
     agent_session = create_agent_session(preferences)
     requirements = agent_session.trip_requirements
@@ -184,7 +186,7 @@ def _install_deterministic_planning_graph(monkeypatch, preferences):
                         "opening_hours": None,
                     }
                 ],
-                "hotel_id": None,
+                "hotel_id": "hotel-1",
                 "hotel_location": None,
                 "warnings": [],
             }
@@ -228,27 +230,19 @@ def _install_deterministic_planning_graph(monkeypatch, preferences):
         }
 
     monkeypatch.setitem(registry.TOOLS, "scheduling_engine", scheduling_engine)
-    monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
+    if include_weather:
+        monkeypatch.setitem(registry.TOOLS, "weather_validator", weather_validator)
     monkeypatch.setitem(registry.TOOLS, "cost_estimator", cost_estimator)
 
     decisions = [
-        PlannerDecision(
-            action="scheduling_engine",
-            arguments={"candidates": [], "trip_requirements": requirements},
-        ),
-        PlannerDecision(
-            action="weather_validator",
-            arguments={"schedule": schedule},
-        ),
-        PlannerDecision(
-            action="cost_estimator",
-            arguments={
-                "itinerary": schedule,
-                "candidates": [],
-                "trip_requirements": requirements,
-            },
-        ),
+        PlannerDecision(action="candidate_retriever"),
+        PlannerDecision(action="scoring_engine"),
+        PlannerDecision(action="scheduling_engine"),
+        PlannerDecision(action="route_optimizer"),
     ]
+    if include_weather:
+        decisions.append(PlannerDecision(action="weather_validator"))
+    decisions.append(PlannerDecision(action="cost_estimator"))
 
     class FakePlannerModel:
         def __init__(self):
@@ -281,7 +275,9 @@ def _install_deterministic_planning_graph(monkeypatch, preferences):
 
     planner_model = FakePlannerModel()
     critic_model = FakeCriticModel()
-    monkeypatch.setattr(planner_module, "create_planner_model", lambda: planner_model)
+    monkeypatch.setattr(
+        planner_module, "create_planner_model", lambda _runnable_actions: planner_model
+    )
     monkeypatch.setattr(critic_module, "create_critic_model", lambda: critic_model)
     return planner_model, critic_model
 
@@ -667,7 +663,7 @@ def test_multi_message_preference_collection_starts_planning_only_when_complete(
         ["transport_type"],
     ]
     assert db_session.query(Trip).count() == 1
-    assert planner_model.prompts and len(planner_model.prompts) == 3
+    assert planner_model.prompts and len(planner_model.prompts) == 6
     assert len(critic_model.prompts) == 1
 
     all_turns_prompt = processor.model.prompts[-1][-1].content
@@ -705,7 +701,7 @@ def test_complete_single_message_runs_chat_api_through_real_planning_graph(
     preferences = _complete_preferences()
     processor = _mock_real_preference_processor(monkeypatch, preferences)
     planner_model, critic_model = _install_deterministic_planning_graph(
-        monkeypatch, preferences
+        monkeypatch, preferences, include_weather=False
     )
 
     response = client.post(
@@ -726,10 +722,10 @@ def test_complete_single_message_runs_chat_api_through_real_planning_graph(
     assert "2026-10-01" in body["assistant_message"]
     assert "100–200" in body["assistant_message"]
     assert body["itinerary"]["days"][0]["items"][0]["name"] == "Kandy cultural site 1"
-    assert len(planner_model.prompts) == 3
+    assert len(planner_model.prompts) == 5
     assert len(critic_model.prompts) == 1
     assert "cost_estimator" in critic_model.prompts[0]
-    assert "weather_validator" in critic_model.prompts[0]
+    assert "weather_validator" not in critic_model.prompts[0]
     assert processor.model.prompts[0][-1].content.startswith(
         "human: Plan a three-day trip"
     )
@@ -840,7 +836,7 @@ def test_complete_preferences_start_planning_and_persist_final_result(
         return agent_session
 
     class FakeGraph:
-        def invoke(self, state):
+        def invoke(self, state, context=None):
             graph_calls.append(state)
             trip = db_session.query(Trip).one()
             linked_session = (

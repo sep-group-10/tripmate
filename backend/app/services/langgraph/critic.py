@@ -2,10 +2,15 @@ import os
 from pathlib import Path
 from string import Template
 
+from fastapi.encoders import jsonable_encoder
 from langchain_openai import ChatOpenAI
+from langgraph.runtime import Runtime
+from sqlalchemy.orm import Session
 
+from app.models.agent_execution_trace import AgentExecutionTrace
 from app.schemas.agent_session import AgentSessionStatus
 from app.schemas.planning import CriticDecision
+from app.services.langgraph.context import PlanningContext
 from app.services.langgraph.state import PlanningState
 
 _CRITIC_PROMPT_PATH = (
@@ -22,23 +27,57 @@ def create_critic_model():
     ).with_structured_output(CriticDecision)
 
 
-def _critic_prompt(state: PlanningState) -> str:
+def _critic_context(state: PlanningState) -> dict:
     session = state["session"]
+    return {
+        "goal": session.goal,
+        "trip_requirements": session.trip_requirements,
+        "tool_execution_order": session.tool_execution_order,
+        "tool_results": session.tool_results,
+        "constraint_result": session.constraint_result,
+        "iteration_count": session.iteration_count,
+    }
+
+
+def _critic_prompt(state: PlanningState) -> str:
     template = Template(_CRITIC_PROMPT_PATH.read_text(encoding="utf-8"))
-    return template.substitute(
-        goal=session.goal,
-        trip_requirements=session.trip_requirements,
-        tool_execution_order=session.tool_execution_order,
-        tool_results=session.tool_results,
-        constraint_result=session.constraint_result,
-        iteration_count=session.iteration_count,
+    return template.substitute(**_critic_context(state))
+
+
+def _add_critic_trace(
+    runtime: Runtime[PlanningContext] | None,
+    *,
+    session,
+    tool_input: dict,
+    tool_output: dict,
+) -> None:
+    """Add the structured Critic decision to the request transaction."""
+
+    if runtime is None or runtime.context is None:
+        return
+
+    context = runtime.context
+    db: Session = context["db"]
+    db.add(
+        AgentExecutionTrace(
+            planning_session_id=context["planning_session_id"],
+            tool_name="critic",
+            tool_input=jsonable_encoder(tool_input),
+            tool_output=jsonable_encoder(tool_output),
+            success=True,
+            iteration_number=session.iteration_count,
+        )
     )
 
 
-def critic_node(state: PlanningState) -> dict:
+def critic_node(
+    state: PlanningState,
+    runtime: Runtime[PlanningContext] | None = None,
+) -> dict:
     """Assess itinerary quality and persist the full structured Critic result."""
 
     session = state["session"]
+    critic_context = _critic_context(state)
     try:
         decision = create_critic_model().invoke(_critic_prompt(state))
     except Exception:
@@ -51,7 +90,14 @@ def critic_node(state: PlanningState) -> dict:
             if state["last_failure"] == failure
             else 1,
         }
-    session.critic_result = decision.model_dump(mode="json")
+    decision_data = decision.model_dump(mode="json")
+    _add_critic_trace(
+        runtime,
+        session=session,
+        tool_input=critic_context,
+        tool_output=decision_data,
+    )
+    session.critic_result = decision_data
     return {
         "session": session,
         "critic_decision": decision,
@@ -85,12 +131,6 @@ def route_after_critic(state: PlanningState) -> str:
     ):
         return "planner"
 
-    weather_validated = any(
-        entry.get("tool") == "weather_validator" for entry in session.tool_results
-    )
-    if not weather_validated:
-        return "planner"
-
     if not decision.continue_planning:
         try:
             status = AgentSessionStatus(decision.status or "failed")
@@ -99,4 +139,5 @@ def route_after_critic(state: PlanningState) -> str:
         session.status = status
         return "end"
 
-    return "planner"
+    session.status = AgentSessionStatus.COMPLETED
+    return "end"

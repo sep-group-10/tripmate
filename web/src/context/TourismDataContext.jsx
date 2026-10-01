@@ -11,16 +11,11 @@ import {
   mapRestaurantFromApi,
 } from "../utils/tourismMapping";
 
-// Only GET /destinations is paginated ({success, data: {items, ...}}).
-// GET /attractions|hotels|restaurants (backend/app/api/tourism.py) return a
-// plain list[...Response] with no pagination at all - so those three fetch
-// effects below read `response.data` directly instead of
-// `response.data.data.items`.
-// limit=50 is the destinations endpoint's max page size (Query(..., le=50))
-// - there is no pagination UI yet, so this just pulls everything that fits
-// in one page. Fine for the current seed data; revisit if the real
-// destination count ever approaches 50.
-const DESTINATION_LIST_PARAMS = { params: { limit: 50 } };
+// Destinations use a paginated backend response. Load each page so admin
+// forms still have every destination available for their selectors; the list
+// page itself applies simple client-side Previous/Next paging consistently
+// with Attractions, Hotels, and Restaurants.
+const DESTINATION_PAGE_SIZE = 50;
 
 /** Holds the 4 admin tourism entities in state, all wired to the real API
  * (C4.2). Attractions/Hotels/Restaurants each depend on `destinations`
@@ -31,6 +26,7 @@ const DESTINATION_LIST_PARAMS = { params: { limit: 50 } };
  * not from the destination. */
 export function TourismDataProvider({ children }) {
   const [destinations, setDestinations] = useState([]);
+  const [destinationsTotal, setDestinationsTotal] = useState(0);
   const [destinationsStatus, setDestinationsStatus] = useState("loading"); // loading | ready | error
   const [destinationsError, setDestinationsError] = useState("");
 
@@ -48,18 +44,35 @@ export function TourismDataProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .get("/api/v1/destinations", DESTINATION_LIST_PARAMS)
-      .then((response) => {
+    const fetchDestinations = async () => {
+      try {
+        const firstResponse = await api.get("/api/v1/destinations", {
+          params: { page: 1, limit: DESTINATION_PAGE_SIZE },
+        });
+        const firstPage = firstResponse.data.data;
+        const remainingPages = await Promise.all(
+          Array.from(
+            { length: Math.max(0, firstPage.total_pages - 1) },
+            (_, index) =>
+              api.get("/api/v1/destinations", {
+                params: { page: index + 2, limit: DESTINATION_PAGE_SIZE },
+              }),
+          ),
+        );
         if (cancelled) return;
-        setDestinations(response.data.data.items);
+        setDestinations([
+          ...firstPage.items,
+          ...remainingPages.flatMap((page) => page.data.data.items),
+        ]);
+        setDestinationsTotal(firstPage.total);
         setDestinationsStatus("ready");
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) return;
         setDestinationsError(parseApiError(error).message);
         setDestinationsStatus("error");
-      });
+      }
+    };
+    fetchDestinations();
     return () => {
       cancelled = true;
     };
@@ -161,6 +174,7 @@ export function TourismDataProvider({ children }) {
   const addDestination = async (fields) => {
     const response = await api.post("/api/v1/destinations", fields);
     setDestinations((prev) => [response.data, ...prev]);
+    setDestinationsTotal((prev) => prev + 1);
     return response.data;
   };
 
@@ -175,6 +189,7 @@ export function TourismDataProvider({ children }) {
   const deleteDestination = async (id) => {
     await api.delete(`/api/v1/destinations/${id}`);
     setDestinations((prev) => prev.filter((item) => item.id !== id));
+    setDestinationsTotal((prev) => Math.max(0, prev - 1));
   };
 
   const addAttraction = async (values) => {
@@ -204,6 +219,20 @@ export function TourismDataProvider({ children }) {
     setAttractions((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const addAttractionPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(
+      `/api/v1/attractions/${id}/photos`,
+      formData,
+    );
+    const mapped = mapAttractionFromApi(response.data, destinations);
+    setAttractions((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const addHotel = async (values) => {
     const response = await api.post(
       "/api/v1/hotels",
@@ -227,6 +256,15 @@ export function TourismDataProvider({ children }) {
   const deleteHotel = async (id) => {
     await api.delete(`/api/v1/hotels/${id}`);
     setHotels((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const addHotelPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(`/api/v1/hotels/${id}/photos`, formData);
+    const mapped = mapHotelFromApi(response.data, destinations);
+    setHotels((prev) => prev.map((item) => (item.id === id ? mapped : item)));
+    return mapped;
   };
 
   const addRestaurant = async (values) => {
@@ -256,8 +294,23 @@ export function TourismDataProvider({ children }) {
     setRestaurants((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const addRestaurantPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(
+      `/api/v1/restaurants/${id}/photos`,
+      formData,
+    );
+    const mapped = mapRestaurantFromApi(response.data, destinations);
+    setRestaurants((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const value = {
     destinations,
+    destinationsTotal,
     destinationsStatus,
     destinationsError,
     addDestination,
@@ -269,17 +322,20 @@ export function TourismDataProvider({ children }) {
     addAttraction,
     updateAttraction,
     deleteAttraction,
+    addAttractionPhoto,
     hotels,
     hotelsStatus,
     hotelsError,
     addHotel,
     updateHotel,
     deleteHotel,
+    addHotelPhoto,
     restaurants,
     restaurantsStatus,
     restaurantsError,
     addRestaurant,
     updateRestaurant,
+    addRestaurantPhoto,
     deleteRestaurant,
   };
 

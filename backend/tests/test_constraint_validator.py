@@ -13,8 +13,18 @@ def _inputs(*, cost_max=Decimal("900"), itinerary=None):
         or {
             "status": "ok",
             "days": [
-                {"date": "2026-10-05", "items": [{"category": "attraction"}]},
-                {"date": "2026-10-06", "items": [{"category": "restaurant"}]},
+                {
+                    "date": "2026-10-05",
+                    "day_type": "arrival",
+                    "hotel_id": "hotel-1",
+                    "items": [{"category": "attraction"}],
+                },
+                {
+                    "date": "2026-10-06",
+                    "day_type": "departure",
+                    "hotel_id": None,
+                    "items": [{"category": "restaurant"}],
+                },
             ],
             "unscheduled": [],
         },
@@ -58,15 +68,77 @@ def test_wrong_or_out_of_range_duration_fails():
     assert "outside the trip range" in result["reasons"]["duration"]
 
 
-def test_basic_infeasibility_fails():
+def test_partial_schedule_with_unscheduled_optional_candidates_passes():
     inputs = _inputs()
     inputs["itinerary"]["status"] = "partial"
-    inputs["itinerary"]["unscheduled"] = [{"candidate_id": "required-1"}]
+    inputs["itinerary"]["unscheduled"] = [{"candidate_id": "optional-1"}]
+
+    result = validate_constraints(**inputs)
+
+    assert result["constraints"]["feasibility"]["status"] == "pass"
+    assert "feasibility" not in result["failed_constraints"]
+
+
+def test_empty_day_fails_even_when_schedule_is_partial():
+    inputs = _inputs()
+    inputs["itinerary"]["status"] = "partial"
+    inputs["itinerary"]["days"][1]["items"] = []
 
     result = validate_constraints(**inputs)
 
     assert "feasibility" in result["failed_constraints"]
-    assert "partial" in result["reasons"]["feasibility"]
+    assert "no scheduled items" in result["reasons"]["feasibility"]
+
+
+def test_missing_required_hotel_fails_even_when_schedule_is_partial():
+    inputs = _inputs()
+    inputs["itinerary"]["status"] = "partial"
+    for day in inputs["itinerary"]["days"]:
+        day["hotel_id"] = None
+
+    result = validate_constraints(**inputs)
+
+    assert "feasibility" in result["failed_constraints"]
+    assert "missing a required hotel" in result["reasons"]["feasibility"]
+
+
+def test_no_scheduled_days_fails_even_when_schedule_is_partial():
+    inputs = _inputs()
+    inputs["itinerary"]["status"] = "partial"
+    inputs["itinerary"]["days"] = []
+
+    result = validate_constraints(**inputs)
+
+    assert "feasibility" in result["failed_constraints"]
+    assert "no scheduled days" in result["reasons"]["feasibility"]
+
+
+def test_invalid_scheduler_status_fails():
+    inputs = _inputs()
+    inputs["itinerary"]["status"] = "invalid_input"
+
+    result = validate_constraints(**inputs)
+
+    assert "feasibility" in result["failed_constraints"]
+    assert "invalid_input" in result["reasons"]["feasibility"]
+
+
+def test_day_trip_does_not_require_a_hotel():
+    inputs = _inputs()
+    inputs["itinerary"]["days"] = [
+        {
+            "date": "2026-10-05",
+            "day_type": "day_trip",
+            "hotel_id": None,
+            "items": [{"category": "attraction"}],
+        }
+    ]
+    inputs["trip_requirements"]["end_date"] = date(2026, 10, 5)
+    inputs["trip_requirements"]["duration_days"] = 1
+
+    result = validate_constraints(**inputs)
+
+    assert result["constraints"]["feasibility"]["status"] == "pass"
 
 
 def test_result_names_failed_constraint_and_reason():

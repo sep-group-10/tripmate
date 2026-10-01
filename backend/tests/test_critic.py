@@ -80,6 +80,55 @@ def test_bad_plan_returns_scores_and_actionable_feedback(monkeypatch):
     assert current.critic_result == response.model_dump(mode="json")
 
 
+def test_critic_decision_is_persisted_to_execution_trace(monkeypatch):
+    import uuid
+
+    from langgraph.runtime import Runtime
+
+    response = decision(
+        continue_planning=True,
+        status=None,
+        reason="The itinerary omits a requested hiking experience.",
+        suggestions=["Add a suitable hiking stop on day two."],
+    )
+
+    class FakeModel:
+        def invoke(self, _prompt):
+            return response
+
+    class FakeDB:
+        def __init__(self):
+            self.records = []
+
+        def add(self, record):
+            self.records.append(record)
+
+    monkeypatch.setattr(critic, "create_critic_model", lambda: FakeModel())
+    current = session(iteration_count=4)
+    planning_session_id = uuid.uuid4()
+    db = FakeDB()
+    runtime = Runtime(context={"db": db, "planning_session_id": planning_session_id})
+
+    result = critic.critic_node({"session": current}, runtime=runtime)
+
+    assert result["critic_decision"] == response
+    assert len(db.records) == 1
+    trace = db.records[0]
+    assert trace.tool_name == "critic"
+    assert trace.planning_session_id == planning_session_id
+    assert trace.iteration_number == 4
+    assert trace.success is True
+    assert trace.tool_input["goal"] == current.goal
+    assert trace.tool_input["trip_requirements"] == current.trip_requirements
+    assert trace.tool_input["constraint_result"] == current.constraint_result
+    assert trace.tool_input["iteration_count"] == 4
+    assert trace.tool_output["continue_planning"] is True
+    assert trace.tool_output["status"] is None
+    assert trace.tool_output["reason"] == response.reason
+    assert trace.tool_output["suggestions"] == response.suggestions
+    assert trace.tool_output["variety"] == response.variety.model_dump()
+
+
 def test_good_plan_completes_without_unnecessary_suggestions(monkeypatch):
     response = decision()
 
@@ -149,7 +198,9 @@ def test_planner_prompt_contains_latest_critic_feedback(monkeypatch):
                 action="candidate_retriever", arguments={"destination": "Kandy"}
             )
 
-    monkeypatch.setattr(planner, "create_planner_model", lambda: FakeModel())
+    monkeypatch.setattr(
+        planner, "create_planner_model", lambda _runnable_actions: FakeModel()
+    )
     feedback = {
         "variety": {"score": 1, "reasoning": "The itinerary repeats similar places."},
         "suggestions": ["Add a nature stop on day two."],
