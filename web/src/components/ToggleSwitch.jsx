@@ -13,8 +13,9 @@ function ToggleSwitch({ checked, onChange, label, description }) {
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label || description || "Toggle"}
         onClick={onChange}
-        className={`relative h-[22px] w-[38px] flex-none rounded-pill transition-colors ${
+        className={`relative h-[22px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent w-[38px] flex-none rounded-pill transition-colors ${
           checked ? "bg-accent" : "bg-muted-400"
         }`}
       >
