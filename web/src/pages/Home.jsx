@@ -10,7 +10,7 @@ function Home() {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (ADMIN_ROLES.includes(role)) return <Navigate to="/admin" replace />;
 
-  return <Navigate to="/profile" replace />;
+  return <Navigate to="/chat" replace />;
 }
 
 export default Home;

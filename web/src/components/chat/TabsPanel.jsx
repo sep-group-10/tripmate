@@ -1,16 +1,18 @@
 import { useState } from "react";
-import BudgetTab from "./BudgetTab";
+// import BudgetTab from "./BudgetTab";
 import ItineraryTab from "./ItineraryTab";
 import MapTab from "./MapTab";
-import SummaryTab from "./SummaryTab";
+// import SummaryTab from "./SummaryTab";
 
-const TABS = ["Summary", "Map", "Itinerary", "Budget"];
+// Summary and Budget are commented out of TABS below - they still only
+// show dummy data (see SummaryTab/BudgetTab), not wired to the backend yet.
+const TABS = ["Map", "Itinerary"];
 
 // `itinerary` is the ChatItinerary from the latest plan (null before one exists).
 // Only the Itinerary and Map tabs read it so far; Summary and Budget still show
 // dummy data because the response has no hero facts or costs yet.
 function TabsPanel({ itinerary }) {
-  const [tab, setTab] = useState("Summary");
+  const [tab, setTab] = useState("Itinerary");
 
   return (
     <section
@@ -47,10 +49,10 @@ function TabsPanel({ itinerary }) {
         aria-labelledby={`tab-${tab}`}
         className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4.5"
       >
-        {tab === "Summary" && <SummaryTab />}
+        {/* {tab === "Summary" && <SummaryTab />} */}
         {tab === "Itinerary" && <ItineraryTab itinerary={itinerary} />}
         {tab === "Map" && <MapTab itinerary={itinerary} />}
-        {tab === "Budget" && <BudgetTab />}
+        {/* {tab === "Budget" && <BudgetTab />} */}
       </div>
     </section>
   );

@@ -42,7 +42,7 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/trip-plan"
+        path="/chat"
         element={
           <ProtectedRoute>
             <TripPlanChatPage />

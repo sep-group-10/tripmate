@@ -1,4 +1,4 @@
-// PLACEHOLDER DATA for the trip-plan page. Nothing here comes from the backend:
+// PLACEHOLDER DATA for the chat page. Nothing here comes from the backend:
 // it is a hardcoded Kandy and Ella sample, shaped like the real
 // ChatResponse / ChatItineraryDay (backend/app/schemas/chat.py) so the page can
 // be wired to /api/v1/chat later by replacing these imports.
