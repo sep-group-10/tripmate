@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import FullPageLoader from "../components/FullPageLoader";
 import { ADMIN_ROLES } from "../constants/roles";
 
 /** Guards /admin/* — requires both login AND an admin-capable role.
@@ -12,7 +13,7 @@ function AdminRoute({ children }) {
 
   // Wait for AuthContext's initial GET /users/me session-restore check
   // before deciding - see ProtectedRoute for the same reasoning.
-  if (loading) return null;
+  if (loading) return <FullPageLoader />;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
