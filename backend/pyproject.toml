@@ -5,4 +5,9 @@ select = ["E4", "E7", "E9", "F", "I", "DTZ", "B"]
 "alembic/env.py" = ["F401"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.params.Depends",
+    "fastapi.File",
+    "fastapi.params.File",
+]
