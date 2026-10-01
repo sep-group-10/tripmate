@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { SendHorizontal } from "lucide-react";
-import api from "../../services/api";
-import { parseApiError } from "../../utils/apiError";
+import { useAuth } from "../../hooks/useAuth";
+import { sendChatMessage } from "../../services/chatService";
+import { describeChatError } from "../../utils/chatErrors";
 
 const SUGGESTIONS = ["Swap a day", "Cut LKR 10,000", "Add a tea estate visit"];
+
+const MAX_INPUT_HEIGHT_PX = 144;
 
 const WELCOME_MESSAGES = [
   {
@@ -33,8 +36,9 @@ function ItineraryPreview({ day }) {
   );
 }
 
-function MessageBubble({ message, onAction }) {
+function MessageBubble({ message, onAction, onRetry, retryDisabled }) {
   const isUser = message.role === "user";
+  const isError = message.kind === "error";
   return (
     <div
       className={`flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}
@@ -43,13 +47,16 @@ function MessageBubble({ message, onAction }) {
         {isUser ? "You" : "TripMate"}
       </span>
       <div
+        role={isError ? "alert" : undefined}
         className={`max-w-[86%] px-4 py-3.5 text-[14.5px] leading-[1.62] ${
           isUser
             ? "rounded-[16px_16px_4px_16px] bg-muted-900 text-white"
-            : "rounded-[16px_16px_16px_4px] border border-border bg-inset text-ink"
+            : isError
+              ? "rounded-[16px_16px_16px_4px] border border-danger/40 bg-danger-100 text-ink"
+              : "rounded-[16px_16px_16px_4px] border border-border bg-inset text-ink"
         }`}
       >
-        <p className="m-0">{message.text}</p>
+        <p className="m-0 whitespace-pre-line">{message.text}</p>
         {message.itineraryDay && (
           <ItineraryPreview day={message.itineraryDay} />
         )}
@@ -68,6 +75,16 @@ function MessageBubble({ message, onAction }) {
           </div>
         )}
       </div>
+      {message.retryText && (
+        <button
+          type="button"
+          onClick={() => onRetry(message.retryText)}
+          disabled={retryDisabled}
+          className="rounded-pill bg-accent-100 px-3.25 py-1.75 text-[13px] font-medium text-accent-700 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          Retry
+        </button>
+      )}
       {message.actions?.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {message.actions.map((action) => (
@@ -98,12 +115,13 @@ function TypingIndicator() {
   );
 }
 
-function SuggestionChip({ label, onClick }) {
+function SuggestionChip({ label, onClick, disabled }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
+      disabled={disabled}
+      className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-45"
     >
       {label}
     </button>
@@ -113,6 +131,7 @@ function SuggestionChip({ label, onClick }) {
 // `onPlan(itinerary)` is called whenever a reply carries an itinerary, so the
 // page can hand it to the tabs. Remount (change `key`) to start a new trip.
 function ChatPanel({ onPlan }) {
+  const { clearSession } = useAuth();
   const [messages, setMessages] = useState(WELCOME_MESSAGES);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -121,9 +140,14 @@ function ChatPanel({ onPlan }) {
   // Plain state on purpose: the backend can't reload a past session yet, so a
   // page refresh starts a new one.
   const [sessionId, setSessionId] = useState(null);
-  const [error, setError] = useState(null);
   const mounted = useRef(true);
+  // Set synchronously so a fast double Enter or click can't send twice before
+  // the `thinking` state has re-rendered.
+  const busy = useRef(false);
+  const nextId = useRef(0);
+  const wasThinking = useRef(false);
   const listEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -137,35 +161,31 @@ function ChatPanel({ onPlan }) {
     };
   }, []);
 
+  // Grows with the text (up to a limit) so Shift+Enter lines stay visible.
+  useEffect(() => {
+    const field = inputRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${Math.min(field.scrollHeight, MAX_INPUT_HEIGHT_PX)}px`;
+  }, [input]);
+
+  // The field is disabled while waiting; give focus back when the reply lands.
+  useEffect(() => {
+    if (wasThinking.current && !thinking) inputRef.current?.focus();
+    wasThinking.current = thinking;
+  }, [thinking]);
+
   const canSend = input.trim().length > 0 && !thinking;
 
-  // POST /api/v1/chat starts a session; POST /api/v1/chat/{session_id}
-  // continues one (see backend/app/routers/chat.py). The call is synchronous
-  // on the server and runs the full planner, so it can take a while. Resolves
-  // with a ChatResponse ({ assistant_message, session, itinerary }).
-  const requestAssistantReply = async (text, currentSessionId) => {
-    const res = await api.post(
-      currentSessionId ? `/api/v1/chat/${currentSessionId}` : "/api/v1/chat",
-      { message: text },
-    );
-    return res.data.data;
-  };
+  const makeId = (prefix) => `${prefix}-${nextId.current++}`;
 
-  const handleSend = async (event) => {
-    event.preventDefault();
-    if (!canSend) return;
-
-    const text = input.trim();
-    setMessages((prev) => [
-      ...prev,
-      { id: `u-${Date.now()}`, role: "user", text },
-    ]);
-    setInput("");
-    setError(null);
+  // Sends `text` and appends TripMate's reply, or an error message with a Retry
+  // button. The caller has already put the user's message in the chat.
+  const deliver = async (text) => {
+    busy.current = true;
     setThinking(true);
-
     try {
-      const response = await requestAssistantReply(text, sessionId);
+      const response = await sendChatMessage(text, sessionId);
       if (!mounted.current) return;
       if (response.session?.id) {
         setSessionId((current) => current ?? response.session.id);
@@ -176,23 +196,71 @@ function ChatPanel({ onPlan }) {
       setMessages((prev) => [
         ...prev,
         {
-          id: `a-${Date.now()}`,
+          id: makeId("a"),
           role: "assistant",
           text: response.assistant_message,
         },
       ]);
     } catch (err) {
       if (!mounted.current) return;
-      const { message } = parseApiError(err);
-      if (err.response?.status === 404) {
-        // Session not found: drop the stale id so the next message starts fresh.
-        setSessionId(null);
-        setError(`${message}. Your next message will start a new session.`);
-      } else {
-        setError(message);
+      const failure = describeChatError(err);
+      if (failure.kind === "auth") {
+        // The session is gone and the shared client already tried to refresh
+        // it once: clearing it makes ProtectedRoute send the user to /login.
+        clearSession();
+        return;
       }
+      if (failure.resetSession) setSessionId(null);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: makeId("e"),
+          role: "assistant",
+          kind: "error",
+          text: failure.text,
+          // Only a retryable error offers Retry, which resends this same text.
+          retryText: failure.retryable ? text : null,
+        },
+      ]);
     } finally {
+      busy.current = false;
       if (mounted.current) setThinking(false);
+    }
+  };
+
+  const sendMessage = (raw) => {
+    const text = raw.trim();
+    if (!text || busy.current) return;
+    setMessages((prev) => [
+      // A new message replaces any earlier error (and its Retry button).
+      ...prev.filter((message) => message.kind !== "error"),
+      { id: makeId("u"), role: "user", text },
+    ]);
+    setInput("");
+    deliver(text);
+  };
+
+  // Retry resends the same text without adding the user's message again.
+  const retry = (text) => {
+    if (busy.current) return;
+    setMessages((prev) => prev.filter((message) => message.kind !== "error"));
+    deliver(text);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    sendMessage(input);
+  };
+
+  // Enter sends; Shift+Enter inserts a new line.
+  const handleKeyDown = (event) => {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent?.isComposing
+    ) {
+      event.preventDefault();
+      sendMessage(input);
     }
   };
 
@@ -207,14 +275,11 @@ function ChatPanel({ onPlan }) {
             key={message.id}
             message={message}
             onAction={setInput}
+            onRetry={retry}
+            retryDisabled={thinking}
           />
         ))}
         {thinking && <TypingIndicator />}
-        {error && (
-          <p role="alert" className="m-0 text-body-sm text-danger">
-            {error}
-          </p>
-        )}
         <div ref={listEndRef} />
       </div>
 
@@ -224,18 +289,22 @@ function ChatPanel({ onPlan }) {
             <SuggestionChip
               key={label}
               label={label}
-              onClick={() => setInput(label)}
+              disabled={thinking}
+              onClick={() => sendMessage(label)}
             />
           ))}
         </div>
-        <form onSubmit={handleSend} className="flex items-center gap-2">
-          <input
-            type="text"
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            rows={1}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={thinking}
             placeholder="Ask for a change — 'swap Day 3 for something quieter'"
             aria-label="Message"
-            className="min-h-10 flex-1 rounded-pill border border-border bg-surface px-4 py-2 text-sm text-ink shadow-inset outline-none"
+            className="min-h-10 flex-1 resize-none rounded-card border border-border bg-surface px-4 py-2.5 text-sm text-ink shadow-inset outline-none disabled:opacity-60"
           />
           <button
             type="submit"
