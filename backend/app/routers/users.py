@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -10,6 +10,7 @@ from app.schemas.common import ApiResponse
 from app.schemas.export import UserDataExport
 from app.schemas.profile import ProfileUpdateRequest
 from app.schemas.user import UserResponse
+from app.services.image_upload import upload_image
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -34,6 +35,39 @@ def update_my_profile(
     for field, value in payload.applied_fields().items():
         setattr(current_user, field, value)
 
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return ApiResponse(data=current_user)
+
+
+@router.post("/me/profile-picture", response_model=ApiResponse[UserResponse])
+def upload_my_profile_picture(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Resize and store a new profile picture for the current user,
+    replacing any previous one."""
+    url = upload_image(file, key_prefix=f"profiles/{current_user.id}")
+
+    current_user.profile_picture_url = url
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return ApiResponse(data=current_user)
+
+
+@router.delete("/me/profile-picture", response_model=ApiResponse[UserResponse])
+def remove_my_profile_picture(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Unlink the current user's profile picture. The S3 object itself
+    is left in place - only the reference on the user row is cleared."""
+    current_user.profile_picture_url = None
     db.add(current_user)
     db.commit()
     db.refresh(current_user)

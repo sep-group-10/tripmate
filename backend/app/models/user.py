@@ -99,6 +99,11 @@ class User(Base):
         nullable=True,
     )
 
+    preferred_pace: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
     preferred_accommodation: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
@@ -111,6 +116,11 @@ class User(Base):
 
     interests: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text),
+        nullable=True,
+    )
+
+    profile_picture_url: Mapped[str | None] = mapped_column(
+        String(500),
         nullable=True,
     )
 

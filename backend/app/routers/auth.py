@@ -541,6 +541,7 @@ def delete_account(
     current_user.refresh_token = None
     current_user.refresh_token_expiry = None
     current_user.preferred_travel_style = None
+    current_user.preferred_pace = None
     current_user.preferred_accommodation = None
     current_user.typical_budget_range = None
     current_user.interests = None

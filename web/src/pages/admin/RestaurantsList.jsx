@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import EntityCard from "../../components/EntityCard";
+import ListPagination from "../../components/ListPagination";
 import SearchInput from "../../components/SearchInput";
 import EntityFormModal from "../../components/EntityFormModal";
 import ConfirmDeleteDialog from "../../components/ConfirmDeleteDialog";
@@ -19,6 +20,8 @@ const CUISINE_TONES = {
 
 const CUISINE_OPTIONS = Object.keys(CUISINE_TONES);
 
+const PAGE_SIZE = 50;
+
 function RestaurantsList() {
   const {
     restaurants,
@@ -28,8 +31,10 @@ function RestaurantsList() {
     addRestaurant,
     updateRestaurant,
     deleteRestaurant,
+    addRestaurantPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [destinationFilter, setDestinationFilter] = useState("All");
   const [cuisineFilter, setCuisineFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -62,6 +67,12 @@ function RestaurantsList() {
           (r.description ?? "").toLowerCase().includes(q),
       );
   }, [restaurants, query, destinationFilter, cuisineFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRecords = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
 
   const formFields = useMemo(
     () => [
@@ -190,13 +201,19 @@ function RestaurantsList() {
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(1);
+          }}
           placeholder="Search restaurants…"
           className="w-search"
         />
         <select
           value={destinationFilter}
-          onChange={(event) => setDestinationFilter(event.target.value)}
+          onChange={(event) => {
+            setDestinationFilter(event.target.value);
+            setPage(1);
+          }}
           aria-label="Destination"
           className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
@@ -209,7 +226,10 @@ function RestaurantsList() {
         </select>
         <select
           value={cuisineFilter}
-          onChange={(event) => setCuisineFilter(event.target.value)}
+          onChange={(event) => {
+            setCuisineFilter(event.target.value);
+            setPage(1);
+          }}
           aria-label="Cuisine"
           className="min-h-10 min-w-filter rounded-lg border border-border bg-surface px-3 text-sm text-ink shadow-inset outline-none"
         >
@@ -241,33 +261,42 @@ function RestaurantsList() {
       )}
 
       {restaurantsStatus === "ready" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((restaurant) => (
-            <EntityCard
-              key={restaurant.id}
-              name={restaurant.name}
-              location={restaurant.destination}
-              rating={restaurant.rating}
-              tag={{
-                label: restaurant.cuisine_type,
-                tone: CUISINE_TONES[restaurant.cuisine_type] || "accent",
-              }}
-              description={restaurant.description}
-              metrics={[
-                { label: "Hours", value: restaurant.operating_hours || "—" },
-                {
-                  label: "Avg. meal cost",
-                  value: formatCurrency(restaurant.avg_meal_cost),
-                },
-              ]}
-              onEdit={() => openEditForm(restaurant)}
-              onDelete={() => {
-                setDeleteError("");
-                setDeletingRecord(restaurant);
-              }}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {visibleRecords.map((restaurant) => (
+              <EntityCard
+                key={restaurant.id}
+                name={restaurant.name}
+                location={restaurant.destination}
+                rating={restaurant.rating}
+                tag={{
+                  label: restaurant.cuisine_type,
+                  tone: CUISINE_TONES[restaurant.cuisine_type] || "accent",
+                }}
+                photoUrls={restaurant.photo_urls}
+                description={restaurant.description}
+                metrics={[
+                  { label: "Hours", value: restaurant.operating_hours || "—" },
+                  {
+                    label: "Avg. meal cost",
+                    value: formatCurrency(restaurant.avg_meal_cost),
+                  },
+                ]}
+                onEdit={() => openEditForm(restaurant)}
+                onDelete={() => {
+                  setDeleteError("");
+                  setDeletingRecord(restaurant);
+                }}
+              />
+            ))}
+          </div>
+          <ListPagination
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+          />
+        </>
       )}
 
       {isFormOpen && (
@@ -283,6 +312,11 @@ function RestaurantsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          onUploadPhoto={
+            editingRecord
+              ? (file) => addRestaurantPhoto(editingRecord.id, file)
+              : undefined
+          }
           submitting={formSubmitting}
           submitError={formError}
         />

@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import Modal from "../components/Modal";
+import Button from "../components/Button";
+import SectionCard from "../components/SectionCard";
+import ChoiceChip from "../components/ChoiceChip";
+import SavedMessage from "../components/SavedMessage";
+import PasswordChangeForm from "../components/PasswordChangeForm";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
-import { validateFullName, validatePassword } from "../utils/validation";
-import { loadProfile, saveProfile } from "../utils/profileStorage";
+import { validateFullName } from "../utils/validation";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
@@ -21,22 +25,7 @@ const INTEREST_OPTIONS = [
   "Nightlife",
 ];
 
-// Email is deliberately excluded from the PUT body below: the real
-// PUT /users/me contract (backend/app/schemas/profile.py) only allows
-// full_name and preference fields, with extra="forbid" - sending email
-// would reject the whole request. Email is shown read-only for this
-// reason, not as an oversight.
-//
-// Account Settings: password change now calls the real
-// POST /auth/change-password. Email notifications still has no backend
-// field (no notifications column on User yet), so it stays on the
-// local-only profileStorage behavior below. Travel Preferences partially
-// overlaps the real contract
-// (typical_budget_range and interests both exist on ProfileUpdateRequest)
-// but "pace" has no backend equivalent, and this issue (C4.1) is scoped to
-// register -> login -> profile's Personal Information section only, so
-// full preference wiring is left for a later issue; it also stays
-// local-only for now.
+// Travel preferences are stored on the authenticated user profile.
 const personalValidators = { fullName: validateFullName };
 
 function useFlash(duration = 2000) {
@@ -59,53 +48,20 @@ function initials(name) {
     .toUpperCase();
 }
 
-function SectionCard({ title, badge, children }) {
-  return (
-    <section className="overflow-hidden rounded-card bg-surface shadow-control">
-      <div className="flex items-center justify-between gap-4 border-b border-divider px-7 py-4.5">
-        <h2 className="font-heading m-0 text-[17px] font-semibold tracking-tight">
-          {title}
-        </h2>
-        <span className="rounded-badge bg-muted-300 px-2 py-[3px] font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
-          {badge}
-        </span>
-      </div>
-      <div className="flex flex-col gap-6 p-7">{children}</div>
-    </section>
-  );
-}
-
-function ChoiceChip({ label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${
-        active
-          ? "bg-accent-100 text-accent-700"
-          : "border border-border bg-surface text-ink shadow-control"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SavedMessage({ show, text }) {
-  if (!show) return null;
-  return <span className="text-helper text-success">{text}</span>;
-}
-
 function ProfilePage() {
   const { login, logout, clearSession, role } = useAuth();
   const navigate = useNavigate();
 
-  // Personal information comes from the real GET /users/me on mount, kept
-  // separate from the localStorage-backed prefs below.
+  // Profile information and travel preferences come from GET /users/me.
   const [email, setEmail] = useState("");
   const [loginProvider, setLoginProvider] = useState("local");
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
   const [loadStatus, setLoadStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
+
+  const photoInputRef = useRef(null);
+  const [photoStatus, setPhotoStatus] = useState("idle"); // idle | uploading | removing | error
+  const [photoError, setPhotoError] = useState("");
 
   const {
     values: personalValues,
@@ -120,6 +76,13 @@ function ProfilePage() {
   const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | error
   const [saveError, setSaveError] = useState("");
 
+  const [budget, setBudget] = useState("Moderate");
+  const [pace, setPace] = useState("Relaxed");
+  const [interests, setInterests] = useState(["Culture", "Nature", "Food"]);
+  const [savedPrefs, flashPrefs] = useFlash();
+  const [prefsSaveStatus, setPrefsSaveStatus] = useState("idle");
+  const [prefsSaveError, setPrefsSaveError] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     api
@@ -130,15 +93,16 @@ function ProfilePage() {
         setPersonalValues({ fullName: me.full_name });
         setEmail(me.email);
         setLoginProvider(me.login_provider);
+        setProfilePictureUrl(me.profile_picture_url);
+        setBudget(me.typical_budget_range || "Moderate");
+        setPace(me.preferred_pace || "Relaxed");
+        setInterests(me.interests || ["Culture", "Nature", "Food"]);
         setLoadStatus("ready");
       })
       .catch((error) => {
         if (cancelled) return;
         const { code, message } = parseApiError(error);
         if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
-          // See AuthContext's clearSession() comment: no refresh endpoint
-          // exists yet, so this is treated as a full session expiry.
-          // ProtectedRoute redirects to /login once isAuthenticated flips.
           clearSession();
           return;
         }
@@ -191,73 +155,52 @@ function ProfilePage() {
     navigate("/login", { replace: true });
   };
 
-  const [localPrefs, setLocalPrefs] = useState(() => loadProfile());
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [currentPasswordError, setCurrentPasswordError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordStatus, setPasswordStatus] = useState("idle"); // idle | saving | error
-  const [savedPassword, flashPassword] = useFlash();
-  const [emailNotifications, setEmailNotifications] = useState(
-    localPrefs.emailNotifications,
-  );
+  const handlePhotoChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
 
-  const handleUpdatePassword = async (event) => {
-    event.preventDefault();
-
-    if (!currentPassword) {
-      setCurrentPasswordError("Enter your current password");
-      return;
-    }
-    const newPasswordError = validatePassword(newPassword);
-    if (newPasswordError) {
-      setPasswordError(newPasswordError);
-      return;
-    }
-
-    setCurrentPasswordError("");
-    setPasswordError("");
-    setPasswordStatus("saving");
+    setPhotoStatus("uploading");
+    setPhotoError("");
     try {
-      const response = await api.post("/api/v1/auth/change-password", {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-      login(response.data.data.user);
-      setCurrentPassword("");
-      setNewPassword("");
-      setPasswordStatus("idle");
-      flashPassword();
+      const response = await api.post(
+        "/api/v1/users/me/profile-picture",
+        (() => {
+          const formData = new FormData();
+          formData.append("file", file);
+          return formData;
+        })(),
+      );
+      setProfilePictureUrl(response.data.data.profile_picture_url);
+      setPhotoStatus("idle");
     } catch (error) {
-      const { code, message, details } = parseApiError(error);
+      const { code, message } = parseApiError(error);
       if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
         clearSession();
         return;
       }
-      if (code === "INVALID_CREDENTIALS") {
-        setCurrentPasswordError(message);
-      } else if (code === "VALIDATION_ERROR" && details.length > 0) {
-        const newPasswordDetail = details.find(
-          (detail) => detail.field === "new_password",
-        );
-        setPasswordError(newPasswordDetail?.message ?? message);
-      } else {
-        setPasswordError(message);
-      }
-      setPasswordStatus("error");
+      setPhotoError(message);
+      setPhotoStatus("error");
     }
   };
 
-  const handleToggleEmailNotifications = () => {
-    const next = saveProfile({ emailNotifications: !emailNotifications });
-    setLocalPrefs(next);
-    setEmailNotifications(next.emailNotifications);
+  const handleRemovePhoto = async () => {
+    setPhotoStatus("removing");
+    setPhotoError("");
+    try {
+      const response = await api.delete("/api/v1/users/me/profile-picture");
+      setProfilePictureUrl(response.data.data.profile_picture_url);
+      setPhotoStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setPhotoError(message);
+      setPhotoStatus("error");
+    }
   };
-
-  const [budget, setBudget] = useState(localPrefs.budget);
-  const [pace, setPace] = useState(localPrefs.pace);
-  const [interests, setInterests] = useState(localPrefs.interests);
-  const [savedPrefs, flashPrefs] = useFlash();
 
   const toggleInterest = (label) => {
     setInterests((prev) =>
@@ -267,10 +210,28 @@ function ProfilePage() {
     );
   };
 
-  const handleSavePreferences = (event) => {
+  const handleSavePreferences = async (event) => {
     event.preventDefault();
-    setLocalPrefs(saveProfile({ budget, pace, interests }));
-    flashPrefs();
+    setPrefsSaveStatus("saving");
+    setPrefsSaveError("");
+    try {
+      const response = await api.put("/api/v1/users/me", {
+        typical_budget_range: budget,
+        preferred_pace: pace,
+        interests,
+      });
+      login(response.data.data);
+      flashPrefs();
+      setPrefsSaveStatus("idle");
+    } catch (error) {
+      const { code, message } = parseApiError(error);
+      if (code === "TOKEN_EXPIRED" || code === "UNAUTHORIZED") {
+        clearSession();
+        return;
+      }
+      setPrefsSaveError(message);
+      setPrefsSaveStatus("error");
+    }
   };
 
   const [exportStatus, setExportStatus] = useState("idle"); // idle | exporting | error
@@ -345,9 +306,9 @@ function ProfilePage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
+            {/* <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
               Verified traveller
-            </span>
+            </span> */}
             {ADMIN_ROLES.includes(role) && (
               <Link
                 to="/admin"
@@ -356,39 +317,63 @@ function ProfilePage() {
                 Admin
               </Link>
             )}
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleLogout}
-              className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
+              className="px-3.5 py-1.5 text-xs"
             >
               Log out
-            </button>
+            </Button>
           </div>
         </header>
 
         <SectionCard title="Personal information" badge="Account">
           <div className="flex items-center gap-4">
-            <span className="flex h-[60px] w-[60px] items-center justify-center rounded-pill bg-accent-100 text-xl font-semibold tracking-wide text-accent-700">
-              {initials(personalValues.fullName)}
-            </span>
+            {profilePictureUrl ? (
+              <img
+                src={profilePictureUrl}
+                alt=""
+                className="h-[60px] w-[60px] flex-none rounded-pill object-cover"
+              />
+            ) : (
+              <span className="flex h-[60px] w-[60px] flex-none items-center justify-center rounded-pill bg-accent-100 text-xl font-semibold tracking-wide text-accent-700">
+                {initials(personalValues.fullName)}
+              </span>
+            )}
             <div className="flex flex-col gap-1.5">
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoStatus === "uploading"}
+                  className="px-3.5 py-1.5 text-xs"
                 >
-                  Change photo
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-700"
-                >
-                  Remove
-                </button>
+                  {photoStatus === "uploading" ? "Uploading…" : "Change photo"}
+                </Button>
+                {profilePictureUrl && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleRemovePhoto}
+                    disabled={photoStatus === "removing"}
+                    className="px-3.5 py-1.5 text-xs"
+                  >
+                    {photoStatus === "removing" ? "Removing…" : "Remove"}
+                  </Button>
+                )}
               </div>
               <span className="text-helper text-muted-600">
-                JPG or PNG, up to 2 MB.
+                JPG, PNG, or WebP, up to 8 MB.
               </span>
+              {photoError && (
+                <span className="text-helper text-danger">{photoError}</span>
+              )}
             </div>
           </div>
 
@@ -441,103 +426,26 @@ function ProfilePage() {
 
               <div className="flex items-center justify-end gap-3">
                 <SavedMessage show={savedProfile} text="Saved" />
-                <button
-                  type="submit"
-                  disabled={saveStatus === "saving"}
-                  className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
+                <Button type="submit" disabled={saveStatus === "saving"}>
                   {saveStatus === "saving" ? "Saving…" : "Save changes"}
-                </button>
+                </Button>
               </div>
             </form>
           )}
         </SectionCard>
 
         <SectionCard title="Account settings" badge="Security">
-          <form
-            onSubmit={handleUpdatePassword}
-            noValidate
-            className="flex flex-col gap-6"
-          >
-            {loginProvider === "google" ? (
-              <p className="m-0 rounded-lg bg-bg px-4 py-3 text-sm text-muted-600">
-                You signed in with Google, so there&apos;s no password to update
-                here.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormInput
-                  id="currentPassword"
-                  label="Current password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={currentPassword}
-                  onChange={(event) => {
-                    setCurrentPassword(event.target.value);
-                    setCurrentPasswordError("");
-                  }}
-                  error={currentPasswordError}
-                />
-                <FormInput
-                  id="newPassword"
-                  label="New password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters"
-                  value={newPassword}
-                  onChange={(event) => {
-                    setNewPassword(event.target.value);
-                    setPasswordError("");
-                  }}
-                  error={passwordError}
-                />
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3.5 rounded-lg bg-bg p-4">
-              <div className="flex items-center justify-between gap-6">
-                <div>
-                  <div className="text-sm font-medium">Email notifications</div>
-                  <div className="text-helper text-muted-600">
-                    Trip updates, price drops and itinerary reminders
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={emailNotifications}
-                  onClick={handleToggleEmailNotifications}
-                  className={`relative h-[22px] w-[38px] flex-none rounded-pill transition-colors ${
-                    emailNotifications ? "bg-accent" : "bg-muted-400"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow-control transition-transform ${
-                      emailNotifications
-                        ? "translate-x-[19px]"
-                        : "translate-x-[3px]"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {loginProvider !== "google" && (
-              <div className="flex items-center justify-end gap-3">
-                <SavedMessage show={savedPassword} text="Password updated" />
-                <button
-                  type="submit"
-                  disabled={passwordStatus === "saving"}
-                  className="rounded-full bg-muted-900 px-5 py-2.5 text-sm font-medium text-white shadow-control disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {passwordStatus === "saving"
-                    ? "Updating…"
-                    : "Update password"}
-                </button>
-              </div>
-            )}
-          </form>
+          {loginProvider === "google" ? (
+            <p className="m-0 rounded-lg bg-bg px-4 py-3 text-sm text-muted-600">
+              You signed in with Google, so there&apos;s no password to update
+              here.
+            </p>
+          ) : (
+            <PasswordChangeForm
+              onSuccess={(user) => login(user)}
+              onSessionExpired={clearSession}
+            />
+          )}
         </SectionCard>
 
         <SectionCard title="Travel preferences" badge="Planning">
@@ -597,14 +505,25 @@ function ProfilePage() {
               </span>
             </div>
 
+            {prefsSaveError && (
+              <p
+                className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger"
+                role="alert"
+              >
+                {prefsSaveError}
+              </p>
+            )}
+
             <div className="flex items-center justify-end gap-3">
               <SavedMessage show={savedPrefs} text="Preferences saved" />
-              <button
+              <Button
                 type="submit"
-                className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700"
+                disabled={
+                  prefsSaveStatus === "saving" || loadStatus !== "ready"
+                }
               >
-                Save preferences
-              </button>
+                {prefsSaveStatus === "saving" ? "Saving…" : "Save preferences"}
+              </Button>
             </div>
           </form>
         </SectionCard>
@@ -618,14 +537,14 @@ function ProfilePage() {
                 file.
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleExportData}
               disabled={exportStatus === "exporting"}
-              className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+              className="px-4 py-2"
             >
               {exportStatus === "exporting" ? "Preparing…" : "Export data"}
-            </button>
+            </Button>
           </div>
           {exportStatus === "error" && (
             <p className="m-0 rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger">
@@ -642,13 +561,13 @@ function ProfilePage() {
                 Permanently deactivates your account. This cannot be undone.
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="dangerOutline"
               onClick={() => setShowDeleteModal(true)}
-              className="rounded-full border border-danger px-4 py-2 text-sm font-medium text-danger shadow-control"
+              className="px-4 py-2"
             >
               Delete account
-            </button>
+            </Button>
           </div>
         </SectionCard>
       </div>
@@ -664,29 +583,29 @@ function ProfilePage() {
           }}
           footer={
             <>
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeletePassword("");
                   setDeleteError("");
                 }}
                 disabled={deleteStatus === "deleting"}
-                className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
+                className="px-4 py-2"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={handleDeleteAccount}
                 disabled={
                   deleteStatus === "deleting" ||
                   (loginProvider !== "google" && !deletePassword)
                 }
-                className="rounded-full bg-danger px-4 py-2 text-sm font-medium text-white shadow-control hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                className="px-4 py-2"
               >
                 {deleteStatus === "deleting" ? "Deleting…" : "Delete account"}
-              </button>
+              </Button>
             </>
           }
         >

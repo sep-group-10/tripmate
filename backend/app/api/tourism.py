@@ -2,7 +2,7 @@ import math
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -32,6 +32,7 @@ from app.schemas.tourism import (
     RestaurantResponse,
     RestaurantUpdate,
 )
+from app.services.image_upload import upload_image
 
 destination_router = APIRouter(
     prefix="/api/v1/destinations",
@@ -57,6 +58,27 @@ local_event_router = APIRouter(
     prefix="/api/v1/local-events",
     tags=["Local Events"],
 )
+
+
+def _not_found(entity_name: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={
+            "success": False,
+            "error": {"code": "NOT_FOUND", "message": f"{entity_name} not found"},
+        },
+    )
+
+
+def _add_entity_photo(entity, key_prefix: str, file: UploadFile, db: Session):
+    """Upload a photo and append its CloudFront URL to an entity's
+    photo_urls array. Shared across attractions/hotels/restaurants/
+    local events since all four model this field identically."""
+    url = upload_image(file, key_prefix=key_prefix)
+    entity.photo_urls = [*(entity.photo_urls or []), url]
+    db.commit()
+    db.refresh(entity)
+    return entity
 
 
 # ============================================================
@@ -446,6 +468,29 @@ def delete_attraction(
     return attraction
 
 
+@attraction_router.post(
+    "/{attraction_id}/photos",
+    response_model=AttractionResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def add_attraction_photo(
+    attraction_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    attraction = (
+        db.query(Attraction)
+        .filter(Attraction.id == attraction_id, Attraction.is_active.is_(True))
+        .first()
+    )
+    if attraction is None:
+        raise _not_found("Attraction")
+
+    return _add_entity_photo(
+        attraction, f"places/attractions/{attraction_id}", file, db
+    )
+
+
 # ============================================================
 # HOTELS
 # ============================================================
@@ -659,6 +704,25 @@ def delete_hotel(
     return hotel
 
 
+@hotel_router.post(
+    "/{hotel_id}/photos",
+    response_model=HotelResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def add_hotel_photo(
+    hotel_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    hotel = (
+        db.query(Hotel).filter(Hotel.id == hotel_id, Hotel.is_active.is_(True)).first()
+    )
+    if hotel is None:
+        raise _not_found("Hotel")
+
+    return _add_entity_photo(hotel, f"places/hotels/{hotel_id}", file, db)
+
+
 # ============================================================
 # RESTAURANTS
 # ============================================================
@@ -870,6 +934,29 @@ def delete_restaurant(
     db.refresh(restaurant)
 
     return restaurant
+
+
+@restaurant_router.post(
+    "/{restaurant_id}/photos",
+    response_model=RestaurantResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def add_restaurant_photo(
+    restaurant_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.id == restaurant_id, Restaurant.is_active.is_(True))
+        .first()
+    )
+    if restaurant is None:
+        raise _not_found("Restaurant")
+
+    return _add_entity_photo(
+        restaurant, f"places/restaurants/{restaurant_id}", file, db
+    )
 
 
 # ============================================================
@@ -1096,3 +1183,24 @@ def delete_local_event(
     db.refresh(event)
 
     return event
+
+
+@local_event_router.post(
+    "/{event_id}/photos",
+    response_model=LocalEventResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def add_local_event_photo(
+    event_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(LocalEvent)
+        .filter(LocalEvent.id == event_id, LocalEvent.is_active.is_(True))
+        .first()
+    )
+    if event is None:
+        raise _not_found("Local event")
+
+    return _add_entity_photo(event, f"places/local-events/{event_id}", file, db)
