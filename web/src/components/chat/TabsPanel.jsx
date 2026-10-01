@@ -1,18 +1,20 @@
 import { useState } from "react";
-// import BudgetTab from "./BudgetTab";
+import { TRIP_DUMMY } from "../../data/tripPlanDummyData";
+import BudgetTab from "./BudgetTab";
+import EmptyState from "./EmptyState";
 import ItineraryTab from "./ItineraryTab";
 import MapTab from "./MapTab";
-// import SummaryTab from "./SummaryTab";
+import SummaryTab from "./SummaryTab";
 
-// Summary and Budget are commented out of TABS below - they still only
-// show dummy data (see SummaryTab/BudgetTab), not wired to the backend yet.
-const TABS = ["Map", "Itinerary"];
+const TABS = ["Summary", "Map", "Itinerary", "Budget"];
 
 // `itinerary` is the ChatItinerary from the latest plan (null before one exists).
-// Only the Itinerary and Map tabs read it so far; Summary and Budget still show
-// dummy data because the response has no hero facts or costs yet.
+// Itinerary and Map render it. Summary and Budget have no backend data yet (the
+// response carries no hero facts, trade-offs or costs), so they show TRIP_DUMMY
+// whenever a plan exists. Swap `trip` for real data once an endpoint provides it.
 function TabsPanel({ itinerary }) {
-  const [tab, setTab] = useState("Itinerary");
+  const [tab, setTab] = useState("Summary");
+  const trip = itinerary ? TRIP_DUMMY : null;
 
   return (
     <section
@@ -49,10 +51,17 @@ function TabsPanel({ itinerary }) {
         aria-labelledby={`tab-${tab}`}
         className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4.5"
       >
-        {/* {tab === "Summary" && <SummaryTab />} */}
-        {tab === "Itinerary" && <ItineraryTab itinerary={itinerary} />}
-        {tab === "Map" && <MapTab itinerary={itinerary} />}
-        {/* {tab === "Budget" && <BudgetTab />} */}
+        {!itinerary && <EmptyState what="itinerary" />}
+        {itinerary && tab === "Summary" && (
+          <SummaryTab summary={trip.summary} />
+        )}
+        {itinerary && tab === "Map" && <MapTab itinerary={itinerary} />}
+        {itinerary && tab === "Itinerary" && (
+          <ItineraryTab itinerary={itinerary} />
+        )}
+        {itinerary && tab === "Budget" && (
+          <BudgetTab summary={trip.summary} budget={trip.budget} />
+        )}
       </div>
     </section>
   );

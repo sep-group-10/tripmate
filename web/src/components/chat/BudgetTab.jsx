@@ -1,26 +1,39 @@
-import { ITINERARY_DAYS } from "../../data/tripPlanDummyData";
-import { BUDGET_CATEGORIES, computeBudget } from "../../utils/tripBudget";
 import { formatMoney } from "../../utils/tripFormat";
 import SectionLabel from "./SectionLabel";
+import TripHero from "./TripHero";
 
-function BudgetTab() {
-  const { amounts, total } = computeBudget();
-  const rows = BUDGET_CATEGORIES.map((category) => ({
+// Segment and dot color per budget category key.
+const CATEGORY_COLORS = {
+  accommodation: "bg-accent",
+  dining: "bg-info",
+  transport: "bg-warn",
+  attractions: "bg-accent-300",
+  misc: "bg-muted-400",
+};
+
+function BudgetTab({ summary, budget }) {
+  // Percentages come from the amounts, so they always match the bar.
+  const sum = budget.categories.reduce((n, category) => n + category.amount, 0);
+  const rows = budget.categories.map((category) => ({
     ...category,
-    amount: amounts[category.key],
-    percent: total ? Math.round((amounts[category.key] / total) * 100) : 0,
+    color: CATEGORY_COLORS[category.key] ?? "bg-muted-400",
+    share: sum > 0 ? (category.amount / sum) * 100 : 0,
   }));
 
   return (
     <>
-      <div className="flex flex-none items-baseline justify-between gap-3">
+      <TripHero summary={summary} />
+
+      {/* Wraps instead of overflowing, and the bar below is a separate block,
+          so a long total can never overlap it. */}
+      <div className="flex flex-none flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <SectionLabel>Total planned spend</SectionLabel>
-        <span className="flex items-baseline gap-2">
-          <span className="font-heading text-[26px] font-semibold tracking-tight text-accent">
-            {formatMoney(total)}
+        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="font-heading text-[26px] leading-tight font-semibold tracking-[-0.03em] text-accent tabular-nums">
+            {formatMoney(budget.total, budget.currency)}
           </span>
-          <span className="text-helper text-muted-500">
-            {formatMoney(Math.round(total / ITINERARY_DAYS.length))} / day
+          <span className="text-helper text-muted-500 tabular-nums">
+            {budget.per_day.toLocaleString("en-US")} / day
           </span>
         </span>
       </div>
@@ -30,15 +43,13 @@ function BudgetTab() {
         role="img"
         aria-label="Spend by category"
       >
-        {rows
-          .filter((row) => row.amount > 0)
-          .map((row) => (
-            <span
-              key={row.key}
-              className={`h-full ${row.color}`}
-              style={{ width: `${row.percent}%` }}
-            />
-          ))}
+        {rows.map((row) => (
+          <span
+            key={row.key}
+            className={`h-full ${row.color}`}
+            style={{ width: `${row.share}%` }}
+          />
+        ))}
       </div>
 
       <div className="flex flex-none flex-col">
@@ -51,13 +62,11 @@ function BudgetTab() {
             <span className="flex-1 text-body-sm text-muted-700">
               {row.label}
             </span>
-            <span className="text-helper text-muted-500">
-              {row.amount > 0 ? `${row.percent}%` : "—"}
+            <span className="text-helper text-muted-500 tabular-nums">
+              {Math.round(row.share)}%
             </span>
-            <span
-              className={`min-w-22 text-right text-body-sm font-medium ${row.amount > 0 ? "" : "text-muted-500"}`}
-            >
-              {formatMoney(row.amount, "LKR 0")}
+            <span className="min-w-22 text-right text-body-sm font-medium tabular-nums">
+              {formatMoney(row.amount, budget.currency)}
             </span>
           </div>
         ))}

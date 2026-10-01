@@ -1,5 +1,5 @@
-// Trip-plan page. The chat panel talks to the real /chat endpoint and the
-// Itinerary and Map tabs render the plan it returns; Summary and Budget still
+// Trip-plan page. The chat panel talks to the real /chat endpoint, the
+// Itinerary and Map tabs render the plan it returns, and Summary and Budget
 // show placeholder content from data/tripPlanDummyData.js. Session list and
 // mobile layout come in later steps. The pieces live in components/chat/.
 import { useState } from "react";
