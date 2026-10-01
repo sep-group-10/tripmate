@@ -186,8 +186,8 @@ def _install_deterministic_planning_graph(
                         "opening_hours": None,
                     }
                 ],
-                "hotel_id": None,
-                "hotel_location": None,
+                "hotel_id": "hotel-1",
+                "hotel_location": "Kandy",
                 "warnings": [],
             }
         )
@@ -836,7 +836,7 @@ def test_complete_preferences_start_planning_and_persist_final_result(
         return agent_session
 
     class FakeGraph:
-        def invoke(self, state):
+        def invoke(self, state, context=None):
             graph_calls.append(state)
             trip = db_session.query(Trip).one()
             linked_session = (
