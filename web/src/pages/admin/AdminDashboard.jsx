@@ -1,66 +1,116 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import KpiCard from "../../components/KpiCard";
 import TrendChart from "../../components/TrendChart";
 import ActivityList from "../../components/ActivityList";
 import BarMeterList from "../../components/BarMeterList";
 import { useTourismData } from "../../hooks/useTourismData";
-
-// TODO(backend): replace with GET /api/v1/admin/stats once it exists.
-const KPIS = [
-  { label: "Draft trips", value: "428", note: "Currently in progress" },
-  { label: "Destinations", value: "20", note: "Active in AI planner" },
-  {
-    label: "Total users",
-    value: "3,284",
-    note: "+47 this week",
-    accent: true,
-  },
-  { label: "Pending feedback", value: "4", note: "Awaiting review" },
-];
-
-// TODO(backend): replace with GET /api/v1/admin/trips-growth once it exists.
-const TRIPS_GROWTH = [
-  { month: "Sep", trips: 210, users: 140 },
-  { month: "Oct", trips: 232, users: 158 },
-  { month: "Nov", trips: 224, users: 150 },
-  { month: "Dec", trips: 268, users: 168 },
-  { month: "Jan", trips: 258, users: 162 },
-  { month: "Feb", trips: 302, users: 184 },
-  { month: "Mar", trips: 294, users: 180 },
-  { month: "Apr", trips: 320, users: 198 },
-  { month: "May", trips: 312, users: 206 },
-  { month: "Jun", trips: 350, users: 214 },
-  { month: "Jul", trips: 344, users: 220 },
-  { month: "Aug", trips: 382, users: 232 },
-];
-
-// TODO(backend): replace with GET /api/v1/admin/feedback-and-activity (or
-// equivalent) once a real activity source exists - these rows are illustrative.
-const RECENT_ACTIVITY = [
-  {
-    kind: "User",
-    title: "Arjun Krishnamurthy registered",
-    meta: "arjun.k@gmail.com",
-    time: "4 min ago",
-  },
-  {
-    kind: "Pricing",
-    title: "Sigiriya Rock Fortress entry fee updated",
-    meta: "USD 30 (was USD 25)",
-    time: "31 min ago",
-  },
-  {
-    kind: "Feedback",
-    title: "Feedback submitted — 5 stars",
-    meta: "Nimal Perera · Ella trip",
-    time: "2 hr ago",
-  },
-];
+import {
+  getAdminStats,
+  getTripsGrowth,
+  getRecentActivity,
+} from "../../services/adminApi";
+import { formatRelativeTime } from "../../utils/formatRelativeTime";
 
 const RANGES = ["30 d", "6 mo", "12 mo"];
 
 function AdminDashboard() {
   const { destinations, destinationsTotal } = useTourismData();
+
+  const [stats, setStats] = useState(null);
+  const [statsStatus, setStatsStatus] = useState("loading");
+  const [tripsGrowth, setTripsGrowth] = useState([]);
+  const [tripsGrowthStatus, setTripsGrowthStatus] = useState("loading");
+  const [activity, setActivity] = useState([]);
+  const [activityStatus, setActivityStatus] = useState("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    getAdminStats()
+      .then((data) => {
+        if (cancelled) return;
+        setStats(data);
+        setStatsStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatsStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getTripsGrowth()
+      .then((data) => {
+        if (cancelled) return;
+        setTripsGrowth(
+          data.months.map((m) => ({
+            month: m.label,
+            trips: m.trips,
+            users: m.users,
+          })),
+        );
+        setTripsGrowthStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTripsGrowthStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getRecentActivity(6)
+      .then((data) => {
+        if (cancelled) return;
+        setActivity(
+          data.map((entry) => ({
+            kind: entry.kind,
+            title: entry.title,
+            meta: entry.meta ?? "",
+            time: formatRelativeTime(entry.created_at),
+          })),
+        );
+        setActivityStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const kpis = [
+    {
+      label: "Draft trips",
+      value: statsStatus === "ready" ? stats.draft_trips_count : "—",
+      note: "Currently in progress",
+    },
+    {
+      label: "Destinations",
+      value: statsStatus === "ready" ? stats.destinations_count : "—",
+      note: "Active in AI planner",
+    },
+    {
+      label: "Total users",
+      value: statsStatus === "ready" ? stats.total_users : "—",
+      note: statsStatus === "error" ? "Couldn't load" : "Registered accounts",
+      accent: true,
+    },
+    {
+      label: "Pending feedback",
+      value: statsStatus === "ready" ? stats.pending_feedback_count : "—",
+      note: "Awaiting review",
+    },
+  ];
 
   // TODO(backend): "trips per destination" isn't tracked yet - standing in
   // with the destinations already loaded, ranked by rating instead.
@@ -106,7 +156,7 @@ function AdminDashboard() {
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} />
         ))}
       </div>
@@ -117,9 +167,7 @@ function AdminDashboard() {
             <h2 className="font-heading text-md font-semibold text-ink">
               Trips generated vs. new users
             </h2>
-            <p className="mt-1 text-label text-muted-600">
-              Rolling 12 mo · updated 4 minutes ago
-            </p>
+            <p className="mt-1 text-label text-muted-600">Rolling 12 mo</p>
           </div>
           <div className="flex gap-4 text-label text-muted-700">
             <span className="flex items-center gap-1.5">
@@ -133,13 +181,19 @@ function AdminDashboard() {
           </div>
         </div>
 
-        <TrendChart
-          data={TRIPS_GROWTH}
-          xKey="month"
-          primaryKey="trips"
-          secondaryKey="users"
-          height={240}
-        />
+        {tripsGrowthStatus === "error" ? (
+          <p className="py-8 text-center text-body-sm text-muted-600">
+            Couldn't load trend data.
+          </p>
+        ) : (
+          <TrendChart
+            data={tripsGrowth}
+            xKey="month"
+            primaryKey="trips"
+            secondaryKey="users"
+            height={240}
+          />
+        )}
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -149,11 +203,18 @@ function AdminDashboard() {
               <h2 className="font-heading text-md font-semibold text-ink">
                 Recent activity
               </h2>
-              <Link to="#" className="text-label text-accent hover:underline">
-                View all
-              </Link>
             </div>
-            <ActivityList items={RECENT_ACTIVITY} />
+            {activityStatus === "error" ? (
+              <p className="px-7 py-8 text-center text-body-sm text-muted-600">
+                Couldn't load recent activity.
+              </p>
+            ) : activityStatus === "ready" && activity.length === 0 ? (
+              <p className="px-7 py-8 text-center text-body-sm text-muted-600">
+                No activity yet.
+              </p>
+            ) : (
+              <ActivityList items={activity} />
+            )}
           </section>
         </div>
 
