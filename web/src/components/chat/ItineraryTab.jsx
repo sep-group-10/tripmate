@@ -117,7 +117,7 @@ function ItineraryTab({ itinerary }) {
             <section
               key={day.day_number}
               id={`itinerary-day-${day.day_number}`}
-              className={`overflow-hidden rounded-[14px] border ${
+              className={`overflow-hidden rounded-panel border ${
                 open ? "border-accent-200 bg-inset" : "border-border bg-surface"
               }`}
             >

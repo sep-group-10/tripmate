@@ -19,7 +19,7 @@ function TabsPanel({ itinerary }) {
   return (
     <section
       aria-label="Trip details"
-      className="flex min-h-0 flex-col overflow-hidden rounded-[14px] bg-surface shadow-control"
+      className="flex min-h-0 flex-col overflow-hidden rounded-panel bg-surface shadow-control"
     >
       <div
         role="tablist"

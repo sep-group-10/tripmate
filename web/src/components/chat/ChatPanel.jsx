@@ -199,7 +199,7 @@ function ChatPanel({ onPlan }) {
   return (
     <section
       aria-label="Trip planning chat"
-      className="flex min-h-0 flex-col overflow-hidden rounded-[14px] bg-surface shadow-control"
+      className="flex min-h-0 flex-col overflow-hidden rounded-panel bg-surface shadow-control"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto p-5.5">
         {messages.map((message) => (
