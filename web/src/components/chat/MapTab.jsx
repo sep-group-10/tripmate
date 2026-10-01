@@ -1,12 +1,27 @@
-import { MapPin } from "lucide-react";
 import { formatDate } from "../../utils/tripFormat";
 import EmptyState from "./EmptyState";
+import TripMap from "./TripMap";
 
-const DAY_COLORS = ["bg-accent", "bg-info", "bg-muted-500"];
+// One entry per day, in order, reused when there are more days than colors.
+// `dot` colors the legend and `hex` colors that day's pins, so they match.
+const DAY_COLORS = [
+  { dot: "bg-accent", hex: "#e8532b" },
+  { dot: "bg-info", hex: "#2f6ff0" },
+  { dot: "bg-muted-500", hex: "#9aa0a3" },
+  { dot: "bg-success", hex: "#12a26a" },
+  { dot: "bg-warn", hex: "#d68a00" },
+];
+
+// Coordinates may be missing (null) on some stops; coerce like LocationPicker
+// does and treat anything that isn't a finite number as "no location".
+function coordinate(value) {
+  return value == null ? NaN : Number(value);
+}
 
 function hasCoords(item) {
   return (
-    typeof item.latitude === "number" && typeof item.longitude === "number"
+    Number.isFinite(coordinate(item.latitude)) &&
+    Number.isFinite(coordinate(item.longitude))
   );
 }
 
@@ -23,19 +38,40 @@ function straightLineKm(a, b) {
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
-// Reads a ChatItinerary. The backend gives lat/lng per stop but no routed
-// legs (only route_optimization.local_distance_km per day), so there is no
-// route to draw: the map area stays a placeholder and the legs below are
-// straight-line distances between consecutive stops, computed here.
+// Reads a ChatItinerary. The map pins every stop that has lat/lng, colored by
+// day. The backend gives no routed legs (only
+// route_optimization.local_distance_km per day), so no route line is drawn and
+// the legs below are straight-line distances between consecutive stops,
+// computed here.
 function MapTab({ itinerary }) {
   const days = itinerary?.days ?? [];
   if (days.length === 0) return <EmptyState what="route map" />;
 
-  const stops = days.flatMap((day) =>
+  // `number` is the stop's position in its day (counting stops with no
+  // coordinates too) so pins match the numbering on the Itinerary tab.
+  const stops = days.flatMap((day, dayIndex) =>
     (day.items ?? [])
-      .filter(hasCoords)
-      .map((item) => ({ ...item, day_number: day.day_number })),
+      .map((item, index) => ({ item, number: index + 1 }))
+      .filter(({ item }) => hasCoords(item))
+      .map(({ item, number }) => ({
+        ...item,
+        latitude: coordinate(item.latitude),
+        longitude: coordinate(item.longitude),
+        day_number: day.day_number,
+        dayIndex,
+        number,
+      })),
   );
+  const pins = stops.map((stop, index) => ({
+    key: `${index}-${stop.candidate_id}`,
+    name: stop.name,
+    lat: stop.latitude,
+    lng: stop.longitude,
+    number: stop.number,
+    day_number: stop.day_number,
+    start_time: stop.start_time,
+    pinColor: DAY_COLORS[stop.dayIndex % DAY_COLORS.length].hex,
+  }));
   const legs = stops.slice(1).map((to, index) => {
     const from = stops[index];
     return { from, to, km: straightLineKm(from, to) };
@@ -43,14 +79,7 @@ function MapTab({ itinerary }) {
 
   return (
     <>
-      <div className="flex min-h-64 flex-none flex-col items-center justify-center gap-2 rounded-[14px] border border-border bg-inset px-6 text-center">
-        <MapPin size={22} className="text-muted-500" aria-hidden="true" />
-        <span className="font-heading text-md font-semibold">Route map</span>
-        <span className="max-w-[36ch] text-body-sm text-muted-600">
-          The interactive map is coming soon. Your stops and the distances
-          between them are listed below.
-        </span>
-      </div>
+      <TripMap stops={pins} />
 
       <div className="flex flex-none flex-wrap gap-2">
         {days.map((day, index) => (
@@ -59,7 +88,7 @@ function MapTab({ itinerary }) {
             className="flex items-center gap-2 rounded-pill border border-border px-3 py-1.5 text-helper"
           >
             <span
-              className={`h-2 w-2 rounded-full ${DAY_COLORS[index % DAY_COLORS.length]}`}
+              className={`h-2 w-2 rounded-full ${DAY_COLORS[index % DAY_COLORS.length].dot}`}
             />
             Day {day.day_number} · {formatDate(day.date)}
           </span>
