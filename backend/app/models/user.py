@@ -119,6 +119,11 @@ class User(Base):
         nullable=True,
     )
 
+    profile_picture_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

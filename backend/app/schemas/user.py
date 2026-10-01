@@ -62,4 +62,5 @@ class UserResponse(BaseModel):
     preferred_accommodation: str | None
     typical_budget_range: str | None
     interests: list[str] | None
+    profile_picture_url: str | None
     created_at: UTCTimestamp
