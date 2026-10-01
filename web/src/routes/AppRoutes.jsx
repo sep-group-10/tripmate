@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import Home from "../pages/Home";
+import LandingPage from "../pages/LandingPage";
 import DevStatusPage from "../pages/DevStatusPage";
 import RegisterPage from "../pages/RegisterPage";
 import LoginPage from "../pages/LoginPage";
@@ -25,7 +25,7 @@ import NotFoundPage from "../pages/NotFoundPage";
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<LandingPage />} />
       {import.meta.env.DEV && (
         <Route path="/dev/status" element={<DevStatusPage />} />
       )}
