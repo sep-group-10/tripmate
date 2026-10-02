@@ -7,6 +7,7 @@ Create Date: 2026-10-02
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
@@ -20,7 +21,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column(
         "destinations",
-        op.Column("photo_urls", postgresql.ARRAY(postgresql.TEXT()), nullable=True),
+        sa.Column("photo_urls", postgresql.ARRAY(postgresql.TEXT()), nullable=True),
     )
 
 
