@@ -20,7 +20,7 @@ import AttractionsList from "../pages/admin/AttractionsList";
 import HotelsList from "../pages/admin/HotelsList";
 import RestaurantsList from "../pages/admin/RestaurantsList";
 import LocalEventsList from "../pages/admin/LocalEventsList";
-import ComingSoon from "../pages/admin/ComingSoon";
+import FeedbackList from "../pages/admin/FeedbackList";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminRoute from "./AdminRoute";
 import SuperAdminRoute from "./SuperAdminRoute";
@@ -73,7 +73,7 @@ function AppRoutes() {
           }
         />
         <Route path="local-events" element={<LocalEventsList />} />
-        <Route path="feedback" element={<ComingSoon title="Feedback" />} />
+        <Route path="feedback" element={<FeedbackList />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

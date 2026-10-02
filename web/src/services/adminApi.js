@@ -29,3 +29,27 @@ export function updateAdminStatus(adminId, isActive) {
     .patch(`/api/v1/admin/admins/${adminId}/status`, { is_active: isActive })
     .then((res) => res.data.data);
 }
+
+export function listFeedback({ status, q } = {}) {
+  return api
+    .get("/api/v1/admin/feedback", { params: { status, q } })
+    .then((res) => res.data.data);
+}
+
+export function resolveFeedback(id, { outcome, note }) {
+  return api
+    .patch(`/api/v1/admin/feedback/${id}/resolve`, { outcome, note })
+    .then((res) => res.data.data);
+}
+
+export function reopenFeedback(id) {
+  return api
+    .patch(`/api/v1/admin/feedback/${id}/reopen`)
+    .then((res) => res.data.data);
+}
+
+export function deleteFeedback(id) {
+  return api
+    .delete(`/api/v1/admin/feedback/${id}`)
+    .then((res) => res.data.data);
+}
