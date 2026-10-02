@@ -75,6 +75,9 @@ function EntityFormModal({
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    // Photo uploads commit independently. Don't submit a potentially stale
+    // edit form while that request is still in flight.
+    if (photoStatus === "uploading" || submitting) return;
     const newErrors = validateAll();
     if (hasErrors(newErrors)) return;
     onSubmit(values);
@@ -107,7 +110,7 @@ function EntityFormModal({
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting}
+            disabled={submitting || photoStatus === "uploading"}
             className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
           >
             Cancel
@@ -115,7 +118,7 @@ function EntityFormModal({
           <button
             type="submit"
             form="entity-form-modal"
-            disabled={submitting}
+            disabled={submitting || photoStatus === "uploading"}
             className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting ? "Saving…" : submitLabel}
@@ -255,7 +258,7 @@ function EntityFormModal({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={photoStatus === "uploading"}
+              disabled={photoStatus === "uploading" || submitting}
               className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-muted-400 bg-bg px-4 py-6 text-center disabled:cursor-not-allowed disabled:opacity-70"
             >
               <ImagePlus
