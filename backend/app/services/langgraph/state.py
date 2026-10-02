@@ -8,6 +8,8 @@ class PlanningState(TypedDict):
     """Shared state passed between LangGraph planning nodes."""
 
     session: AgentSession
+    current_itinerary: NotRequired[dict | None]
+    latest_user_message: NotRequired[str]
     max_iterations: NotRequired[int]
     constraint_validation_current: NotRequired[bool]
     planner_decision: PlannerDecision | None

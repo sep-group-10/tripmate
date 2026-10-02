@@ -1,7 +1,7 @@
 """Integration tests for the chat preference-processing flow."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -11,6 +11,9 @@ from langchain_core.tools import tool
 from app.core.dependencies import get_current_user
 from app.main import app
 from app.models.conversation_history import ConversationHistory
+from app.models.itinerary import Itinerary
+from app.models.itinerary_day import ItineraryDay
+from app.models.itinerary_day_item import ItineraryDayItem
 from app.models.planning_session import PlanningSession
 from app.models.trip import Trip
 from app.routers import chat as chat_router
@@ -465,6 +468,84 @@ def test_session_owner_can_continue_their_chat_session(
     ]
 
 
+def test_current_itinerary_context_is_none_without_persisted_itinerary(
+    db_session, existing_user
+):
+    session = _planning_session(db_session, existing_user)
+    assert chat_router._current_itinerary_context(db_session, session.trip_id) is None
+
+
+def test_current_itinerary_context_loads_latest_persisted_record(
+    db_session, existing_user
+):
+    session = _planning_session(db_session, existing_user)
+    older = Itinerary(
+        trip_id=session.trip_id,
+        total_estimated_cost=Decimal("10.00"),
+        route_info=None,
+        weather_info=None,
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    newest = Itinerary(
+        trip_id=session.trip_id,
+        total_estimated_cost=Decimal("20.00"),
+        route_info={"source": "stored"},
+        weather_info=None,
+        created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+    )
+    db_session.add_all([older, newest])
+    db_session.flush()
+    day = ItineraryDay(
+        itinerary_id=newest.id,
+        day_number=1,
+        date=date(2026, 10, 1),
+        title="Culture",
+        summary="A persisted day",
+    )
+    db_session.add(day)
+    db_session.flush()
+    item = ItineraryDayItem(
+        itinerary_day_id=day.id,
+        item_type="attraction",
+        title="Temple",
+        description="Visit",
+        start_time=None,
+        end_time=None,
+        location="Kandy",
+        estimated_cost=Decimal("5.00"),
+        sort_order=2,
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    context = chat_router._current_itinerary_context(db_session, session.trip_id)
+
+    assert context["id"] == str(newest.id)
+    assert context["trip_id"] == str(session.trip_id)
+    assert context["total_estimated_cost"] == "20.00"
+    assert context["route_info"] == {"source": "stored"}
+    assert context["days"][0] == {
+        "id": str(day.id),
+        "day_number": 1,
+        "date": "2026-10-01",
+        "title": "Culture",
+        "summary": "A persisted day",
+        "items": [
+            {
+                "id": str(item.id),
+                "item_type": "attraction",
+                "title": "Temple",
+                "description": "Visit",
+                "start_time": None,
+                "end_time": None,
+                "sort_order": 2,
+                "location": "Kandy",
+                "estimated_cost": "5.00",
+            }
+        ],
+    }
+
+
 def test_another_user_cannot_access_chat_session(
     client, db_session, existing_user, other_user, monkeypatch
 ):
@@ -749,6 +830,8 @@ def test_complete_single_message_runs_chat_api_through_real_planning_graph(
     assert processor.model.prompts[0][-1].content.startswith(
         "human: Plan a three-day trip"
     )
+    assert "Current persisted itinerary (context only" in planner_model.prompts[0]
+    assert "Latest user message:" in planner_model.prompts[0]
     assert db_session.query(Trip).count() == 1
     assert [
         (entry.role, entry.message)

@@ -81,6 +81,12 @@ Planning goal:
 Trip requirements:
 {session.trip_requirements}
 
+Current persisted itinerary (context only; do not edit or interpret this as an edit request):
+{state.get("current_itinerary")}
+
+Latest user message:
+{state.get("latest_user_message")}
+
 Tool results collected so far:
 {result_summaries}
 

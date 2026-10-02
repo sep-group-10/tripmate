@@ -8,6 +8,9 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.errors import ApiError, ErrorCode
 from app.models.conversation_history import ConversationHistory
+from app.models.itinerary import Itinerary
+from app.models.itinerary_day import ItineraryDay
+from app.models.itinerary_day_item import ItineraryDayItem
 from app.models.planning_session import PlanningSession
 from app.models.trip import Trip
 from app.models.user import User
@@ -31,6 +34,72 @@ from app.services.preference_processor import PreferenceProcessor
 from app.services.trip_service import apply_trip_preferences, create_draft_trip
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _current_itinerary_context(db: Session, trip_id: uuid.UUID | None) -> dict | None:
+    """Load the newest persisted itinerary as plain data for the planning graph."""
+    if trip_id is None:
+        return None
+    itinerary = (
+        db.query(Itinerary)
+        .filter(Itinerary.trip_id == trip_id)
+        .order_by(Itinerary.created_at.desc(), Itinerary.id.desc())
+        .first()
+    )
+    if itinerary is None:
+        return None
+
+    days = (
+        db.query(ItineraryDay)
+        .filter(ItineraryDay.itinerary_id == itinerary.id)
+        .order_by(ItineraryDay.day_number, ItineraryDay.id)
+        .all()
+    )
+    day_context = []
+    for day in days:
+        items = (
+            db.query(ItineraryDayItem)
+            .filter(ItineraryDayItem.itinerary_day_id == day.id)
+            .order_by(ItineraryDayItem.sort_order, ItineraryDayItem.id)
+            .all()
+        )
+        day_context.append(
+            {
+                "id": str(day.id),
+                "day_number": day.day_number,
+                "date": day.date.isoformat(),
+                "title": day.title,
+                "summary": day.summary,
+                "items": [
+                    {
+                        "id": str(item.id),
+                        "item_type": item.item_type,
+                        "title": item.title,
+                        "description": item.description,
+                        "start_time": item.start_time.isoformat()
+                        if item.start_time
+                        else None,
+                        "end_time": item.end_time.isoformat()
+                        if item.end_time
+                        else None,
+                        "sort_order": item.sort_order,
+                        "location": item.location,
+                        "estimated_cost": str(item.estimated_cost)
+                        if item.estimated_cost is not None
+                        else None,
+                    }
+                    for item in items
+                ],
+            }
+        )
+    return {
+        "id": str(itinerary.id),
+        "trip_id": str(itinerary.trip_id),
+        "total_estimated_cost": str(itinerary.total_estimated_cost),
+        "route_info": itinerary.route_info,
+        "weather_info": itinerary.weather_info,
+        "days": day_context,
+    }
 
 
 def _to_langchain_messages(
@@ -132,10 +201,13 @@ def _process_chat_message(
 
     if preferences.intent == "trip_planning" and not preferences.missing_fields:
         agent_session = create_agent_session(preferences)
+        current_itinerary = _current_itinerary_context(db, planning_session.trip_id)
         try:
             planning_result = planning_graph.invoke(
                 {
                     "session": agent_session,
+                    "current_itinerary": current_itinerary,
+                    "latest_user_message": message,
                     "planner_decision": None,
                     "critic_decision": None,
                     "last_failure": None,
