@@ -37,7 +37,7 @@ function RegisterPage() {
         id_token: idToken,
       });
       login(response.data.data.user);
-      navigate("/profile", { replace: true });
+      navigate("/chat", { replace: true });
     } catch (error) {
       setSubmitError(parseApiError(error).message);
       setStatus("error");

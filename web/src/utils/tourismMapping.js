@@ -240,3 +240,36 @@ export function mapRestaurantFromApi(record, destinations) {
     avg_meal_cost: decimalToFormValue(record.avg_meal_cost),
   };
 }
+
+export function buildLocalEventPayload(
+  values,
+  destinations,
+  { isUpdate = false } = {},
+) {
+  const destination = requireDestination(destinations, values.destination);
+  const location = requireLocation(values.location);
+  return {
+    destination_id: destination.id,
+    name: values.name.trim(),
+    description: descriptionForApi(values.description, isUpdate),
+    latitude: location.latitude,
+    longitude: location.longitude,
+    entry_fee: optionalNumberForApi(values.entry_fee, isUpdate),
+    duration_hours: optionalNumberForApi(values.duration_hours, isUpdate),
+    event_schedule: { date: values.event_date },
+  };
+}
+
+export function mapLocalEventFromApi(record, destinations) {
+  return {
+    ...record,
+    destination: findDestinationNameById(destinations, record.destination_id),
+    location: {
+      latitude: Number(record.latitude),
+      longitude: Number(record.longitude),
+    },
+    entry_fee: decimalToFormValue(record.entry_fee),
+    duration_hours: decimalToFormValue(record.duration_hours),
+    event_date: record.event_schedule?.date ?? "",
+  };
+}

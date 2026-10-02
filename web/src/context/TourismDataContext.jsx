@@ -9,6 +9,8 @@ import {
   mapHotelFromApi,
   buildRestaurantPayload,
   mapRestaurantFromApi,
+  buildLocalEventPayload,
+  mapLocalEventFromApi,
 } from "../utils/tourismMapping";
 
 // Destinations use a paginated backend response. Load each page so admin
@@ -41,6 +43,10 @@ export function TourismDataProvider({ children }) {
   const [restaurants, setRestaurants] = useState([]);
   const [restaurantsStatus, setRestaurantsStatus] = useState("loading");
   const [restaurantsError, setRestaurantsError] = useState("");
+
+  const [localEvents, setLocalEvents] = useState([]);
+  const [localEventsStatus, setLocalEventsStatus] = useState("loading");
+  const [localEventsError, setLocalEventsError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +105,12 @@ export function TourismDataProvider({ children }) {
       "Couldn't load destinations, so restaurants can't be shown.",
     );
     setRestaurantsStatus("error");
+  }
+  if (destinationsStatus === "error" && localEventsStatus !== "error") {
+    setLocalEventsError(
+      "Couldn't load destinations, so local events can't be shown.",
+    );
+    setLocalEventsStatus("error");
   }
 
   useEffect(() => {
@@ -161,6 +173,28 @@ export function TourismDataProvider({ children }) {
         if (cancelled) return;
         setRestaurantsError(parseApiError(error).message);
         setRestaurantsStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [destinationsStatus, destinations]);
+
+  useEffect(() => {
+    if (destinationsStatus !== "ready") return;
+    let cancelled = false;
+    api
+      .get("/api/v1/local-events")
+      .then((response) => {
+        if (cancelled) return;
+        setLocalEvents(
+          response.data.map((item) => mapLocalEventFromApi(item, destinations)),
+        );
+        setLocalEventsStatus("ready");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLocalEventsError(parseApiError(error).message);
+        setLocalEventsStatus("error");
       });
     return () => {
       cancelled = true;
@@ -308,6 +342,47 @@ export function TourismDataProvider({ children }) {
     return mapped;
   };
 
+  const addLocalEvent = async (values) => {
+    const response = await api.post(
+      "/api/v1/local-events",
+      buildLocalEventPayload(values, destinations),
+    );
+    const mapped = mapLocalEventFromApi(response.data, destinations);
+    setLocalEvents((prev) => [mapped, ...prev]);
+    return mapped;
+  };
+
+  const updateLocalEvent = async (id, values) => {
+    const response = await api.patch(
+      `/api/v1/local-events/${id}`,
+      buildLocalEventPayload(values, destinations, { isUpdate: true }),
+    );
+    const mapped = mapLocalEventFromApi(response.data, destinations);
+    setLocalEvents((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
+  const deleteLocalEvent = async (id) => {
+    await api.delete(`/api/v1/local-events/${id}`);
+    setLocalEvents((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const addLocalEventPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(
+      `/api/v1/local-events/${id}/photos`,
+      formData,
+    );
+    const mapped = mapLocalEventFromApi(response.data, destinations);
+    setLocalEvents((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const value = {
     destinations,
     destinationsTotal,
@@ -337,6 +412,13 @@ export function TourismDataProvider({ children }) {
     updateRestaurant,
     addRestaurantPhoto,
     deleteRestaurant,
+    localEvents,
+    localEventsStatus,
+    localEventsError,
+    addLocalEvent,
+    updateLocalEvent,
+    deleteLocalEvent,
+    addLocalEventPhoto,
   };
 
   return (

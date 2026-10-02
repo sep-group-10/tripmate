@@ -65,7 +65,7 @@ function TripMap({ stops }) {
 
   if (!API_KEY) {
     return (
-      <p className="m-0 flex h-64 flex-none items-center justify-center rounded-[14px] bg-danger-100 px-6 text-center text-sm text-danger">
+      <p className="m-0 flex h-64 flex-none items-center justify-center rounded-panel bg-danger-100 px-6 text-center text-sm text-danger">
         Map unavailable: VITE_GOOGLE_MAPS_API_KEY is not configured.
       </p>
     );
@@ -75,7 +75,7 @@ function TripMap({ stops }) {
   const signature = stops.map((stop) => `${stop.lat},${stop.lng}`).join("|");
 
   return (
-    <div className="h-64 flex-none overflow-hidden rounded-[14px] border border-border">
+    <div className="h-64 flex-none overflow-hidden rounded-panel border border-border">
       <APIProvider apiKey={API_KEY} version="beta">
         <Map
           mapId={MAP_ID}

@@ -13,7 +13,7 @@ function NotFoundPage() {
     ? "/"
     : ADMIN_ROLES.includes(role)
       ? "/admin"
-      : "/profile";
+      : "/chat";
 
   return (
     <main className="font-body flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-6 text-center text-ink">

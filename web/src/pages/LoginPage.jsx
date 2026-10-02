@@ -33,7 +33,7 @@ function LoginPage() {
       });
       const user = response.data.data.user;
       login(user);
-      navigate(ADMIN_ROLES.includes(user.role) ? "/admin" : "/profile", {
+      navigate(ADMIN_ROLES.includes(user.role) ? "/admin" : "/chat", {
         replace: true,
       });
     } catch (error) {
@@ -81,7 +81,7 @@ function LoginPage() {
       });
       const user = response.data.data.user;
       login(user);
-      navigate(ADMIN_ROLES.includes(user.role) ? "/admin" : "/profile", {
+      navigate(ADMIN_ROLES.includes(user.role) ? "/admin" : "/chat", {
         replace: true,
       });
     } catch (error) {
