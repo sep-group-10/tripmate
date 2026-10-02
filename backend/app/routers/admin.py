@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import require_role
+from app.core.dependencies import get_current_user, require_role
 from app.core.errors import ApiError, ErrorCode
 from app.core.roles import Role
 from app.core.security import generate_admin_invite_token
@@ -23,6 +23,7 @@ from app.schemas.admin import (
     AdminCreateData,
     AdminCreateRequest,
     AdminStats,
+    AdminStatusUpdate,
     FeedbackResponse,
     FeedbackStatusUpdate,
     MonthPoint,
@@ -299,9 +300,10 @@ def create_admin(
     payload: AdminCreateRequest,
     db: Session = Depends(get_db),
 ):
-    """Create a new admin (or super-admin) account with no password set.
-    Emails the new admin an invite link to set their password through
-    the existing reset-password flow. Super-admin-only."""
+    """Create a new ADMIN account with no password set. The system has
+    exactly one super admin, so this never creates one. Emails the new
+    admin an invite link to set their password through the existing
+    reset-password flow. Super-admin-only."""
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user is not None:
         raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
@@ -309,7 +311,7 @@ def create_admin(
     user = User(
         full_name=payload.full_name,
         email=payload.email,
-        role=payload.role.value,
+        role=Role.ADMIN.value,
         is_active=True,
         is_email_verified=True,
     )
@@ -341,3 +343,47 @@ def create_admin(
             message="Admin account created. An invite email has been sent.",
         )
     )
+
+
+@router.patch(
+    "/admins/{admin_id}/status",
+    response_model=ApiResponse[dict],
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def update_admin_status(
+    admin_id: uuid.UUID,
+    payload: AdminStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Activate or deactivate an admin account. A super admin cannot act
+    on their own account (lockout risk) or on another super admin's -
+    only ADMIN-role accounts can be deactivated this way."""
+    target = (
+        db.query(User)
+        .filter(
+            User.id == admin_id,
+            User.role.in_([Role.ADMIN.value, Role.SUPER_ADMIN.value]),
+        )
+        .first()
+    )
+    if target is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Admin not found")
+
+    if target.id == current_user.id:
+        raise ApiError(
+            ErrorCode.FORBIDDEN, "You cannot change your own account's status"
+        )
+    if target.role == Role.SUPER_ADMIN.value:
+        raise ApiError(
+            ErrorCode.FORBIDDEN, "Super admin accounts cannot be changed this way"
+        )
+
+    target.is_active = payload.is_active
+    db.add(target)
+    db.commit()
+
+    action = "activated" if payload.is_active else "deactivated"
+    log_activity(db, "Admin", f"{target.full_name} {action}", target.email)
+
+    return ApiResponse(data={})

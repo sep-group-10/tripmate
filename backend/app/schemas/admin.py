@@ -3,7 +3,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
-from app.core.roles import Role
 from app.schemas.common import UTCTimestamp
 from app.schemas.user import UserResponse
 
@@ -23,12 +22,12 @@ class UserListResponse(BaseModel):
 
 class AdminCreateRequest(BaseModel):
     """Request body for POST /admin/admins. Super-admin-only: creates an
-    admin account with no password and emails an invite link for the
-    new admin to set one."""
+    ADMIN account (the system has exactly one super admin, so this
+    never creates one) with no password, and emails an invite link for
+    the new admin to set one."""
 
     full_name: str
     email: EmailStr
-    role: Literal[Role.ADMIN, Role.SUPER_ADMIN] = Role.ADMIN
 
     @field_validator("email")
     @classmethod
@@ -49,6 +48,12 @@ class AdminCreateData(BaseModel):
 
     email: str
     message: str
+
+
+class AdminStatusUpdate(BaseModel):
+    """Request body for PATCH /admin/admins/{admin_id}/status."""
+
+    is_active: bool
 
 
 class FeedbackResponse(BaseModel):
