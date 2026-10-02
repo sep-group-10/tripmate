@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import Home from "../pages/Home";
+import DevStatusPage from "../pages/DevStatusPage";
 import RegisterPage from "../pages/RegisterPage";
 import LoginPage from "../pages/LoginPage";
 import CheckInboxPage from "../pages/CheckInboxPage";
@@ -7,6 +8,7 @@ import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ProfilePage from "../pages/ProfilePage";
+import TripPlanChatPage from "../pages/TripPlanChatPage";
 import AdminLayout from "../pages/admin/AdminLayout";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import DestinationsList from "../pages/admin/DestinationsList";
@@ -15,11 +17,15 @@ import HotelsList from "../pages/admin/HotelsList";
 import RestaurantsList from "../pages/admin/RestaurantsList";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminRoute from "./AdminRoute";
+import NotFoundPage from "../pages/NotFoundPage";
 
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      {import.meta.env.DEV && (
+        <Route path="/dev/status" element={<DevStatusPage />} />
+      )}
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/check-inbox" element={<CheckInboxPage />} />
@@ -31,6 +37,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trip-plan"
+        element={
+          <ProtectedRoute>
+            <TripPlanChatPage />
           </ProtectedRoute>
         }
       />
@@ -48,6 +62,7 @@ function AppRoutes() {
         <Route path="hotels" element={<HotelsList />} />
         <Route path="restaurants" element={<RestaurantsList />} />
       </Route>
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

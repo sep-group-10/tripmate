@@ -11,6 +11,7 @@ class ProfileUpdateRequest(BaseModel):
 
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
     preferred_travel_style: str | None = Field(default=None, max_length=100)
+    preferred_pace: str | None = Field(default=None, max_length=100)
     preferred_accommodation: str | None = Field(default=None, max_length=100)
     typical_budget_range: str | None = Field(default=None, max_length=100)
     interests: list[str] | None = None
