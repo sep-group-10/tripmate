@@ -3,19 +3,19 @@ import { Link } from "react-router-dom";
 import KpiCard from "../../components/KpiCard";
 import TrendChart from "../../components/TrendChart";
 import ActivityList from "../../components/ActivityList";
-import BarMeterList from "../../components/BarMeterList";
-import { useTourismData } from "../../hooks/useTourismData";
 import {
   getAdminStats,
   getTripsGrowth,
   getRecentActivity,
 } from "../../services/adminApi";
 import { formatRelativeTime } from "../../utils/formatRelativeTime";
+import { SUPER_ADMIN_ROLES } from "../../constants/roles";
+import { useAuth } from "../../hooks/useAuth";
 
 const RANGES = ["30 d", "6 mo", "12 mo"];
 
 function AdminDashboard() {
-  const { destinations, destinationsTotal } = useTourismData();
+  const { user } = useAuth();
 
   const [stats, setStats] = useState(null);
   const [statsStatus, setStatsStatus] = useState("loading");
@@ -111,18 +111,6 @@ function AdminDashboard() {
       note: "Awaiting review",
     },
   ];
-
-  // TODO(backend): "trips per destination" isn't tracked yet - standing in
-  // with the destinations already loaded, ranked by rating instead.
-  const popularDestinations = destinations.slice(0, 5).map((d) => {
-    const rating = Number(d.rating) || 0;
-    return {
-      id: d.id,
-      label: d.name,
-      note: rating ? `${rating.toFixed(1)} ★` : "No rating",
-      pct: Math.round((rating / 5) * 100),
-    };
-  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -229,32 +217,20 @@ function AdminDashboard() {
             >
               Add destination
             </Link>
-            <Link
-              to="/admin/admins"
-              className="rounded-pill border border-border bg-surface px-4 py-2.5 text-center text-body-sm font-medium text-ink shadow-control hover:border-muted-400"
-            >
-              Manage admins
-            </Link>
+            {SUPER_ADMIN_ROLES.includes(user?.role) && (
+              <Link
+                to="/admin/admins"
+                className="rounded-pill border border-border bg-surface px-4 py-2.5 text-center text-body-sm font-medium text-ink shadow-control hover:border-muted-400"
+              >
+                Manage admins
+              </Link>
+            )}
             <Link
               to="/admin/feedback"
               className="rounded-pill border border-border bg-surface px-4 py-2.5 text-center text-body-sm font-medium text-ink shadow-control hover:border-muted-400"
             >
               Review feedback
             </Link>
-          </section>
-
-          <section className="flex flex-col gap-3.5 rounded-card bg-surface p-5.5 shadow-control">
-            <h2 className="font-heading text-md font-semibold text-ink">
-              Popular destinations
-            </h2>
-            <BarMeterList
-              items={popularDestinations}
-              emptyLabel="No destinations yet."
-            />
-            <p className="text-helper text-muted-500">
-              Ranked by rating · {destinationsTotal || destinations.length}{" "}
-              destinations total
-            </p>
           </section>
         </div>
       </div>

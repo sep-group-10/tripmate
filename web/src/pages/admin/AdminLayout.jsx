@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { MapPin } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
+import { SUPER_ADMIN_ROLES } from "../../constants/roles";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", end: true },
@@ -30,6 +31,10 @@ function AdminLayout() {
   const navigate = useNavigate();
   const displayName = user?.full_name?.trim() || "Admin";
   const displayEmail = user?.email?.trim() || "—";
+  const navItems = NAV_ITEMS.filter(
+    (item) =>
+      item.to !== "/admin/admins" || SUPER_ADMIN_ROLES.includes(user?.role),
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -52,7 +57,7 @@ function AdminLayout() {
         </div>
 
         <nav className="flex flex-col gap-0.5">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
