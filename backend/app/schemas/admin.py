@@ -63,11 +63,18 @@ class FeedbackResponse(BaseModel):
     rating: int
     comment: str | None
     status: str
+    resolution_outcome: str | None
+    resolution_note: str | None
+    resolved_by_name: str | None
+    resolved_at: UTCTimestamp | None
     created_at: UTCTimestamp
 
 
-class FeedbackStatusUpdate(BaseModel):
-    status: Literal["pending", "resolved"]
+class FeedbackResolveRequest(BaseModel):
+    """Request body for PATCH /admin/feedback/{feedback_id}/resolve."""
+
+    outcome: Literal["Fixed the data", "Shared with team", "No action needed"]
+    note: str | None = None
 
 
 class AdminStats(BaseModel):

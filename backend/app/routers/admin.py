@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import extract, func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_role
@@ -24,8 +24,8 @@ from app.schemas.admin import (
     AdminCreateRequest,
     AdminStats,
     AdminStatusUpdate,
+    FeedbackResolveRequest,
     FeedbackResponse,
-    FeedbackStatusUpdate,
     MonthPoint,
     TripsGrowthData,
     UserListData,
@@ -170,16 +170,40 @@ def list_admin_users(
     }
 
 
+def _feedback_response(
+    feedback: Feedback, author_name: str, resolver_name: str | None
+) -> FeedbackResponse:
+    return FeedbackResponse(
+        id=feedback.id,
+        user_id=feedback.user_id,
+        user_name=author_name,
+        rating=feedback.rating,
+        comment=feedback.comment,
+        status=feedback.status,
+        resolution_outcome=feedback.resolution_outcome,
+        resolution_note=feedback.resolution_note,
+        resolved_by_name=resolver_name,
+        resolved_at=feedback.resolved_at,
+        created_at=feedback.created_at,
+    )
+
+
 @router.get("/feedback", response_model=ApiResponse[list[FeedbackResponse]])
 def list_admin_feedback(
     status_filter: str | None = Query(default=None, alias="status"),
     q: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Feedback list for the Feedback admin page. Joined against User for
-    the reviewer's display name - Feedback itself has no destination link,
+    """Feedback list for the Feedback admin page. Joined against User
+    twice - once for the reviewer's display name, once for whoever
+    resolved it (if anyone) - Feedback itself has no destination link,
     so that field is intentionally absent from the response."""
-    query = db.query(Feedback, User.full_name).join(User, Feedback.user_id == User.id)
+    Resolver = aliased(User)
+    query = (
+        db.query(Feedback, User.full_name, Resolver.full_name)
+        .join(User, Feedback.user_id == User.id)
+        .outerjoin(Resolver, Feedback.resolved_by == Resolver.id)
+    )
 
     if status_filter:
         query = query.filter(Feedback.status == status_filter)
@@ -192,37 +216,41 @@ def list_admin_feedback(
 
     return ApiResponse(
         data=[
-            FeedbackResponse(
-                id=feedback.id,
-                user_id=feedback.user_id,
-                user_name=full_name,
-                rating=feedback.rating,
-                comment=feedback.comment,
-                status=feedback.status,
-                created_at=feedback.created_at,
-            )
-            for feedback, full_name in rows
+            _feedback_response(feedback, author_name, resolver_name)
+            for feedback, author_name, resolver_name in rows
         ]
     )
 
 
-@router.patch("/feedback/{feedback_id}", response_model=ApiResponse[FeedbackResponse])
-def update_feedback_status(
-    feedback_id: uuid.UUID,
-    payload: FeedbackStatusUpdate,
-    db: Session = Depends(get_db),
-):
-    feedback = (
-        db.query(Feedback, User.full_name)
-        .join(User, Feedback.user_id == User.id)
-        .filter(Feedback.id == feedback_id)
-        .first()
-    )
+def _get_feedback_or_404(db: Session, feedback_id: uuid.UUID) -> Feedback:
+    feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
     if feedback is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Feedback not found")
+    return feedback
 
-    entry, full_name = feedback
-    entry.status = payload.status
+
+@router.patch(
+    "/feedback/{feedback_id}/resolve", response_model=ApiResponse[FeedbackResponse]
+)
+def resolve_feedback(
+    feedback_id: uuid.UUID,
+    payload: FeedbackResolveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark a feedback entry resolved with a saved outcome label - a
+    plain record of how it was handled, with no side effects on any
+    other data (no restaurant/attraction record is touched). Available
+    to Admin and Super Admin alike, since Admin is who actually manages
+    the tourism data most feedback is about."""
+    entry = _get_feedback_or_404(db, feedback_id)
+    author = db.query(User.full_name).filter(User.id == entry.user_id).scalar()
+
+    entry.status = "resolved"
+    entry.resolution_outcome = payload.outcome
+    entry.resolution_note = payload.note
+    entry.resolved_by = current_user.id
+    entry.resolved_at = datetime.now(timezone.utc)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -230,21 +258,60 @@ def update_feedback_status(
     log_activity(
         db,
         "Feedback",
-        f"Feedback marked {entry.status}",
-        f"{full_name} · {entry.rating} stars",
+        f"Feedback resolved: {entry.resolution_outcome}",
+        f"{author} · {entry.rating} stars",
     )
 
-    return ApiResponse(
-        data=FeedbackResponse(
-            id=entry.id,
-            user_id=entry.user_id,
-            user_name=full_name,
-            rating=entry.rating,
-            comment=entry.comment,
-            status=entry.status,
-            created_at=entry.created_at,
-        )
+    return ApiResponse(data=_feedback_response(entry, author, current_user.full_name))
+
+
+@router.patch(
+    "/feedback/{feedback_id}/reopen", response_model=ApiResponse[FeedbackResponse]
+)
+def reopen_feedback(
+    feedback_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Undo a resolution, putting the entry back in the pending queue."""
+    entry = _get_feedback_or_404(db, feedback_id)
+    author = db.query(User.full_name).filter(User.id == entry.user_id).scalar()
+
+    entry.status = "pending"
+    entry.resolution_outcome = None
+    entry.resolution_note = None
+    entry.resolved_by = None
+    entry.resolved_at = None
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    log_activity(
+        db, "Feedback", "Feedback reopened", f"{author} · {entry.rating} stars"
     )
+
+    return ApiResponse(data=_feedback_response(entry, author, None))
+
+
+@router.delete(
+    "/feedback/{feedback_id}",
+    response_model=ApiResponse[dict],
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def delete_feedback(
+    feedback_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Permanently remove a feedback entry. Super-admin-only - deleting
+    loses data, so it needs the higher role, unlike resolving it."""
+    entry = _get_feedback_or_404(db, feedback_id)
+    author = db.query(User.full_name).filter(User.id == entry.user_id).scalar()
+
+    db.delete(entry)
+    db.commit()
+
+    log_activity(db, "Feedback", "Feedback deleted", f"{author} · {entry.rating} stars")
+
+    return ApiResponse(data={})
 
 
 @router.get(

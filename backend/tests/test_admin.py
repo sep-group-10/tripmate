@@ -117,24 +117,105 @@ def test_feedback_list_includes_user_name(admin_client, db_session, existing_use
     assert match["status"] == "pending"
 
 
-def test_feedback_status_update_resolves_entry(admin_client, db_session, existing_user):
+def test_resolve_feedback_sets_outcome_and_resolver(
+    admin_client, db_session, existing_user
+):
     feedback = Feedback(user_id=existing_user.id, rating=3, status="pending")
     db_session.add(feedback)
     db_session.commit()
     db_session.refresh(feedback)
 
     response = admin_client.patch(
-        f"{FEEDBACK_URL}/{feedback.id}", json={"status": "resolved"}
+        f"{FEEDBACK_URL}/{feedback.id}/resolve",
+        json={"outcome": "Fixed the data", "note": "Updated opening hours."},
     )
 
     assert response.status_code == 200
-    assert response.json()["data"]["status"] == "resolved"
+    data = response.json()["data"]
+    assert data["status"] == "resolved"
+    assert data["resolution_outcome"] == "Fixed the data"
+    assert data["resolution_note"] == "Updated opening hours."
+    assert data["resolved_by_name"] == "Tourism Test Admin"
+    assert data["resolved_at"] is not None
 
 
-def test_feedback_status_update_missing_id_returns_404(admin_client):
+def test_resolve_feedback_rejects_unknown_outcome(
+    admin_client, db_session, existing_user
+):
+    feedback = Feedback(user_id=existing_user.id, rating=3, status="pending")
+    db_session.add(feedback)
+    db_session.commit()
+    db_session.refresh(feedback)
+
     response = admin_client.patch(
-        f"{FEEDBACK_URL}/00000000-0000-0000-0000-000000000000",
-        json={"status": "resolved"},
+        f"{FEEDBACK_URL}/{feedback.id}/resolve",
+        json={"outcome": "Not a real outcome"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_resolve_feedback_missing_id_returns_404(admin_client):
+    response = admin_client.patch(
+        f"{FEEDBACK_URL}/00000000-0000-0000-0000-000000000000/resolve",
+        json={"outcome": "Fixed the data"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_reopen_feedback_clears_resolution(admin_client, db_session, existing_user):
+    feedback = Feedback(
+        user_id=existing_user.id,
+        rating=3,
+        status="resolved",
+        resolution_outcome="Fixed the data",
+        resolution_note="Some note",
+    )
+    db_session.add(feedback)
+    db_session.commit()
+    db_session.refresh(feedback)
+
+    response = admin_client.patch(f"{FEEDBACK_URL}/{feedback.id}/reopen")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "pending"
+    assert data["resolution_outcome"] is None
+    assert data["resolution_note"] is None
+    assert data["resolved_at"] is None
+
+
+def test_delete_feedback_blocked_for_plain_admin(
+    admin_client, db_session, existing_user
+):
+    feedback = Feedback(user_id=existing_user.id, rating=2, status="pending")
+    db_session.add(feedback)
+    db_session.commit()
+    db_session.refresh(feedback)
+
+    response = admin_client.delete(f"{FEEDBACK_URL}/{feedback.id}")
+
+    assert response.status_code == 403
+
+
+def test_superadmin_can_delete_feedback(superadmin_client, db_session, existing_user):
+    feedback = Feedback(user_id=existing_user.id, rating=2, status="pending")
+    db_session.add(feedback)
+    db_session.commit()
+    db_session.refresh(feedback)
+    feedback_id = feedback.id
+
+    response = superadmin_client.delete(f"{FEEDBACK_URL}/{feedback_id}")
+
+    assert response.status_code == 200
+    assert db_session.query(Feedback).filter(Feedback.id == feedback_id).first() is None
+
+
+def test_delete_feedback_missing_id_returns_404(superadmin_client):
+    response = superadmin_client.delete(
+        f"{FEEDBACK_URL}/00000000-0000-0000-0000-000000000000"
     )
 
     assert response.status_code == 404
@@ -187,7 +268,7 @@ def test_activity_logs_feedback_resolution(admin_client, db_session, existing_us
     db_session.refresh(feedback)
 
     patch_response = admin_client.patch(
-        f"{FEEDBACK_URL}/{feedback.id}", json={"status": "resolved"}
+        f"{FEEDBACK_URL}/{feedback.id}/resolve", json={"outcome": "Fixed the data"}
     )
     assert patch_response.status_code == 200
 
