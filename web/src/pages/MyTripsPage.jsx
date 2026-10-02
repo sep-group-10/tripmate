@@ -1,20 +1,47 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import StatRow from "../components/StatRow";
 import DraftTripCard from "../components/DraftTripCard";
 import GeneratedTripCard from "../components/GeneratedTripCard";
-import { STATS } from "../data/myTripsDummyData";
-import { listTrips, saveTrip, unsaveTrip } from "../services/tripsService";
+import {
+  discardDraftTrip,
+  listTrips,
+  renameDraftTrip,
+  saveTrip,
+  unsaveTrip,
+} from "../services/tripsService";
 import { parseApiError } from "../utils/apiError";
 import { TRIP_FILTERS, TRIP_SORTS, groupTrips } from "../utils/tripFilters";
 
 function MyTripsPage() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("Recent");
   const [filter, setFilter] = useState("All");
-  // Mock data for now; TODO(backend): load with GET /api/v1/trips.
-  const [trips, setTrips] = useState(() => listTrips());
+  const [trips, setTrips] = useState([]);
+  const [loadStatus, setLoadStatus] = useState("loading");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [pendingTripIds, setPendingTripIds] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    listTrips()
+      .then((loadedTrips) => {
+        if (cancelled) return;
+        setTrips(loadedTrips);
+        setLoadStatus("ready");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadError(parseApiError(error).message);
+        setLoadStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   const q = query.trim().toLowerCase();
   const sortFn = TRIP_SORTS[sort];
@@ -24,24 +51,104 @@ function MyTripsPage() {
     [trips, filter, q, sortFn],
   );
   const isEmpty = shownCount === 0;
-
-  // Both actions call the (mock) service, then re-read the list so the card
-  // moves between sections right away. A rejected call shows its message.
-  const changeSaved = async (action, trip, successMessage) => {
-    try {
-      await action(trip.id);
-      setTrips(listTrips());
-      if (successMessage) toast.success(successMessage);
-    } catch (error) {
-      toast.error(parseApiError(error).message);
-    }
-  };
-  const handleSave = (trip) => changeSaved(saveTrip, trip, "Trip saved");
-  const handleUnsave = (trip) => changeSaved(unsaveTrip, trip);
+  const draftCount = trips.filter((trip) => trip.status === "DRAFT").length;
+  const itineratedDays = trips.reduce(
+    (total, trip) =>
+      trip.status === "DRAFT" ? total : total + (Number(trip.dayCount) || 0),
+    0,
+  );
+  const plannedSpend = trips.reduce(
+    (total, trip) => total + (Number(trip.budget) || 0),
+    0,
+  );
+  const stats = [
+    {
+      label: "Trips planned",
+      value: String(trips.length),
+      delta: "In your account",
+    },
+    {
+      label: "Drafts open",
+      value: String(draftCount),
+      delta: "Still in progress",
+    },
+    {
+      label: "Days itinerated",
+      value: String(itineratedDays),
+      delta: "Generated and saved trips",
+    },
+    {
+      label: "Planned spend",
+      value: `LKR ${plannedSpend.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+      delta: "Sum of trip budgets",
+    },
+  ];
 
   const clearFilters = () => {
     setQuery("");
     setFilter("All");
+  };
+
+  const changeTripStatus = async (action, trip) => {
+    setPendingTripIds((current) => ({ ...current, [trip.id]: true }));
+    try {
+      const updatedTrip = await action(trip.id);
+      setTrips((current) =>
+        current.map((item) =>
+          item.id === updatedTrip.id ? updatedTrip : item,
+        ),
+      );
+    } catch (error) {
+      toast.error(parseApiError(error).message);
+    } finally {
+      setPendingTripIds((current) => {
+        const next = { ...current };
+        delete next[trip.id];
+        return next;
+      });
+    }
+  };
+
+  const renameDraft = async (trip, title) => {
+    setPendingTripIds((current) => ({ ...current, [trip.id]: true }));
+    try {
+      const updatedTrip = await renameDraftTrip(trip.id, title);
+      setTrips((current) =>
+        current.map((item) =>
+          item.id === updatedTrip.id ? updatedTrip : item,
+        ),
+      );
+      toast.success("Draft renamed");
+      return true;
+    } catch (error) {
+      toast.error(parseApiError(error).message);
+      return false;
+    } finally {
+      setPendingTripIds((current) => {
+        const next = { ...current };
+        delete next[trip.id];
+        return next;
+      });
+    }
+  };
+
+  const discardDraft = async (trip) => {
+    setPendingTripIds((current) => ({ ...current, [trip.id]: true }));
+    try {
+      await discardDraftTrip(trip.id);
+      setTrips((current) => current.filter((item) => item.id !== trip.id));
+      toast.success("Draft discarded");
+      return true;
+    } catch (error) {
+      toast.error(parseApiError(error).message);
+      return false;
+    } finally {
+      setPendingTripIds((current) => {
+        const next = { ...current };
+        delete next[trip.id];
+        return next;
+      });
+    }
   };
 
   return (
@@ -68,7 +175,7 @@ function MyTripsPage() {
           </Link>
         </div>
 
-        <StatRow stats={STATS} />
+        {loadStatus === "ready" && <StatRow stats={stats} />}
 
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -110,7 +217,35 @@ function MyTripsPage() {
           </span>
         </div>
 
-        {saved.length > 0 && (
+        {loadStatus === "loading" && (
+          <p className="m-0 text-body-sm text-muted-600" role="status">
+            Loading your trips…
+          </p>
+        )}
+
+        {loadStatus === "error" && (
+          <section
+            className="flex flex-col items-center gap-3 rounded-card bg-surface px-8 py-14 text-center shadow-control"
+            role="alert"
+          >
+            <h2 className="font-heading text-lg font-semibold tracking-tight text-ink">
+              Trips could not be loaded
+            </h2>
+            <p className="max-w-85 text-body-sm text-muted-600">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoadError("");
+                setReloadKey((key) => key + 1);
+              }}
+              className="rounded-pill border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control hover:border-muted-400"
+            >
+              Try again
+            </button>
+          </section>
+        )}
+
+        {loadStatus === "ready" && saved.length > 0 && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
@@ -130,14 +265,18 @@ function MyTripsPage() {
                 <GeneratedTripCard
                   key={trip.id}
                   trip={trip}
-                  onUnsave={handleUnsave}
+                  actionPending={Boolean(pendingTripIds[trip.id])}
+                  onUnsave={(item) => changeTripStatus(unsaveTrip, item)}
+                  onViewItinerary={(item) =>
+                    navigate(`/trips/${encodeURIComponent(item.id)}`)
+                  }
                 />
               ))}
             </div>
           </section>
         )}
 
-        {generated.length > 0 && (
+        {loadStatus === "ready" && generated.length > 0 && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
@@ -149,7 +288,7 @@ function MyTripsPage() {
                 </span>
               </div>
               <p className="text-body-sm text-muted-600">
-                Complete day-by-day plans, ready to review, refine or save.
+                Trips with generated itineraries.
               </p>
             </div>
             <div className="flex flex-col gap-4">
@@ -157,14 +296,21 @@ function MyTripsPage() {
                 <GeneratedTripCard
                   key={trip.id}
                   trip={trip}
-                  onSave={handleSave}
+                  actionPending={Boolean(pendingTripIds[trip.id])}
+                  onSave={(item) => changeTripStatus(saveTrip, item)}
+                  onKeepRefining={(item) =>
+                    navigate(`/chat?tripId=${encodeURIComponent(item.id)}`)
+                  }
+                  onViewItinerary={(item) =>
+                    navigate(`/trips/${encodeURIComponent(item.id)}`)
+                  }
                 />
               ))}
             </div>
           </section>
         )}
 
-        {drafts.length > 0 && (
+        {loadStatus === "ready" && drafts.length > 0 && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
@@ -181,28 +327,40 @@ function MyTripsPage() {
             </div>
             <div className="flex flex-col gap-4">
               {drafts.map((trip) => (
-                <DraftTripCard key={trip.id} trip={trip} />
+                <DraftTripCard
+                  key={trip.id}
+                  trip={trip}
+                  actionPending={Boolean(pendingTripIds[trip.id])}
+                  onRename={renameDraft}
+                  onDiscard={discardDraft}
+                  onContinue={(item) =>
+                    navigate(`/chat?tripId=${encodeURIComponent(item.id)}`)
+                  }
+                />
               ))}
             </div>
           </section>
         )}
 
-        {isEmpty && (
+        {loadStatus === "ready" && isEmpty && (
           <section className="flex flex-col items-center gap-3 rounded-card bg-surface px-8 py-14 text-center shadow-control">
             <h2 className="font-heading text-lg font-semibold tracking-tight text-ink">
-              No trips match that
+              {trips.length === 0 ? "No trips yet" : "No trips match that"}
             </h2>
             <p className="max-w-85 text-body-sm text-muted-600">
-              Try a different search term, or clear the filter to see every trip
-              in your account.
+              {trips.length === 0
+                ? "Trips you create will appear here. Start planning your first trip."
+                : "Try a different search term, or clear the filter to see every trip in your account."}
             </p>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="mt-1 rounded-pill border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control hover:border-muted-400"
-            >
-              Clear filters
-            </button>
+            {trips.length > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-1 rounded-pill border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control hover:border-muted-400"
+              >
+                Clear filters
+              </button>
+            )}
           </section>
         )}
       </main>

@@ -9,6 +9,7 @@ from app.core.dependencies import get_current_user
 from app.core.errors import ApiError, ErrorCode
 from app.models.conversation_history import ConversationHistory
 from app.models.planning_session import PlanningSession
+from app.models.trip import Trip
 from app.models.user import User
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.chat import (
@@ -23,10 +24,11 @@ from app.services.agent_session import create_agent_session
 from app.services.chat_response_generator import ChatResponseGenerator
 from app.services.conversation_history import get_conversation, save_message
 from app.services.final_response_generator import FinalResponseGenerator
+from app.services.itinerary_service import persist_chat_itinerary
 from app.services.langgraph.context import PlanningContext
 from app.services.langgraph.planning_graph import planning_graph
 from app.services.preference_processor import PreferenceProcessor
-from app.services.trip_service import create_trip
+from app.services.trip_service import apply_trip_preferences, create_draft_trip
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -68,16 +70,46 @@ def _itinerary_for_agent_session(session: AgentSession) -> ChatItinerary | None:
     return None
 
 
-def _prepare_preferences_for_planning(
+def _ensure_draft_trip_for_session(
     db: Session,
     planning_session: PlanningSession,
+    current_user: User,
     preferences: PreferenceResult,
 ) -> None:
-    """Persist JSON-compatible preferences for the future planning flow."""
+    """Create or update the one Trip linked to this authenticated session."""
+    locked_session = (
+        db.query(PlanningSession)
+        .filter(
+            PlanningSession.id == planning_session.id,
+            PlanningSession.user_id == current_user.id,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if locked_session is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Planning session not found")
 
-    working_memory = dict(planning_session.working_memory or {})
+    if locked_session.trip_id is None:
+        trip = create_draft_trip(db, current_user.id)
+        locked_session.trip_id = trip.id
+    else:
+        trip = (
+            db.query(Trip)
+            .filter(
+                Trip.id == locked_session.trip_id,
+                Trip.user_id == current_user.id,
+            )
+            .first()
+        )
+        if trip is None:
+            raise ApiError(ErrorCode.NOT_FOUND, "Trip not found")
+
+    apply_trip_preferences(trip, preferences)
+
+    working_memory = dict(locked_session.working_memory or {})
     working_memory["trip_preferences"] = preferences.model_dump(mode="json")
-    planning_session.working_memory = working_memory
+    locked_session.working_memory = working_memory
     db.commit()
     db.refresh(planning_session)
 
@@ -95,13 +127,10 @@ def _process_chat_message(
     preferences = PreferenceProcessor().process(_to_langchain_messages(conversation))
     itinerary = None
 
+    if preferences.intent == "trip_planning":
+        _ensure_draft_trip_for_session(db, planning_session, current_user, preferences)
+
     if preferences.intent == "trip_planning" and not preferences.missing_fields:
-        if planning_session.trip_id is None:
-            trip = create_trip(db, current_user.id, preferences)
-            planning_session.trip_id = trip.id
-            db.commit()
-            db.refresh(planning_session)
-        _prepare_preferences_for_planning(db, planning_session, preferences)
         agent_session = create_agent_session(preferences)
         try:
             planning_result = planning_graph.invoke(
@@ -130,6 +159,19 @@ def _process_chat_message(
 
         assistant_message = FinalResponseGenerator().generate(final_agent_session)
         itinerary = _itinerary_for_agent_session(final_agent_session)
+        if itinerary is not None and planning_session.trip_id is not None:
+            cost_estimate = next(
+                (
+                    entry.get("result")
+                    for entry in reversed(final_agent_session.tool_results)
+                    if isinstance(entry, dict) and entry.get("tool") == "cost_estimator"
+                ),
+                None,
+            )
+            persist_chat_itinerary(
+                db, planning_session.trip_id, itinerary, cost_estimate
+            )
+            db.commit()
     else:
         assistant_message = ChatResponseGenerator().generate(
             _to_langchain_messages(conversation), preferences

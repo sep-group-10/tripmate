@@ -10,6 +10,7 @@ import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ProfilePage from "../pages/ProfilePage";
 import TripPlanChatPage from "../pages/TripPlanChatPage";
 import MyTripsPage from "../pages/MyTripsPage";
+import TripItineraryPage from "../pages/TripItineraryPage";
 import UserLayout from "../pages/UserLayout";
 import AdminLayout from "../pages/admin/AdminLayout";
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/chat" element={<TripPlanChatPage />} />
         <Route path="/trips" element={<MyTripsPage />} />
+        <Route path="/trips/:tripId" element={<TripItineraryPage />} />
       </Route>
       <Route
         path="/admin"

@@ -341,8 +341,8 @@ def test_start_chat_processes_normal_conversation_and_stores_messages(
     ]
 
 
-def test_preferences_missing_required_trip_values_do_not_create_trip(
-    client, db_session, monkeypatch
+def test_incomplete_trip_preferences_create_a_linked_draft(
+    client, db_session, monkeypatch, existing_user
 ):
     response_generator = _mock_response_generator(
         monkeypatch,
@@ -379,7 +379,20 @@ def test_preferences_missing_required_trip_values_do_not_create_trip(
     assert processor.model.prompts[0][-1].content == "human: I want to visit Kandy."
     assert processor.model.results == []
     assert response.json()["data"]["itinerary"] is None
-    assert db_session.query(Trip).count() == 0
+    trips = db_session.query(Trip).all()
+    assert len(trips) == 1
+    trip = trips[0]
+    session = db_session.get(
+        PlanningSession, uuid.UUID(response.json()["data"]["session"]["id"])
+    )
+    assert trip.status == "draft"
+    assert trip.user_id == existing_user.id
+    assert session.user_id == existing_user.id
+    assert session.trip_id == trip.id
+    assert trip.travel_start_date is None
+    assert trip.travel_end_date is None
+    assert trip.duration is None
+    assert trip.budget is None
     assert factory_calls == []
     assert graph_calls == []
     assert [
@@ -488,11 +501,11 @@ def test_cross_user_chat_cannot_create_or_modify_victim_trip(
         "budget": victim_trip.budget,
     }
     original_trip_count = db_session.query(Trip).count()
-    create_trip_calls = []
+    create_draft_trip_calls = []
     monkeypatch.setattr(
         chat_router,
-        "create_trip",
-        lambda *args, **kwargs: create_trip_calls.append((args, kwargs)),
+        "create_draft_trip",
+        lambda *args, **kwargs: create_draft_trip_calls.append((args, kwargs)),
     )
     _mock_processor(monkeypatch, _complete_preferences())
     app.dependency_overrides[get_current_user] = lambda: other_user
@@ -504,7 +517,7 @@ def test_cross_user_chat_cannot_create_or_modify_victim_trip(
     db_session.refresh(session)
     db_session.refresh(victim_trip)
     assert response.status_code == 404
-    assert create_trip_calls == []
+    assert create_draft_trip_calls == []
     assert db_session.query(Trip).count() == original_trip_count
     assert session.trip_id is None
     assert session.working_memory is None
@@ -632,6 +645,10 @@ def test_multi_message_preference_collection_starts_planning_only_when_complete(
 
     first_response = client.post(CHAT_URL, json={"message": "I want to visit Kandy."})
     session_id = first_response.json()["data"]["session"]["id"]
+    planning_session = db_session.get(PlanningSession, uuid.UUID(session_id))
+    first_trip_id = planning_session.trip_id
+    assert first_trip_id is not None
+    assert db_session.get(Trip, first_trip_id).status == "draft"
     later_messages = [
         "For 3 days.",
         "Two people.",
@@ -663,6 +680,9 @@ def test_multi_message_preference_collection_starts_planning_only_when_complete(
         ["transport_type"],
     ]
     assert db_session.query(Trip).count() == 1
+    db_session.refresh(planning_session)
+    assert planning_session.trip_id == first_trip_id
+    assert db_session.get(Trip, first_trip_id).status == "generated"
     assert planner_model.prompts and len(planner_model.prompts) == 6
     assert len(critic_model.prompts) == 1
 
