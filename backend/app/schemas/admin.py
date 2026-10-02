@@ -1,8 +1,9 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
+from app.core.roles import Role
 from app.schemas.common import UTCTimestamp
 from app.schemas.user import UserResponse
 
@@ -18,6 +19,36 @@ class UserListData(BaseModel):
 class UserListResponse(BaseModel):
     success: bool = True
     data: UserListData
+
+
+class AdminCreateRequest(BaseModel):
+    """Request body for POST /admin/admins. Super-admin-only: creates an
+    admin account with no password and emails an invite link for the
+    new admin to set one."""
+
+    full_name: str
+    email: EmailStr
+    role: Literal[Role.ADMIN, Role.SUPER_ADMIN] = Role.ADMIN
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+    @field_validator("full_name")
+    @classmethod
+    def full_name_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Full name cannot be blank or only whitespace")
+        return value
+
+
+class AdminCreateData(BaseModel):
+    """Response data for a successful admin creation - no password is
+    issued here, the invited admin sets their own via email."""
+
+    email: str
+    message: str
 
 
 class FeedbackResponse(BaseModel):

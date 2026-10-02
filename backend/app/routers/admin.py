@@ -4,19 +4,24 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import extract, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import require_role
 from app.core.errors import ApiError, ErrorCode
 from app.core.roles import Role
+from app.core.security import generate_admin_invite_token
 from app.models.activity_log import ActivityLog
 from app.models.destination import Destination
 from app.models.feedback import Feedback
 from app.models.trip import Trip
 from app.models.user import User
+from app.routers.auth import _frontend_base_url
 from app.schemas.admin import (
     ActivityEntry,
+    AdminCreateData,
+    AdminCreateRequest,
     AdminStats,
     FeedbackResponse,
     FeedbackStatusUpdate,
@@ -27,6 +32,8 @@ from app.schemas.admin import (
 )
 from app.schemas.common import ApiResponse
 from app.services.activity_log import log_activity
+from app.services.email import send_email
+from app.services.email_templates import admin_invite_email
 
 
 def _add_months(base: date, months: int) -> date:
@@ -235,5 +242,102 @@ def update_feedback_status(
             comment=entry.comment,
             status=entry.status,
             created_at=entry.created_at,
+        )
+    )
+
+
+@router.get(
+    "/admins",
+    response_model=UserListResponse,
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def list_admins(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=50),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Paginated list of admin/super-admin accounts, for the super
+    admin's "Manage admins" page. Super-admin-only."""
+    query = db.query(User).filter(
+        User.role.in_([Role.ADMIN.value, Role.SUPER_ADMIN.value])
+    )
+
+    if q:
+        like = f"%{q}%"
+        query = query.filter(User.full_name.ilike(like) | User.email.ilike(like))
+
+    total = query.count()
+    total_pages = math.ceil(total / limit) if total else 0
+
+    admins = (
+        query.order_by(User.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "success": True,
+        "data": UserListData(
+            items=admins,
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+        ),
+    }
+
+
+@router.post(
+    "/admins",
+    response_model=ApiResponse[AdminCreateData],
+    status_code=201,
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def create_admin(
+    payload: AdminCreateRequest,
+    db: Session = Depends(get_db),
+):
+    """Create a new admin (or super-admin) account with no password set.
+    Emails the new admin an invite link to set their password through
+    the existing reset-password flow. Super-admin-only."""
+    existing_user = db.query(User).filter(User.email == payload.email).first()
+    if existing_user is not None:
+        raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
+
+    user = User(
+        full_name=payload.full_name,
+        email=payload.email,
+        role=payload.role.value,
+        is_active=True,
+        is_email_verified=True,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
+        ) from exc
+    db.refresh(user)
+
+    token, expires_at = generate_admin_invite_token()
+    user.password_reset_token = token
+    user.reset_token_expiry = expires_at
+    db.add(user)
+    db.commit()
+
+    link = f"{_frontend_base_url()}/reset-password?token={token}"
+    subject, body = admin_invite_email(link)
+    send_email(user.email, subject, body)
+
+    log_activity(db, "Admin", f"{user.full_name} added as {user.role}", user.email)
+
+    return ApiResponse(
+        data=AdminCreateData(
+            email=user.email,
+            message="Admin account created. An invite email has been sent.",
         )
     )
