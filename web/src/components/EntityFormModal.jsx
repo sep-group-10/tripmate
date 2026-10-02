@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, Trash2 } from "lucide-react";
 import Modal from "./Modal";
 import FormInput from "./FormInput";
 import LocationPicker from "./LocationPicker";
@@ -44,6 +44,7 @@ function EntityFormModal({
   onSubmit,
   onClose,
   onUploadPhoto,
+  onDeletePhoto,
   submitting = false,
   submitError = "",
 }) {
@@ -72,12 +73,13 @@ function EntityFormModal({
   const [photoStatus, setPhotoStatus] = useState("idle"); // idle | uploading | error
   const [photoError, setPhotoError] = useState("");
   const [photoUrls, setPhotoUrls] = useState(initialValues?.photo_urls || []);
+  const [deletingPhoto, setDeletingPhoto] = useState(null);
 
   const handleSubmit = (event) => {
     event.preventDefault();
     // Photo uploads commit independently. Don't submit a potentially stale
     // edit form while that request is still in flight.
-    if (photoStatus === "uploading" || submitting) return;
+    if (photoStatus === "uploading" || deletingPhoto || submitting) return;
     const newErrors = validateAll();
     if (hasErrors(newErrors)) return;
     onSubmit(values);
@@ -100,6 +102,20 @@ function EntityFormModal({
     }
   };
 
+  const handlePhotoDelete = async (url) => {
+    if (!onDeletePhoto || deletingPhoto) return;
+    setDeletingPhoto(url);
+    setPhotoError("");
+    try {
+      const updated = await onDeletePhoto(url);
+      setPhotoUrls(updated.photo_urls || []);
+    } catch (error) {
+      setPhotoError(parseApiError(error).message);
+    } finally {
+      setDeletingPhoto(null);
+    }
+  };
+
   return (
     <Modal
       title={title}
@@ -110,7 +126,9 @@ function EntityFormModal({
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting || photoStatus === "uploading"}
+            disabled={
+              submitting || photoStatus === "uploading" || deletingPhoto
+            }
             className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-ink shadow-control disabled:cursor-not-allowed disabled:opacity-70"
           >
             Cancel
@@ -118,7 +136,9 @@ function EntityFormModal({
           <button
             type="submit"
             form="entity-form-modal"
-            disabled={submitting || photoStatus === "uploading"}
+            disabled={
+              submitting || photoStatus === "uploading" || deletingPhoto
+            }
             className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-control hover:bg-accent-600 active:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting ? "Saving…" : submitLabel}
@@ -238,12 +258,29 @@ function EntityFormModal({
             {photoUrls.length > 0 && (
               <div className="mb-3 grid grid-cols-3 gap-2">
                 {photoUrls.map((url) => (
-                  <img
-                    key={url}
-                    src={url}
-                    alt=""
-                    className="aspect-square w-full rounded-lg object-cover"
-                  />
+                  <div key={url} className="relative">
+                    <img
+                      src={url}
+                      alt=""
+                      className="aspect-square w-full rounded-lg object-cover"
+                    />
+                    {onDeletePhoto && (
+                      <button
+                        type="button"
+                        onClick={() => handlePhotoDelete(url)}
+                        disabled={
+                          submitting ||
+                          photoStatus === "uploading" ||
+                          Boolean(deletingPhoto)
+                        }
+                        aria-label={`Delete photo${deletingPhoto === url ? ", deleting" : ""}`}
+                        title="Delete photo"
+                        className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-danger shadow-control disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -258,7 +295,9 @@ function EntityFormModal({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={photoStatus === "uploading" || submitting}
+              disabled={
+                photoStatus === "uploading" || submitting || deletingPhoto
+              }
               className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-muted-400 bg-bg px-4 py-6 text-center disabled:cursor-not-allowed disabled:opacity-70"
             >
               <ImagePlus

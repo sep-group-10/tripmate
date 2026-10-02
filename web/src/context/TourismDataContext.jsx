@@ -239,6 +239,16 @@ export function TourismDataProvider({ children }) {
     return response.data;
   };
 
+  const deleteDestinationPhoto = async (id, photoUrl) => {
+    const response = await api.delete(`/api/v1/destinations/${id}/photos`, {
+      params: { photo_url: photoUrl },
+    });
+    setDestinations((prev) =>
+      prev.map((item) => (item.id === id ? response.data : item)),
+    );
+    return response.data;
+  };
+
   const addAttraction = async (values) => {
     const response = await api.post(
       "/api/v1/attractions",
@@ -280,6 +290,17 @@ export function TourismDataProvider({ children }) {
     return mapped;
   };
 
+  const deleteAttractionPhoto = async (id, photoUrl) => {
+    const response = await api.delete(`/api/v1/attractions/${id}/photos`, {
+      params: { photo_url: photoUrl },
+    });
+    const mapped = mapAttractionFromApi(response.data, destinations);
+    setAttractions((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const addHotel = async (values) => {
     const response = await api.post(
       "/api/v1/hotels",
@@ -309,6 +330,15 @@ export function TourismDataProvider({ children }) {
     const formData = new FormData();
     formData.append("file", file);
     const response = await api.post(`/api/v1/hotels/${id}/photos`, formData);
+    const mapped = mapHotelFromApi(response.data, destinations);
+    setHotels((prev) => prev.map((item) => (item.id === id ? mapped : item)));
+    return mapped;
+  };
+
+  const deleteHotelPhoto = async (id, photoUrl) => {
+    const response = await api.delete(`/api/v1/hotels/${id}/photos`, {
+      params: { photo_url: photoUrl },
+    });
     const mapped = mapHotelFromApi(response.data, destinations);
     setHotels((prev) => prev.map((item) => (item.id === id ? mapped : item)));
     return mapped;
@@ -348,6 +378,17 @@ export function TourismDataProvider({ children }) {
       `/api/v1/restaurants/${id}/photos`,
       formData,
     );
+    const mapped = mapRestaurantFromApi(response.data, destinations);
+    setRestaurants((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
+  const deleteRestaurantPhoto = async (id, photoUrl) => {
+    const response = await api.delete(`/api/v1/restaurants/${id}/photos`, {
+      params: { photo_url: photoUrl },
+    });
     const mapped = mapRestaurantFromApi(response.data, destinations);
     setRestaurants((prev) =>
       prev.map((item) => (item.id === id ? mapped : item)),
@@ -396,6 +437,17 @@ export function TourismDataProvider({ children }) {
     return mapped;
   };
 
+  const deleteLocalEventPhoto = async (id, photoUrl) => {
+    const response = await api.delete(`/api/v1/local-events/${id}/photos`, {
+      params: { photo_url: photoUrl },
+    });
+    const mapped = mapLocalEventFromApi(response.data, destinations);
+    setLocalEvents((prev) =>
+      prev.map((item) => (item.id === id ? mapped : item)),
+    );
+    return mapped;
+  };
+
   const value = {
     destinations,
     destinationsTotal,
@@ -405,6 +457,7 @@ export function TourismDataProvider({ children }) {
     updateDestination,
     deleteDestination,
     addDestinationPhoto,
+    deleteDestinationPhoto,
     attractions,
     attractionsStatus,
     attractionsError,
@@ -412,6 +465,7 @@ export function TourismDataProvider({ children }) {
     updateAttraction,
     deleteAttraction,
     addAttractionPhoto,
+    deleteAttractionPhoto,
     hotels,
     hotelsStatus,
     hotelsError,
@@ -419,6 +473,7 @@ export function TourismDataProvider({ children }) {
     updateHotel,
     deleteHotel,
     addHotelPhoto,
+    deleteHotelPhoto,
     restaurants,
     restaurantsStatus,
     restaurantsError,
@@ -426,6 +481,7 @@ export function TourismDataProvider({ children }) {
     updateRestaurant,
     addRestaurantPhoto,
     deleteRestaurant,
+    deleteRestaurantPhoto,
     localEvents,
     localEventsStatus,
     localEventsError,
@@ -433,6 +489,7 @@ export function TourismDataProvider({ children }) {
     updateLocalEvent,
     deleteLocalEvent,
     addLocalEventPhoto,
+    deleteLocalEventPhoto,
   };
 
   return (

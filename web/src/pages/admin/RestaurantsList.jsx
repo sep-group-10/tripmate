@@ -32,6 +32,7 @@ function RestaurantsList() {
     updateRestaurant,
     deleteRestaurant,
     addRestaurantPhoto,
+    deleteRestaurantPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -315,6 +316,11 @@ function RestaurantsList() {
           onUploadPhoto={
             editingRecord
               ? (file) => addRestaurantPhoto(editingRecord.id, file)
+              : undefined
+          }
+          onDeletePhoto={
+            editingRecord
+              ? (photoUrl) => deleteRestaurantPhoto(editingRecord.id, photoUrl)
               : undefined
           }
           submitting={formSubmitting}

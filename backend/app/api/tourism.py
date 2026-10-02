@@ -33,7 +33,7 @@ from app.schemas.tourism import (
     RestaurantUpdate,
 )
 from app.services.activity_log import log_activity
-from app.services.image_upload import upload_image
+from app.services.image_upload import delete_image, upload_image
 
 destination_router = APIRouter(
     prefix="/api/v1/destinations",
@@ -82,6 +82,20 @@ def _add_entity_photo(entity, key_prefix: str, file: UploadFile, db: Session):
     return entity
 
 
+def _remove_entity_photo(entity, photo_url: str, key_prefix: str, db: Session):
+    """Remove a photo reference and its object after verifying it belongs
+    to the given entity."""
+    photo_urls = entity.photo_urls or []
+    if photo_url not in photo_urls:
+        raise _not_found("Photo")
+
+    delete_image(photo_url, key_prefix)
+    entity.photo_urls = [url for url in photo_urls if url != photo_url]
+    db.commit()
+    db.refresh(entity)
+    return entity
+
+
 @destination_router.post(
     "/{destination_id}/photos",
     response_model=DestinationResponse,
@@ -96,6 +110,24 @@ def add_destination_photo(
     if not destination:
         raise _not_found("Destination")
     return _add_entity_photo(destination, f"destinations/{destination_id}", file, db)
+
+
+@destination_router.delete(
+    "/{destination_id}/photos",
+    response_model=DestinationResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def remove_destination_photo(
+    destination_id: uuid.UUID,
+    photo_url: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    destination = db.get(Destination, destination_id)
+    if not destination:
+        raise _not_found("Destination")
+    return _remove_entity_photo(
+        destination, photo_url, f"destinations/{destination_id}", db
+    )
 
 
 # ============================================================
@@ -520,6 +552,28 @@ def add_attraction_photo(
     )
 
 
+@attraction_router.delete(
+    "/{attraction_id}/photos",
+    response_model=AttractionResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def remove_attraction_photo(
+    attraction_id: uuid.UUID,
+    photo_url: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    attraction = (
+        db.query(Attraction)
+        .filter(Attraction.id == attraction_id, Attraction.is_active.is_(True))
+        .first()
+    )
+    if attraction is None:
+        raise _not_found("Attraction")
+    return _remove_entity_photo(
+        attraction, photo_url, f"places/attractions/{attraction_id}", db
+    )
+
+
 # ============================================================
 # HOTELS
 # ============================================================
@@ -756,6 +810,24 @@ def add_hotel_photo(
         raise _not_found("Hotel")
 
     return _add_entity_photo(hotel, f"places/hotels/{hotel_id}", file, db)
+
+
+@hotel_router.delete(
+    "/{hotel_id}/photos",
+    response_model=HotelResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def remove_hotel_photo(
+    hotel_id: uuid.UUID,
+    photo_url: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    hotel = (
+        db.query(Hotel).filter(Hotel.id == hotel_id, Hotel.is_active.is_(True)).first()
+    )
+    if hotel is None:
+        raise _not_found("Hotel")
+    return _remove_entity_photo(hotel, photo_url, f"places/hotels/{hotel_id}", db)
 
 
 # ============================================================
@@ -997,6 +1069,28 @@ def add_restaurant_photo(
 
     return _add_entity_photo(
         restaurant, f"places/restaurants/{restaurant_id}", file, db
+    )
+
+
+@restaurant_router.delete(
+    "/{restaurant_id}/photos",
+    response_model=RestaurantResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def remove_restaurant_photo(
+    restaurant_id: uuid.UUID,
+    photo_url: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.id == restaurant_id, Restaurant.is_active.is_(True))
+        .first()
+    )
+    if restaurant is None:
+        raise _not_found("Restaurant")
+    return _remove_entity_photo(
+        restaurant, photo_url, f"places/restaurants/{restaurant_id}", db
     )
 
 
@@ -1251,3 +1345,23 @@ def add_local_event_photo(
         raise _not_found("Local event")
 
     return _add_entity_photo(event, f"places/local-events/{event_id}", file, db)
+
+
+@local_event_router.delete(
+    "/{event_id}/photos",
+    response_model=LocalEventResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def remove_local_event_photo(
+    event_id: uuid.UUID,
+    photo_url: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(LocalEvent)
+        .filter(LocalEvent.id == event_id, LocalEvent.is_active.is_(True))
+        .first()
+    )
+    if event is None:
+        raise _not_found("Local event")
+    return _remove_entity_photo(event, photo_url, f"places/local-events/{event_id}", db)
