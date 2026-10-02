@@ -32,8 +32,8 @@ def run_planner_eval():
 
     for case in planner_cases:
         session = AgentSession(
-            user_request=case["request"],
-            trip_preferences=case["preferences"],
+            goal=case["request"],
+            trip_requirements=case["preferences"],
         )
 
         state = {
