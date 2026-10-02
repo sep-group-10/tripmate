@@ -130,16 +130,28 @@ function SuggestionChip({ label, onClick, disabled }) {
 
 // `onPlan(itinerary)` is called whenever a reply carries an itinerary, so the
 // page can hand it to the tabs. Remount (change `key`) to start a new trip.
-function ChatPanel({ onPlan }) {
+function ChatPanel({
+  onPlan,
+  initialSessionId = null,
+  initialConversation = [],
+}) {
   const { clearSession } = useAuth();
-  const [messages, setMessages] = useState(WELCOME_MESSAGES);
+  const [messages, setMessages] = useState(() =>
+    initialConversation.length > 0
+      ? initialConversation.map((entry) => ({
+          id: entry.id,
+          role: entry.role,
+          text: entry.message,
+        }))
+      : WELCOME_MESSAGES,
+  );
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   // Planning-session id from ChatResponse.session.id. Null until the first
   // reply; after that it is sent back so messages continue the same session.
   // Plain state on purpose: the backend can't reload a past session yet, so a
   // page refresh starts a new one.
-  const [sessionId, setSessionId] = useState(null);
+  const [sessionId, setSessionId] = useState(initialSessionId);
   const mounted = useRef(true);
   // Set synchronously so a fast double Enter or click can't send twice before
   // the `thinking` state has re-rendered.

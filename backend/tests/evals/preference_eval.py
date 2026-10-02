@@ -93,8 +93,8 @@ def evaluate_result(result, expected: dict[str, Any]) -> dict[str, bool]:
 
 
 def run_preference_eval():
-    if not os.getenv("GOOGLE_API_KEY"):
-        print("GOOGLE_API_KEY is not configured.")
+    if not os.getenv("OPENROUTER_API_KEY"):
+        print("OPENROUTER_API_KEY is not configured.")
         print("Preference evaluation skipped.")
         return
 

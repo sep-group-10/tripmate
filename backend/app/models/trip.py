@@ -30,24 +30,29 @@ class Trip(Base):
         default="draft",
     )
 
-    travel_start_date: Mapped[date] = mapped_column(
-        Date,
-        nullable=False,
+    title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
-    travel_end_date: Mapped[date] = mapped_column(
+    travel_start_date: Mapped[date | None] = mapped_column(
         Date,
-        nullable=False,
+        nullable=True,
     )
 
-    duration: Mapped[int] = mapped_column(
+    travel_end_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
+    duration: Mapped[int | None] = mapped_column(
         Integer,
-        nullable=False,
+        nullable=True,
     )
 
-    budget: Mapped[Decimal] = mapped_column(
+    budget: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2),
-        nullable=False,
+        nullable=True,
     )
 
     travel_style: Mapped[str] = mapped_column(

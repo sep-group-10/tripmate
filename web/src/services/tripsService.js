@@ -1,21 +1,110 @@
-import { MY_TRIPS } from "../data/myTripsDummyData";
+import api from "./api";
+import { TRIP_STATUS } from "../constants/tripStatus";
 import {
   InvalidTripStatusError,
   statusAfterSave,
   statusAfterUnsave,
 } from "../utils/tripStatus";
+import { formatDate, formatDateRange, formatMoney } from "../utils/tripFormat";
 
-// MOCK trips service: an in-memory store seeded from MY_TRIPS, so a change made
-// on one page is visible on another until the page reloads. There is no trips
-// endpoint yet. TODO(backend): replace the bodies of saveTrip and unsaveTrip
-// with POST /api/v1/trips/{id}/save and DELETE /api/v1/trips/{id}/save, return
-// the standard { success, data } response from the shared axios client
-// (services/api.js), and load the list from GET /api/v1/trips.
+function formatEditedAt(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "recently"
+    : date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+}
 
-// Builds the error an axios call would reject with for a failed API request,
-// so callers can use parseApiError (utils/apiError.js) unchanged. The contract
-// (docs/api-contract.md) has no "wrong state" code, so this uses
-// VALIDATION_ERROR (400); a dedicated code can replace it if the backend adds one.
+function mapTrip(trip) {
+  const status = String(trip.status || "").toUpperCase();
+  const dateRange = formatDateRange(
+    trip.travel_start_date,
+    trip.travel_end_date,
+    {
+      withYear: true,
+    },
+  );
+  const dayCount = Number(trip.duration) || 0;
+  const budget = Number(trip.budget) || 0;
+  const edited = formatEditedAt(trip.updated_at);
+  const title =
+    trip.title ||
+    (status === TRIP_STATUS.DRAFT ? "Untitled trip" : `Trip · ${dateRange}`);
+  const common = {
+    id: trip.id,
+    status,
+    title,
+    where:
+      status === TRIP_STATUS.DRAFT
+        ? "Destination not set"
+        : "Loading destination…",
+    edited,
+    budget,
+    dayCount,
+    days: dayCount,
+  };
+
+  if (status === TRIP_STATUS.DRAFT) {
+    return {
+      ...common,
+      stage: "Planning in progress",
+      pct: null,
+      prompt: null,
+    };
+  }
+
+  return {
+    ...common,
+    coverImageUrl: null,
+    coverHint: "Trip itinerary",
+    facts: [
+      { label: "Length", value: `${dayCount} days` },
+      { label: "Budget", value: formatMoney(budget) },
+      { label: "Updated", value: formatDate(trip.updated_at?.slice(0, 10)) },
+    ],
+    days: [],
+  };
+}
+
+export async function listTrips() {
+  const response = await api.get("/api/v1/trips");
+  return response.data.data.map(mapTrip);
+}
+
+export async function getTripDetails(tripId) {
+  const response = await api.get(`/api/v1/trips/${tripId}`);
+  return response.data.data;
+}
+
+export async function saveTrip(tripId) {
+  const response = await api.post(`/api/v1/trips/${tripId}/save`);
+  return mapTrip(response.data.data);
+}
+
+export async function unsaveTrip(tripId) {
+  const response = await api.delete(`/api/v1/trips/${tripId}/save`);
+  return mapTrip(response.data.data);
+}
+
+export async function resumeTrip(tripId) {
+  const response = await api.get(`/api/v1/trips/${tripId}/resume`);
+  return response.data.data;
+}
+
+export async function renameDraftTrip(tripId, title) {
+  const response = await api.patch(`/api/v1/trips/${tripId}/title`, { title });
+  return mapTrip(response.data.data);
+}
+
+export async function discardDraftTrip(tripId) {
+  await api.delete(`/api/v1/trips/${tripId}`);
+}
+
+// Kept as a small in-memory helper for the existing service unit tests.
+// The page uses listTrips() above and does not use this helper for its data.
 function apiError(status, code, message) {
   const error = new Error(message);
   error.response = {
@@ -46,15 +135,8 @@ export function createTripsService(seed) {
   }
 
   return {
-    // Sync for now; will become an async GET /api/v1/trips call.
     listTrips: () => trips.map((trip) => ({ ...trip })),
-    // GENERATED -> SAVED. Rejects for DRAFT, SAVED and unknown trips.
     saveTrip: async (tripId) => changeStatus(tripId, statusAfterSave),
-    // SAVED -> GENERATED. Rejects for DRAFT, GENERATED and unknown trips.
     unsaveTrip: async (tripId) => changeStatus(tripId, statusAfterUnsave),
   };
 }
-
-const tripsService = createTripsService(MY_TRIPS);
-
-export const { listTrips, saveTrip, unsaveTrip } = tripsService;
