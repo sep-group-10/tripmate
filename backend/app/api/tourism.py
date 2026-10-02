@@ -82,6 +82,22 @@ def _add_entity_photo(entity, key_prefix: str, file: UploadFile, db: Session):
     return entity
 
 
+@destination_router.post(
+    "/{destination_id}/photos",
+    response_model=DestinationResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+def add_destination_photo(
+    destination_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    destination = db.get(Destination, destination_id)
+    if not destination:
+        raise _not_found("Destination")
+    return _add_entity_photo(destination, f"destinations/{destination_id}", file, db)
+
+
 # ============================================================
 # DESTINATIONS
 # ============================================================

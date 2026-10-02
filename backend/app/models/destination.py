@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import Boolean, DateTime, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
@@ -25,6 +25,11 @@ class Destination(Base):
 
     description: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+
+    photo_urls: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text),
         nullable=True,
     )
 

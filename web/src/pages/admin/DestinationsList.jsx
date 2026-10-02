@@ -72,6 +72,7 @@ function DestinationsList() {
     addDestination,
     updateDestination,
     deleteDestination,
+    addDestinationPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -226,6 +227,7 @@ function DestinationsList() {
                 name={destination.name}
                 location={`${destination.region}, ${destination.country}`}
                 rating={destination.rating}
+                photoUrls={destination.photo_urls}
                 description={destination.description}
                 metrics={[
                   { label: "Region", value: destination.region },
@@ -265,6 +267,11 @@ function DestinationsList() {
           initialValues={editingRecord}
           onSubmit={handleSubmit}
           onClose={() => setIsFormOpen(false)}
+          onUploadPhoto={
+            editingRecord
+              ? (file) => addDestinationPhoto(editingRecord.id, file)
+              : undefined
+          }
           submitting={formSubmitting}
           submitError={formError}
         />

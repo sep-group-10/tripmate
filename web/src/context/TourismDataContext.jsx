@@ -226,6 +226,19 @@ export function TourismDataProvider({ children }) {
     setDestinationsTotal((prev) => Math.max(0, prev - 1));
   };
 
+  const addDestinationPhoto = async (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(
+      `/api/v1/destinations/${id}/photos`,
+      formData,
+    );
+    setDestinations((prev) =>
+      prev.map((item) => (item.id === id ? response.data : item)),
+    );
+    return response.data;
+  };
+
   const addAttraction = async (values) => {
     const response = await api.post(
       "/api/v1/attractions",
@@ -391,6 +404,7 @@ export function TourismDataProvider({ children }) {
     addDestination,
     updateDestination,
     deleteDestination,
+    addDestinationPhoto,
     attractions,
     attractionsStatus,
     attractionsError,

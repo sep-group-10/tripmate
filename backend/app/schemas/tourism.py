@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class DestinationCreate(BaseModel):
     name: str = Field(..., max_length=255)
     description: str | None = None
+    photo_urls: list[str] | None = None
     country: str = Field(..., max_length=100)
     region: str | None = Field(default=None, max_length=100)
     latitude: Decimal
@@ -18,6 +19,7 @@ class DestinationCreate(BaseModel):
 class DestinationUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     description: str | None = None
+    photo_urls: list[str] | None = None
     country: str | None = Field(default=None, max_length=100)
     region: str | None = Field(default=None, max_length=100)
     latitude: Decimal | None = None
@@ -31,6 +33,7 @@ class DestinationResponse(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
+    photo_urls: list[str] | None
     country: str
     region: str | None
     latitude: Decimal
