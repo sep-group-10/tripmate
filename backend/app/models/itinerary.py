@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +22,13 @@ class Itinerary(Base):
         UUID(as_uuid=True),
         ForeignKey("trips.id"),
         nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
     )
 
     total_estimated_cost: Mapped[Decimal] = mapped_column(

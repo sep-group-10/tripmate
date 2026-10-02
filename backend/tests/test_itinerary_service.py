@@ -79,6 +79,7 @@ def test_persist_chat_itinerary_maps_rows_and_cost(db_session):
     assert item.end_time == time(11, 30)
     assert item.sort_order == 0
     assert trip.status == "generated"
+    assert persisted.created_at is not None
 
 
 def test_missing_cost_does_not_use_trip_budget(db_session):

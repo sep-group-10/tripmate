@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from app.models.conversation_history import ConversationHistory
@@ -12,13 +12,15 @@ LOGIN_URL = "/api/v1/auth/login"
 TRIPS_URL = "/api/v1/trips"
 
 
-def _add_itinerary(db_session, trip):
+def _add_itinerary(db_session, trip, *, title="Temple visit", created_at=None):
     itinerary = Itinerary(
         trip_id=trip.id,
         total_estimated_cost=Decimal("12500.00"),
         route_info={"mode": "walking"},
         weather_info={"forecast": "sunny"},
     )
+    if created_at is not None:
+        itinerary.created_at = created_at
     db_session.add(itinerary)
     db_session.flush()
     day = ItineraryDay(
@@ -34,7 +36,7 @@ def _add_itinerary(db_session, trip):
         ItineraryDayItem(
             itinerary_day_id=day.id,
             item_type="attraction",
-            title="Temple visit",
+            title=title,
             description="Morning visit",
             start_time=time(9, 0),
             end_time=time(10, 30),
@@ -77,9 +79,82 @@ def test_trip_details_return_persisted_itinerary_and_items(
     assert data["itinerary"]["days"][0]["items"][0]["title"] == "Temple visit"
 
 
+def test_trip_details_return_newer_itinerary_for_same_trip(
+    client, db_session, existing_user
+):
+    trip = _add_trip(db_session, existing_user, status="generated")
+    _add_itinerary(
+        db_session,
+        trip,
+        title="Earlier stop",
+        created_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+    )
+    latest = _add_itinerary(
+        db_session,
+        trip,
+        title="Latest stop",
+        created_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+    )
+    db_session.commit()
+    token = _login(client, existing_user.email, "existingpassword123")
+
+    response = client.get(
+        f"{TRIPS_URL}/{trip.id}", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    data = response.json()["data"]
+    assert response.status_code == 200
+    assert data["itinerary"]["id"] == str(latest.id)
+    assert data["itinerary"]["days"][0]["items"][0]["title"] == "Latest stop"
+
+
+def test_trip_details_deterministically_return_newest_of_three_itineraries(
+    client, db_session, existing_user
+):
+    trip = _add_trip(db_session, existing_user, status="generated")
+    for day, title in ((1, "First stop"), (2, "Second stop")):
+        _add_itinerary(
+            db_session,
+            trip,
+            title=title,
+            created_at=datetime(2026, 9, day, tzinfo=timezone.utc),
+        )
+    latest = _add_itinerary(
+        db_session,
+        trip,
+        title="Third stop",
+        created_at=datetime(2026, 9, 3, tzinfo=timezone.utc),
+    )
+    db_session.commit()
+    token = _login(client, existing_user.email, "existingpassword123")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    first_response = client.get(f"{TRIPS_URL}/{trip.id}", headers=headers)
+    second_response = client.get(f"{TRIPS_URL}/{trip.id}", headers=headers)
+
+    first_data = first_response.json()["data"]["itinerary"]
+    second_data = second_response.json()["data"]["itinerary"]
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_data["id"] == str(latest.id)
+    assert second_data["id"] == str(latest.id)
+    assert first_data["days"][0]["items"][0]["title"] == "Third stop"
+
+
 def test_trip_details_are_available_for_saved_trip(client, db_session, existing_user):
     trip = _add_trip(db_session, existing_user, status="saved")
-    itinerary = _add_itinerary(db_session, trip)
+    _add_itinerary(
+        db_session,
+        trip,
+        title="Earlier saved stop",
+        created_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+    )
+    latest = _add_itinerary(
+        db_session,
+        trip,
+        title="Latest saved stop",
+        created_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+    )
     db_session.commit()
     token = _login(client, existing_user.email, "existingpassword123")
 
@@ -89,7 +164,11 @@ def test_trip_details_are_available_for_saved_trip(client, db_session, existing_
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "saved"
-    assert response.json()["data"]["itinerary"]["id"] == str(itinerary.id)
+    assert response.json()["data"]["itinerary"]["id"] == str(latest.id)
+    assert (
+        response.json()["data"]["itinerary"]["days"][0]["items"][0]["title"]
+        == "Latest saved stop"
+    )
 
 
 def test_trip_details_hide_other_users_and_missing_trips(
