@@ -94,3 +94,81 @@ def persist_chat_itinerary(
         db.flush()
 
     return record
+
+
+def persist_removed_chat_item(
+    db: Session,
+    trip_id: uuid.UUID,
+    source_itinerary_id: uuid.UUID,
+    target_item_id: uuid.UUID,
+) -> Itinerary:
+    """Persist a REMOVE revision while copying every unaffected stored field."""
+    source = db.get(Itinerary, source_itinerary_id)
+    trip = db.get(Trip, trip_id)
+    if source is None or source.trip_id != trip_id or trip is None:
+        raise ValueError("Current itinerary does not exist for this trip")
+    latest = (
+        db.query(Itinerary)
+        .filter(Itinerary.trip_id == trip_id)
+        .order_by(Itinerary.created_at.desc(), Itinerary.id.desc())
+        .first()
+    )
+    if latest is None or latest.id != source_itinerary_id:
+        raise ValueError("Current itinerary changed before the edit was saved")
+
+    source_days = (
+        db.query(ItineraryDay)
+        .filter(ItineraryDay.itinerary_id == source.id)
+        .order_by(ItineraryDay.day_number, ItineraryDay.id)
+        .all()
+    )
+    with db.connection().begin_nested():
+        revision = Itinerary(
+            trip_id=trip_id,
+            total_estimated_cost=source.total_estimated_cost,
+            route_info=source.route_info,
+            weather_info=source.weather_info,
+        )
+        db.add(revision)
+        db.flush()
+        found_target = False
+        for source_day in source_days:
+            day = ItineraryDay(
+                itinerary_id=revision.id,
+                day_number=source_day.day_number,
+                date=source_day.date,
+                title=source_day.title,
+                summary=source_day.summary,
+            )
+            db.add(day)
+            db.flush()
+            source_items = (
+                db.query(ItineraryDayItem)
+                .filter(ItineraryDayItem.itinerary_day_id == source_day.id)
+                .order_by(ItineraryDayItem.sort_order, ItineraryDayItem.id)
+                .all()
+            )
+            next_order = 0
+            for item in source_items:
+                if item.id == target_item_id:
+                    found_target = True
+                    continue
+                db.add(
+                    ItineraryDayItem(
+                        itinerary_day_id=day.id,
+                        item_type=item.item_type,
+                        title=item.title,
+                        description=item.description,
+                        start_time=item.start_time,
+                        end_time=item.end_time,
+                        location=item.location,
+                        estimated_cost=item.estimated_cost,
+                        sort_order=next_order,
+                    )
+                )
+                next_order += 1
+        if not found_target:
+            raise ValueError("Target item is not in the current itinerary")
+        trip.status = "generated"
+        db.flush()
+    return revision

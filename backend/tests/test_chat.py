@@ -1,7 +1,7 @@
 """Integration tests for the chat preference-processing flow."""
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -18,7 +18,7 @@ from app.models.planning_session import PlanningSession
 from app.models.trip import Trip
 from app.routers import chat as chat_router
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
-from app.schemas.planning import CriticDecision, PlannerDecision
+from app.schemas.planning import CriticDecision, ItineraryEditPlan, PlannerDecision
 from app.schemas.preference import PreferenceResult
 from app.services.agent_session import create_agent_session
 from app.services.langgraph import critic as critic_module
@@ -544,6 +544,208 @@ def test_current_itinerary_context_loads_latest_persisted_record(
             }
         ],
     }
+
+
+def _removal_context(*, duplicate=False, invalid=False):
+    itinerary_id = uuid.uuid4()
+    day = {
+        "id": str(uuid.uuid4()),
+        "day_number": 2,
+        "date": "not-a-date" if invalid else "2026-10-02",
+        "title": "Culture",
+        "summary": "Keep this summary",
+        "items": [
+            {
+                "id": str(uuid.uuid4()),
+                "item_type": "attraction",
+                "title": "Jaffna Fort",
+                "description": "Target",
+                "start_time": "09:00:00",
+                "end_time": "10:00:00",
+                "sort_order": 0,
+                "location": "Jaffna",
+                "estimated_cost": "10.00",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "item_type": "museum",
+                "title": "Museum",
+                "description": "Preserve me",
+                "start_time": "10:30:00",
+                "end_time": "11:30:00",
+                "sort_order": 1,
+                "location": "Town",
+                "estimated_cost": "4.50",
+            },
+        ],
+    }
+    if duplicate:
+        day["items"].append(
+            {**day["items"][0], "id": str(uuid.uuid4()), "sort_order": 2}
+        )
+    return {"id": str(itinerary_id), "trip_id": str(uuid.uuid4()), "days": [day]}
+
+
+def test_remove_edit_successfully_removes_requested_day_item():
+    context = _removal_context()
+    itinerary, target_id, message = chat_router._remove_itinerary_item(
+        context,
+        ItineraryEditPlan(operation="remove", target_item="Jaffna Fort", source_day=2),
+    )
+    assert message is None
+    assert target_id == uuid.UUID(context["days"][0]["items"][0]["id"])
+    assert itinerary.days[0].day_number == 2
+    assert [item.name for item in itinerary.days[0].items] == ["Museum"]
+
+
+def test_remove_edit_leaves_other_itinerary_items_unchanged():
+    context = _removal_context()
+    original = context["days"][0]["items"][1].copy()
+    itinerary, _, message = chat_router._remove_itinerary_item(
+        context, ItineraryEditPlan(operation="remove", target_item="Jaffna Fort")
+    )
+    assert message is None
+    remaining = itinerary.days[0].items[0]
+    assert remaining.name == original["title"]
+    assert remaining.start_time == "10:30"
+    assert remaining.end_time == "11:30"
+    assert context["days"][0]["items"][1] == original
+
+
+def test_remove_edit_not_found_requests_clarification():
+    itinerary, target_id, message = chat_router._remove_itinerary_item(
+        _removal_context(), ItineraryEditPlan(operation="remove", target_item="Fort")
+    )
+    assert itinerary is None and target_id is None
+    assert "couldn't find" in message
+
+
+def test_remove_edit_ambiguous_target_requests_clarification():
+    itinerary, target_id, message = chat_router._remove_itinerary_item(
+        _removal_context(duplicate=True),
+        ItineraryEditPlan(operation="remove", target_item="Jaffna Fort"),
+    )
+    assert itinerary is None and target_id is None
+    assert "more than one" in message
+
+
+def test_invalid_remove_result_is_not_persisted(db_session, existing_user):
+    session = _planning_session(db_session, existing_user)
+    context = _removal_context(invalid=True)
+    itinerary, target_id, message = chat_router._remove_itinerary_item(
+        context, ItineraryEditPlan(operation="remove", target_item="Jaffna Fort")
+    )
+    assert itinerary is None and target_id is None
+    assert "validate" in message
+    assert (
+        db_session.query(Itinerary).filter(Itinerary.trip_id == session.trip_id).count()
+        == 0
+    )
+
+
+def test_remove_edit_returns_updated_itinerary_and_persistence_preserves_fields(
+    client, db_session, existing_user, monkeypatch
+):
+    session = _planning_session(db_session, existing_user)
+    source = Itinerary(
+        trip_id=session.trip_id,
+        total_estimated_cost=Decimal("24.50"),
+        route_info={"route": "stored"},
+        weather_info={"forecast": "stored"},
+    )
+    db_session.add(source)
+    db_session.flush()
+    day = ItineraryDay(
+        itinerary_id=source.id,
+        day_number=2,
+        date=date(2026, 10, 2),
+        title="Culture",
+        summary="Keep summary",
+    )
+    db_session.add(day)
+    db_session.flush()
+    target = ItineraryDayItem(
+        itinerary_day_id=day.id,
+        item_type="attraction",
+        title="Jaffna Fort",
+        description="Remove",
+        start_time=time(9),
+        end_time=time(10),
+        location="Jaffna",
+        estimated_cost=Decimal("10.00"),
+        sort_order=0,
+    )
+    survivor = ItineraryDayItem(
+        itinerary_day_id=day.id,
+        item_type="museum",
+        title="Museum",
+        description="Keep description",
+        start_time=time(10, 30),
+        end_time=time(11, 30),
+        location="Town",
+        estimated_cost=Decimal("4.50"),
+        sort_order=1,
+    )
+    db_session.add_all([target, survivor])
+    db_session.commit()
+    _mock_processor(monkeypatch, _complete_preferences())
+    final_session = create_agent_session(_complete_preferences())
+    final_session.status = AgentSessionStatus.COMPLETED
+    final_session.iteration_count = 1
+    decision = PlannerDecision(
+        action="candidate_retriever",
+        edit_plan=ItineraryEditPlan(
+            operation="remove", target_item="Jaffna Fort", source_day=2
+        ),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type(
+            "Graph",
+            (),
+            {
+                "invoke": lambda self, *args, **kwargs: {
+                    "session": final_session,
+                    "planner_decision": decision,
+                }
+            },
+        )(),
+    )
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "Remove Jaffna Fort from day 2."}
+    )
+    assert response.status_code == 200
+    assert [
+        item["name"]
+        for item in response.json()["data"]["itinerary"]["days"][0]["items"]
+    ] == ["Museum"]
+    revisions = (
+        db_session.query(Itinerary).filter(Itinerary.trip_id == session.trip_id).all()
+    )
+    assert len(revisions) == 2
+    revision = max(revisions, key=lambda item: (item.created_at, str(item.id)))
+    db_session.refresh(revision)
+    db_session.refresh(revision)
+    copied_day = (
+        db_session.query(ItineraryDay).filter_by(itinerary_id=revision.id).one()
+    )
+    copied_item = (
+        db_session.query(ItineraryDayItem)
+        .filter_by(itinerary_day_id=copied_day.id)
+        .one()
+    )
+    assert copied_day.summary == "Keep summary"
+    assert copied_item.title == "Museum"
+    assert copied_item.description == "Keep description"
+    assert copied_item.location == "Town"
+    assert copied_item.estimated_cost == Decimal("4.50")
+    assert copied_item.start_time == survivor.start_time
+    assert copied_item.end_time == survivor.end_time
+    assert copied_item.sort_order == 0
+    assert revision.route_info == {"route": "stored"}
+    assert revision.weather_info == {"forecast": "stored"}
+    assert db_session.get(ItineraryDayItem, target.id) is not None
 
 
 def test_another_user_cannot_access_chat_session(

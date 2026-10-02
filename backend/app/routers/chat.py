@@ -1,4 +1,5 @@
 import uuid
+from datetime import date, time
 
 from fastapi import APIRouter, Depends
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -22,18 +23,122 @@ from app.schemas.chat import (
     PlanningSessionInfo,
 )
 from app.schemas.common import ApiResponse
+from app.schemas.planning import ItineraryEditPlan
 from app.schemas.preference import PreferenceResult
 from app.services.agent_session import create_agent_session
 from app.services.chat_response_generator import ChatResponseGenerator
 from app.services.conversation_history import get_conversation, save_message
 from app.services.final_response_generator import FinalResponseGenerator
-from app.services.itinerary_service import persist_chat_itinerary
+from app.services.itinerary_service import (
+    persist_chat_itinerary,
+    persist_removed_chat_item,
+)
 from app.services.langgraph.context import PlanningContext
 from app.services.langgraph.planning_graph import planning_graph
 from app.services.preference_processor import PreferenceProcessor
 from app.services.trip_service import apply_trip_preferences, create_draft_trip
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _remove_itinerary_item(
+    current_itinerary: dict, edit_plan: ItineraryEditPlan
+) -> tuple[ChatItinerary | None, uuid.UUID | None, str | None]:
+    """Resolve one persisted item and validate the itinerary without it."""
+    target = (edit_plan.target_item or "").strip()
+    if not target:
+        return None, None, "Which itinerary item would you like me to remove?"
+    matches = []
+    for day_index, day in enumerate(current_itinerary.get("days", [])):
+        if (
+            edit_plan.source_day is not None
+            and day.get("day_number") != edit_plan.source_day
+        ):
+            continue
+        for item_index, item in enumerate(day.get("items", [])):
+            if (
+                str(item.get("id")) == target
+                or item.get("title", "").casefold() == target.casefold()
+            ):
+                matches.append((day_index, item_index, item))
+    if not matches:
+        return (
+            None,
+            None,
+            f"I couldn't find '{target}' in that day. Which item did you mean?",
+        )
+    if len(matches) > 1:
+        return (
+            None,
+            None,
+            f"I found more than one '{target}'. Which one should I remove?",
+        )
+
+    target_item = matches[0][2]
+    days = []
+    for day_index, day in enumerate(current_itinerary["days"]):
+        context_items = [
+            item
+            for index, item in enumerate(day.get("items", []))
+            if not (
+                day_index == matches[0][0] and item.get("id") == target_item.get("id")
+            )
+        ]
+        day_items = []
+        for item in context_items:
+            try:
+                start_time = time.fromisoformat(item["start_time"]).isoformat(
+                    timespec="minutes"
+                )
+                end_time = time.fromisoformat(item["end_time"]).isoformat(
+                    timespec="minutes"
+                )
+            except (KeyError, TypeError, ValueError):
+                start_time, end_time = item.get("start_time"), item.get("end_time")
+            day_items.append(
+                {
+                    "candidate_id": item.get("id") or item.get("title"),
+                    "category": item.get("item_type") or "activity",
+                    "name": item.get("title"),
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "latitude": None,
+                    "longitude": None,
+                    "duration_minutes": None,
+                    "opening_hours": None,
+                }
+            )
+        days.append(
+            {
+                "day_number": day["day_number"],
+                "date": day["date"],
+                "day_type": day.get("title") or "day_trip",
+                "items": day_items,
+                "hotel_id": None,
+                "hotel_location": None,
+                "warnings": [],
+            }
+        )
+    try:
+        for day in days:
+            date.fromisoformat(day["date"])
+            previous_end = None
+            for item in day["items"]:
+                start = time.fromisoformat(item["start_time"])
+                end = time.fromisoformat(item["end_time"])
+                if end <= start or (previous_end is not None and start < previous_end):
+                    raise ValueError("Invalid or overlapping schedule")
+                previous_end = end
+        itinerary = ChatItinerary(
+            status="ok", days=days, hotel_by_destination={}, unscheduled=[], warnings=[]
+        )
+        return itinerary, uuid.UUID(str(target_item["id"])), None
+    except Exception:
+        return (
+            None,
+            None,
+            "I couldn't validate the updated schedule, so I left your itinerary unchanged.",
+        )
 
 
 def _current_itinerary_context(db: Session, trip_id: uuid.UUID | None) -> dict | None:
@@ -223,6 +328,39 @@ def _process_chat_message(
             db.commit()
             raise
         final_agent_session = planning_result["session"]
+
+        planner_decision = planning_result.get("planner_decision")
+        edit_plan = planner_decision.edit_plan if planner_decision else None
+        if edit_plan and edit_plan.operation == "remove":
+            edited_itinerary, target_item_id, clarification = _remove_itinerary_item(
+                current_itinerary or {"days": []}, edit_plan
+            )
+            if clarification:
+                assistant_message = clarification
+                itinerary = None
+            else:
+                itinerary = edited_itinerary
+                assistant_message = (
+                    "Done — I removed the item and updated your itinerary."
+                )
+                if planning_session.trip_id is not None:
+                    persist_removed_chat_item(
+                        db,
+                        planning_session.trip_id,
+                        uuid.UUID(current_itinerary["id"]),
+                        target_item_id,
+                    )
+                    db.commit()
+            planning_session.status = "completed"
+            planning_session.iteration_count = final_agent_session.iteration_count
+            db.commit()
+            db.refresh(planning_session)
+            save_message(db, planning_session.id, "assistant", assistant_message)
+            return ChatResponse(
+                assistant_message=assistant_message,
+                session=PlanningSessionInfo.model_validate(planning_session),
+                itinerary=itinerary,
+            )
 
         planning_session.status = final_agent_session.status.value
         planning_session.iteration_count = final_agent_session.iteration_count
