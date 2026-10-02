@@ -21,23 +21,22 @@ function VerifyEmailPage() {
   const verifiedTokenRef = useRef(null);
 
   useEffect(() => {
+    // Guards against both a real re-render with the same token and
+    // React StrictMode's dev-only double-invoke of this effect - either
+    // way, the verification request itself must only ever fire once per
+    // token, and its result must always be applied once it lands.
     if (!token || verifiedTokenRef.current === token) return;
     verifiedTokenRef.current = token;
 
-    let cancelled = false;
     api
       .post("/api/v1/auth/verify-email", { token })
       .then(() => {
-        if (!cancelled) setStatus("success");
+        setStatus("success");
       })
       .catch((err) => {
-        if (cancelled) return;
         setError(parseApiError(err).message);
         setStatus("error");
       });
-    return () => {
-      cancelled = true;
-    };
   }, [token]);
 
   const handleResend = async (event) => {
