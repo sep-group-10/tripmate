@@ -830,7 +830,8 @@ def test_complete_single_message_runs_chat_api_through_real_planning_graph(
     assert processor.model.prompts[0][-1].content.startswith(
         "human: Plan a three-day trip"
     )
-    assert "Current persisted itinerary (context only" in planner_model.prompts[0]
+    assert "Trip requirements:" in planner_model.prompts[0]
+    assert "Current persisted itinerary (context only" not in planner_model.prompts[0]
     assert "Latest user message:" in planner_model.prompts[0]
     assert db_session.query(Trip).count() == 1
     assert [
