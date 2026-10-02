@@ -4,10 +4,13 @@ import { useAuth } from "../../hooks/useAuth";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", end: true },
+  { to: "/admin/admins", label: "Admins" },
   { to: "/admin/destinations", label: "Destinations" },
   { to: "/admin/attractions", label: "Attractions" },
-  { to: "/admin/hotels", label: "Hotels" },
+  { to: "/admin/hotels", label: "Accommodations" },
   { to: "/admin/restaurants", label: "Restaurants" },
+  { to: "/admin/local-events", label: "Local events" },
+  { to: "/admin/feedback", label: "Feedback" },
 ];
 
 function initials(name) {

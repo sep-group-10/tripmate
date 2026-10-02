@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import FormInput from "../components/FormInput";
 import Modal from "../components/Modal";
 import Button from "../components/Button";
@@ -12,7 +12,6 @@ import { validateFullName } from "../utils/validation";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
-import { ADMIN_ROLES } from "../constants/roles";
 
 const BUDGET_OPTIONS = ["Budget", "Moderate", "Luxury"];
 const PACE_OPTIONS = ["Relaxed", "Balanced", "Packed"];
@@ -49,7 +48,7 @@ function initials(name) {
 }
 
 function ProfilePage() {
-  const { login, logout, clearSession, role } = useAuth();
+  const { login, clearSession } = useAuth();
   const navigate = useNavigate();
 
   // Profile information and travel preferences come from GET /users/me.
@@ -148,11 +147,6 @@ function ProfilePage() {
       }
       setSaveStatus("error");
     }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
   };
 
   const handlePhotoChange = async (event) => {
@@ -290,41 +284,19 @@ function ProfilePage() {
   };
 
   return (
-    <div className="font-body min-h-screen bg-bg px-6 py-14 text-ink">
+    <div className="font-body bg-bg px-6 py-14 text-ink">
       <div className="mx-auto flex max-w-[840px] flex-col gap-6">
-        <header className="mb-2 flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
-              TripMate account
-            </span>
-            <h1 className="font-heading mt-2 mb-1.5 text-[34px] font-semibold tracking-tight">
-              Profile
-            </h1>
-            <p className="m-0 text-md text-muted-600">
-              Manage your personal information, account settings and travel
-              preferences.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* <span className="rounded-pill bg-success-100 px-2.5 py-1 text-xs font-medium text-success">
-              Verified traveller
-            </span> */}
-            {ADMIN_ROLES.includes(role) && (
-              <Link
-                to="/admin"
-                className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-control"
-              >
-                Admin
-              </Link>
-            )}
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              className="px-3.5 py-1.5 text-xs"
-            >
-              Log out
-            </Button>
-          </div>
+        <header className="mb-2 flex flex-col gap-1.5">
+          <span className="font-mono text-eyebrow font-medium tracking-widest text-muted-600 uppercase">
+            TripMate account
+          </span>
+          <h1 className="font-heading mt-0.5 mb-1.5 text-[34px] font-semibold tracking-tight">
+            Profile
+          </h1>
+          <p className="m-0 text-md text-muted-600">
+            Manage your personal information, account settings and travel
+            preferences.
+          </p>
         </header>
 
         <SectionCard title="Personal information" badge="Account">

@@ -47,6 +47,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import ApiResponse
 from app.schemas.user import UserRegisterRequest
+from app.services.activity_log import log_activity
 from app.services.email import send_email
 from app.services.email_templates import password_reset_email, verification_email
 
@@ -171,6 +172,8 @@ def register(
             ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
         ) from exc
     db.refresh(user)
+
+    log_activity(db, "User", f"{user.full_name} registered", user.email)
 
     _send_verification_email(user, db)
 

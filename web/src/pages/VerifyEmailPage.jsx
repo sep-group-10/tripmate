@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CircleCheck, CircleX, MapPin } from "lucide-react";
 import FormInput from "../components/FormInput";
@@ -18,8 +18,11 @@ function VerifyEmailPage() {
   const [resendEmail, setResendEmail] = useState("");
   const [resendStatus, setResendStatus] = useState("idle"); // idle | sending | sent
 
+  const verifiedTokenRef = useRef(null);
+
   useEffect(() => {
-    if (!token) return;
+    if (!token || verifiedTokenRef.current === token) return;
+    verifiedTokenRef.current = token;
 
     let cancelled = false;
     api

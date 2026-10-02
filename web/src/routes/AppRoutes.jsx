@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import Home from "../pages/Home";
+import LandingPage from "../pages/LandingPage";
 import DevStatusPage from "../pages/DevStatusPage";
 import RegisterPage from "../pages/RegisterPage";
 import LoginPage from "../pages/LoginPage";
@@ -9,12 +9,16 @@ import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ProfilePage from "../pages/ProfilePage";
 import TripPlanChatPage from "../pages/TripPlanChatPage";
+import MyTripsPage from "../pages/MyTripsPage";
+import UserLayout from "../pages/UserLayout";
 import AdminLayout from "../pages/admin/AdminLayout";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import DestinationsList from "../pages/admin/DestinationsList";
 import AttractionsList from "../pages/admin/AttractionsList";
 import HotelsList from "../pages/admin/HotelsList";
 import RestaurantsList from "../pages/admin/RestaurantsList";
+import LocalEventsList from "../pages/admin/LocalEventsList";
+import ComingSoon from "../pages/admin/ComingSoon";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminRoute from "./AdminRoute";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -22,7 +26,7 @@ import NotFoundPage from "../pages/NotFoundPage";
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<LandingPage />} />
       {import.meta.env.DEV && (
         <Route path="/dev/status" element={<DevStatusPage />} />
       )}
@@ -33,21 +37,16 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
-        path="/profile"
         element={
           <ProtectedRoute>
-            <ProfilePage />
+            <UserLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/trip-plan"
-        element={
-          <ProtectedRoute>
-            <TripPlanChatPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/chat" element={<TripPlanChatPage />} />
+        <Route path="/trips" element={<MyTripsPage />} />
+      </Route>
       <Route
         path="/admin"
         element={
@@ -61,6 +60,9 @@ function AppRoutes() {
         <Route path="attractions" element={<AttractionsList />} />
         <Route path="hotels" element={<HotelsList />} />
         <Route path="restaurants" element={<RestaurantsList />} />
+        <Route path="admins" element={<ComingSoon title="Admins" />} />
+        <Route path="local-events" element={<LocalEventsList />} />
+        <Route path="feedback" element={<ComingSoon title="Feedback" />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

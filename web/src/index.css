@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 /* Design tokens from design-reference/_ds/.../styles.css, exposed as Tailwind
@@ -8,6 +8,14 @@
    Tailwind's built-in neutral/shadow-lg/etc. keys, since those differ in
    value from this design system and are unrelated to it. --radius-lg is
    skipped: Tailwind's stock 8px already matches this design's input radius.
+   Name mapping to the design system: neutral-* is muted-*, accent-2-* is
+   info-*, text is ink, radius-md (14px) is radius-panel, shadow-sm is
+   shadow-control, shadow-md is shadow-raised and shadow-lg is shadow-card.
+   The color ramps are complete for neutral, accent and accent-2/info; the
+   status colors (success, warn, danger) only carry the 100 and 700 steps the
+   design system defines for them. font-mono is IBM Plex Mono, for micro-labels
+   only. The num utility at the bottom is the design system's .num: tabular
+   figures, for any number that can change.
 
    --text-* keys below are for sizes genuinely reused across multiple
    components - one-off sizes stay as arbitrary text-[..] values on
@@ -24,16 +32,23 @@
   --color-accent-100: #fdefeb;
   --color-accent-200: #fbdcd3;
   --color-accent-300: #f8bda9;
+  --color-accent-400: #f3937a;
+  --color-accent-500: #e8532b;
   --color-accent-600: #cf4220;
   --color-accent-700: #a9331a;
+  --color-accent-800: #7c2614;
+  --color-accent-900: #4d1a0f;
   --color-border: #e2e4e5;
   --color-divider: #dfe1e2;
 
+  --color-muted-100: #f7f8f8;
+  --color-muted-200: #eceded;
   --color-muted-300: #dfe1e2;
   --color-muted-400: #c3c7c9;
   --color-muted-500: #9aa0a3;
   --color-muted-600: #767c80;
   --color-muted-700: #565c60;
+  --color-muted-800: #383d40;
   --color-muted-900: #17191a;
 
   --color-success: #12a26a;
@@ -41,13 +56,24 @@
   --color-success-700: #0a6b45;
   --color-danger: #d92d20;
   --color-danger-100: #fdeceb;
+  --color-danger-700: #8f1c14;
   --color-warn: #d68a00;
   --color-warn-100: #fdf3e0;
+  --color-warn-700: #8a5a00;
   --color-info: #2f6ff0;
   --color-info-100: #eef3fe;
+  --color-info-200: #d8e4fd;
+  --color-info-300: #b3c9fa;
+  --color-info-400: #7fa4f6;
+  --color-info-500: #2f6ff0;
+  --color-info-600: #1e58cf;
+  --color-info-700: #1844a3;
+  --color-info-800: #143377;
+  --color-info-900: #10224a;
 
   --font-heading: "Schibsted Grotesk", system-ui, sans-serif;
   --font-body: "Schibsted Grotesk", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 
   --text-badge: 10px;
   --text-caption: 11.5px;
@@ -59,6 +85,7 @@
   --text-heading-sm: 26px;
   --text-heading-md: 28px;
 
+  --radius-panel: 14px;
   --radius-card: 22px;
   --radius-pill: 999px;
   --radius-badge: 6px;
@@ -68,6 +95,8 @@
   --spacing-search: 260px;
   --spacing-auth-card: 460px;
 
+  --shadow-raised:
+    0 2px 4px rgba(23, 25, 26, 0.04), 0 12px 28px -12px rgba(23, 25, 26, 0.14);
   --shadow-card:
     0 4px 8px rgba(23, 25, 26, 0.04), 0 32px 64px -24px rgba(23, 25, 26, 0.22);
   --shadow-control:
@@ -77,4 +106,10 @@
 
 body {
   margin: 0;
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
 }
