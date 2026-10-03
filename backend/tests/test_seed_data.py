@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -12,6 +13,23 @@ from app.core.check_seed_data import (
     find_price_outliers,
 )
 from app.core.seed_data import DESTINATION_SEEDS, TRANSPORT_RATES
+from app.core.seed_data.commons_photos import (
+    ATTRACTION_PHOTO_URLS,
+    COMMONS_URL_PREFIX,
+    GENERIC_PHOTO_URLS,
+    KNOWN_WRONG_PHOTO_NAMES,
+    event_photo,
+    hotel_photo,
+    restaurant_photo,
+)
+from app.core.seed_data.photo_credits import PHOTO_CREDITS
+from app.core.seed_data.photos import (
+    ATTRACTION_PHOTOS,
+    EVENT_PHOTOS,
+    HOTEL_PHOTOS,
+    PHOTO_CDN,
+    RESTAURANT_PHOTOS,
+)
 from app.core.seed_tourism import seed_tourism
 from app.models.attraction import Attraction
 from app.models.destination import Destination
@@ -267,3 +285,130 @@ def _days():
         "saturday",
         "sunday",
     )
+
+
+# --- photos -----------------------------------------------------------------
+
+_ALLOWED_LICENSE = re.compile(r"^(CC0|CC BY(-SA)? \d|Public domain)", re.IGNORECASE)
+_GENERIC_KEYS = {
+    "budget_room",
+    "midrange_room",
+    "resort_pool",
+    "rice_and_curry",
+    "seafood",
+    "cafe",
+    "street_food",
+    "indian_curry",
+    "noodles",
+    "festival",
+    "perahera",
+    "beach_event",
+}
+
+
+def test_photo_credits_are_complete_and_use_allowed_licenses():
+    assert {c["name"] for c in PHOTO_CREDITS if c["kind"] == "generic"} == _GENERIC_KEYS
+    for credit in PHOTO_CREDITS:
+        label = credit["used_for"]
+        assert credit["url"].startswith("https://upload.wikimedia.org/"), label
+        assert "/960px-" in credit["url"], label
+        assert _ALLOWED_LICENSE.match(credit["license"]), label
+        assert credit["author"].strip() and len(credit["author"]) < 120, label
+        assert credit["source"].startswith("https://commons.wikimedia.org/wiki/File:")
+    urls = [credit["url"] for credit in PHOTO_CREDITS]
+    assert len(urls) == len(set(urls))
+
+
+def test_every_credited_attraction_exists_in_the_seed_data():
+    seeded = {a["name"] for d in DESTINATION_SEEDS for a in d["attractions"]}
+    assert set(ATTRACTION_PHOTO_URLS) <= seeded
+
+
+@pytest.mark.parametrize("data", DESTINATION_SEEDS, ids=lambda d: d["name"])
+def test_each_destination_has_at_least_three_attractions_with_photos(data):
+    with_photo = [
+        a["name"]
+        for a in data["attractions"]
+        if a["name"] in ATTRACTION_PHOTOS or a["name"] in ATTRACTION_PHOTO_URLS
+    ]
+    assert len(with_photo) >= 3
+
+
+def test_every_hotel_restaurant_and_event_gets_a_photo(db_session):
+    seed_tourism(db_session)
+
+    for model in (Hotel, Restaurant, LocalEvent):
+        for data in DESTINATION_SEEDS:
+            destination = (
+                db_session.query(Destination).filter_by(name=data["name"]).one()
+            )
+            rows = db_session.query(model).filter_by(
+                destination_id=destination.id, is_active=True
+            )
+            for row in rows:
+                assert row.photo_urls, f"{data['name']}: {row.name}"
+                url = row.photo_urls[0]
+                assert url.startswith((COMMONS_URL_PREFIX, PHOTO_CDN)), row.name
+
+
+def test_existing_photo_map_entries_are_kept(db_session):
+    seed_tourism(db_session)
+
+    for model, photos in (
+        (Attraction, ATTRACTION_PHOTOS),
+        (Hotel, HOTEL_PHOTOS),
+        (Restaurant, RESTAURANT_PHOTOS),
+        (LocalEvent, EVENT_PHOTOS),
+    ):
+        for name, key in photos.items():
+            rows = db_session.query(model).filter_by(name=name, is_active=True).all()
+            for row in rows:
+                assert row.photo_urls == [f"{PHOTO_CDN}/{key}"], name
+
+
+def test_reseeding_keeps_other_existing_photos_but_replaces_known_wrong_ones(
+    db_session,
+):
+    custom = ["https://example.com/admin-upload.jpg"]
+    museum = db_session.query(Attraction).filter_by(name="Sigiriya Museum").one()
+    lodge = db_session.query(Hotel).filter_by(name="Ella Budget Lodge").one()
+    galle_fort = db_session.query(Attraction).filter_by(name="Galle Fort").one()
+    assert "Galle Fort" in KNOWN_WRONG_PHOTO_NAMES
+    museum.photo_urls = custom
+    lodge.photo_urls = custom
+    galle_fort.photo_urls = ["https://example.com/wrong-photo.jpg"]
+    db_session.commit()
+
+    seed_tourism(db_session)
+    db_session.refresh(museum)
+    db_session.refresh(lodge)
+    db_session.refresh(galle_fort)
+
+    assert museum.photo_urls == custom
+    assert lodge.photo_urls == custom
+    assert galle_fort.photo_urls == [ATTRACTION_PHOTO_URLS["Galle Fort"]]
+
+
+def test_generic_photos_are_matched_by_type_and_price():
+    assert hotel_photo({"price_per_night": 38}) == GENERIC_PHOTO_URLS["budget_room"]
+    assert hotel_photo({"price_per_night": 95}) == GENERIC_PHOTO_URLS["midrange_room"]
+    assert hotel_photo({"price_per_night": 220}) == GENERIC_PHOTO_URLS["resort_pool"]
+
+    for cuisine, key in (
+        ("Local Sri Lankan", "rice_and_curry"),
+        ("Seafood", "seafood"),
+        ("Western", "cafe"),
+        ("Indian", "indian_curry"),
+        ("Chinese", "noodles"),
+        ("Thai", "street_food"),
+    ):
+        assert restaurant_photo({"cuisine_type": cuisine}) == GENERIC_PHOTO_URLS[key]
+
+    for name, key in (
+        ("Kandy Esala Perahera", "perahera"),
+        ("Negombo Lagoon Lantern Night", "perahera"),
+        ("Colombo Food and Culture Fair", "street_food"),
+        ("Mirissa Whale and Ocean Festival", "beach_event"),
+        ("Kandy Traditional Arts Exhibition", "festival"),
+    ):
+        assert event_photo({"name": name}) == GENERIC_PHOTO_URLS[key]

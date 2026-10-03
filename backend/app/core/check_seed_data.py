@@ -1,6 +1,7 @@
 """Read-only data-quality report for the tourism tables.
 
-    python -m app.core.check_seed_data
+    python -m app.core.check_seed_data          # database report
+    python -m app.core.check_seed_data --urls   # also verify the Commons photo URLs
 
 Reports (active rows only):
   - places more than 30 km from their destination
@@ -9,14 +10,22 @@ Reports (active rows only):
   - active events that have already ended
   - prices far outside the normal range
 
+With --urls, every URL in seed_data/photo_credits.py is fetched (network needed)
+and must load as an image from upload.wikimedia.org with an allowed licence.
+
 Exits with status 1 if anything is reported, so it can gate CI or a deploy.
 """
 
 import math
+import re
 import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timezone
 
 from app.core.database import SessionLocal
+from app.core.seed_data.photo_credits import PHOTO_CREDITS
 from app.models.attraction import Attraction
 from app.models.destination import Destination
 from app.models.hotel import Hotel
@@ -35,6 +44,9 @@ PRICE_RANGES = {
     "attraction entry_fee": (0, 50),
     "event entry_fee": (0, 100),
 }
+
+_ALLOWED_LICENSE = re.compile(r"^(CC0|CC BY(-SA)? \d|Public domain)", re.IGNORECASE)
+_USER_AGENT = "TripMateSeedCheck/1.0 (student project)"
 
 _PLACE_MODELS = (
     ("attraction", Attraction),
@@ -215,6 +227,41 @@ def _format(item) -> str:
     return ", ".join(f"{key}={value}" for key, value in item.items())
 
 
+def check_photo_urls(pause: float = 1.0) -> list[str]:
+    """Fetch every credited photo URL; returns a list of problems."""
+    problems = []
+    for credit in PHOTO_CREDITS:
+        label = credit["used_for"]
+        url = credit["url"]
+        if not url.startswith("https://upload.wikimedia.org/"):
+            problems.append(f"{label}: not an upload.wikimedia.org URL")
+        if not _ALLOWED_LICENSE.match(credit["license"]):
+            problems.append(f"{label}: licence {credit['license']!r} not allowed")
+        if not (credit["author"] and credit["source"]):
+            problems.append(f"{label}: missing author or source")
+
+        request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+        for attempt in range(5):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    content_type = response.headers.get("Content-Type", "")
+                    response.read()
+                if not content_type.startswith("image/"):
+                    problems.append(f"{label}: content type {content_type!r}")
+                break
+            except urllib.error.HTTPError as error:
+                if error.code == 429 and attempt < 4:
+                    time.sleep(15 * (attempt + 1))
+                    continue
+                problems.append(f"{label}: HTTP {error.code}")
+                break
+            except OSError as error:
+                problems.append(f"{label}: {error}")
+                break
+        time.sleep(pause)
+    return problems
+
+
 def main() -> int:
     db = SessionLocal()
     try:
@@ -229,6 +276,16 @@ def main() -> int:
         print(f"\n{title}: {'OK' if not items else len(items)}")
         for item in items:
             print(f"  - {_format(item)}")
+
+    if "--urls" in sys.argv[1:]:
+        problems = check_photo_urls()
+        issues += len(problems)
+        print(
+            f"\nCommons photo URLs ({len(PHOTO_CREDITS)} checked): "
+            f"{'OK' if not problems else len(problems)}"
+        )
+        for problem in problems:
+            print(f"  - {problem}")
 
     print(f"\n{issues} issue(s) found." if issues else "\nNo issues found.")
     return 1 if issues else 0

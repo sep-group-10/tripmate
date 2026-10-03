@@ -7,6 +7,11 @@ data apply on re-run. Nothing is ever deleted: stale rows are deactivated
 
 Matching keys: destinations by name, places by (destination, name), transport
 rates by (transport_type, region).
+
+Photos: entries in seed_data/photos.py (existing uploads) always win. Otherwise a
+Wikimedia Commons photo (seed_data/commons_photos.py, credits in photo_credits.py)
+is applied to rows with no photo, a Commons photo already, or a known-wrong one.
+Any other existing photo is kept.
 """
 
 from datetime import date, datetime, time, timedelta, timezone
@@ -16,6 +21,14 @@ from sqlalchemy import func
 
 from app.core.database import SessionLocal
 from app.core.seed_data import DESTINATION_SEEDS, TRANSPORT_RATES
+from app.core.seed_data.commons_photos import (
+    COMMONS_URL_PREFIX,
+    KNOWN_WRONG_PHOTO_NAMES,
+    attraction_photo,
+    event_photo,
+    hotel_photo,
+    restaurant_photo,
+)
 from app.core.seed_data.photos import (
     ATTRACTION_PHOTOS,
     EVENT_PHOTOS,
@@ -40,6 +53,16 @@ def _photo_values(photos: dict[str, str], name: str) -> dict:
     (so photos uploaded through the admin pages are not wiped)."""
     key = photos.get(name)
     return {"photo_urls": [f"{PHOTO_CDN}/{key}"]} if key else {}
+
+
+def _set_default_photo(row, photos: dict[str, str], name: str, default_url):
+    """Give a place its Commons photo without clobbering existing photos."""
+    if default_url is None or name in photos:
+        return
+    current = row.photo_urls or []
+    seed_owned = all(url.startswith(COMMONS_URL_PREFIX) for url in current)
+    if seed_owned or name in KNOWN_WRONG_PHOTO_NAMES:
+        row.photo_urls = [default_url]
 
 
 def _upsert(db, model, match: dict, values: dict, deactivate_extras: bool = False):
@@ -111,7 +134,7 @@ def _seed_attractions(db, destination, data):
         ).update({"is_active": False}, synchronize_session=False)
 
     for item in data["attractions"]:
-        _upsert(
+        row = _upsert(
             db,
             Attraction,
             {"destination_id": destination.id, "name": item["name"]},
@@ -128,11 +151,14 @@ def _seed_attractions(db, destination, data):
             },
             deactivate_extras=True,
         )
+        _set_default_photo(
+            row, ATTRACTION_PHOTOS, item["name"], attraction_photo(item["name"])
+        )
 
 
 def _seed_hotels(db, destination, data):
     for item in data["hotels"]:
-        _upsert(
+        row = _upsert(
             db,
             Hotel,
             {"destination_id": destination.id, "name": item["name"]},
@@ -148,11 +174,12 @@ def _seed_hotels(db, destination, data):
             },
             deactivate_extras=True,
         )
+        _set_default_photo(row, HOTEL_PHOTOS, item["name"], hotel_photo(item))
 
 
 def _seed_restaurants(db, destination, data):
     for item in data["restaurants"]:
-        _upsert(
+        row = _upsert(
             db,
             Restaurant,
             {"destination_id": destination.id, "name": item["name"]},
@@ -169,6 +196,7 @@ def _seed_restaurants(db, destination, data):
             },
             deactivate_extras=True,
         )
+        _set_default_photo(row, RESTAURANT_PHOTOS, item["name"], restaurant_photo(item))
 
 
 def _duration_hours(start_time: str, end_time: str) -> Decimal:
@@ -182,7 +210,7 @@ def _seed_events(db, destination, data, today: date):
     for item in data["events"]:
         starts_on = today + timedelta(days=item["days_ahead"])
         ends_on = starts_on + timedelta(days=item["duration_days"] - 1)
-        _upsert(
+        row = _upsert(
             db,
             LocalEvent,
             {"destination_id": destination.id, "name": item["name"]},
@@ -205,6 +233,7 @@ def _seed_events(db, destination, data, today: date):
             },
             deactivate_extras=True,
         )
+        _set_default_photo(row, EVENT_PHOTOS, item["name"], event_photo(item))
 
 
 def seed_tourism(db=None, today: date | None = None):
