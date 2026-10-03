@@ -1,43 +1,15 @@
+# Production: API only. The database is Amazon RDS, not a local container
+# (DATABASE_URL in .env.production points at the RDS endpoint). The image is
+# built in GitHub Actions and pushed to GHCR, not built on this server.
+#
+# This file is for the stable, single-copy setup (first-time run, or a
+# plain restart). Blue-green deploys use scripts/deploy.sh instead, which
+# runs two copies of this same image directly with `docker run`.
 services:
-  database:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
-    build:
-      context: .
+    image: ghcr.io/sep-group-10/tripmate-backend:latest
     env_file:
-    - .env.production
-    environment:
-      ENVIRONMENT: production
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-      AWS_REGION: ${AWS_REGION}
-      SES_SENDER_EMAIL: ${SES_SENDER_EMAIL}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
-      AWS_S3_REGION: ${AWS_S3_REGION}
-      AWS_CLOUDFRONT_DOMAIN: ${AWS_CLOUDFRONT_DOMAIN}
-    volumes:
-      - /app/.venv
-      - /app/__pycache__
-    command: ["sh", "./start.sh"]
+      - .env.production
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
-    depends_on:
-      database:
-        condition: service_healthy
-
-volumes:
-  postgres_data:
