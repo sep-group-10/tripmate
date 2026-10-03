@@ -57,6 +57,197 @@
     "expected_action": "candidate_retriever"
   },
   {
+    "id": "planner_006",
+    "type": "planner",
+    "name": "Score retrieved Kandy candidates",
+    "request": "Plan a 2-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "2 days",
+      "travelers": 2,
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "candidate_retriever",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}
+        ]
+      }
+    ],
+    "expected_action": "scoring_engine"
+  },
+  {
+    "id": "planner_007",
+    "type": "planner",
+    "name": "Schedule scored Kandy candidates",
+    "request": "Plan a 2-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "2 days",
+      "travelers": 2,
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "candidate_retriever",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}
+        ]
+      },
+      {
+        "tool": "scoring_engine",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413, "score": 0.94},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955, "score": 0.88}
+        ]
+      }
+    ],
+    "expected_action": "scheduling_engine"
+  },
+  {
+    "id": "planner_008",
+    "type": "planner",
+    "name": "Continue after Kandy schedule",
+    "request": "Plan a 2-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "2 days",
+      "travelers": 2,
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "candidate_retriever",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}
+        ]
+      },
+      {
+        "tool": "scoring_engine",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413, "score": 0.94},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955, "score": 0.88}
+        ]
+      },
+      {
+        "tool": "scheduling_engine",
+        "result": {
+          "status": "ok",
+          "days": [
+            {"date": "2026-10-05", "items": [{"candidate_id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}]},
+            {"date": "2026-10-06", "items": [{"candidate_id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]}
+          ],
+          "unscheduled": [],
+          "warnings": []
+        }
+      }
+    ],
+    "valid_actions": ["route_optimizer", "weather_validator", "cost_estimator"]
+  },
+  {
+    "id": "planner_009",
+    "type": "planner",
+    "name": "Validate weather or estimate cost after routing",
+    "request": "Plan a 2-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "2 days",
+      "travelers": 2,
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "candidate_retriever",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}
+        ]
+      },
+      {
+        "tool": "scoring_engine",
+        "result": [
+          {"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413, "score": 0.94},
+          {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955, "score": 0.88}
+        ]
+      },
+      {
+        "tool": "scheduling_engine",
+        "result": {"status": "ok", "days": [{"date": "2026-10-05", "items": [{"candidate_id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}]}, {"date": "2026-10-06", "items": [{"candidate_id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]}], "unscheduled": [], "warnings": []}
+      },
+      {
+        "tool": "route_optimizer",
+        "result": {"status": "ok", "days": [{"date": "2026-10-05", "items": [{"candidate_id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}]}, {"date": "2026-10-06", "items": [{"candidate_id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]}], "unscheduled": [], "warnings": []}
+      }
+    ],
+    "valid_actions": ["weather_validator", "cost_estimator"]
+  },
+  {
+    "id": "planner_010",
+    "type": "planner",
+    "name": "Route or estimate cost after weather validation",
+    "request": "Plan a 2-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "2 days",
+      "travelers": 2,
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "candidate_retriever",
+        "result": [{"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}, {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]
+      },
+      {
+        "tool": "scoring_engine",
+        "result": [{"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413, "score": 0.94}, {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955, "score": 0.88}]
+      },
+      {
+        "tool": "scheduling_engine",
+        "result": {"status": "ok", "days": [{"date": "2026-10-05", "items": [{"candidate_id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}]}, {"date": "2026-10-06", "items": [{"candidate_id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]}], "unscheduled": [], "warnings": []}
+      },
+      {
+        "tool": "weather_validator",
+        "result": {"status": "ok", "days": [], "warnings": []}
+      }
+    ],
+    "valid_actions": ["route_optimizer", "cost_estimator"]
+  },
+  {
+    "id": "planner_011",
+    "type": "planner",
+    "name": "Route or validate weather after cost estimate",
+    "request": "Plan a 2-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "dates": "2 days",
+      "travelers": 2,
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "candidate_retriever",
+        "result": [{"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}, {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]
+      },
+      {
+        "tool": "scoring_engine",
+        "result": [{"id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413, "score": 0.94}, {"id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955, "score": 0.88}]
+      },
+      {
+        "tool": "scheduling_engine",
+        "result": {"status": "ok", "days": [{"date": "2026-10-05", "items": [{"candidate_id": "kandy-temple", "name": "Temple of the Tooth", "category": "attraction", "latitude": 7.2936, "longitude": 80.6413}]}, {"date": "2026-10-06", "items": [{"candidate_id": "kandy-gardens", "name": "Royal Botanical Gardens", "category": "park", "latitude": 7.2723, "longitude": 80.5955}]}], "unscheduled": [], "warnings": []}
+      },
+      {
+        "tool": "cost_estimator",
+        "result": {"total": {"min": 24000, "max": 36000}, "currency": "LKR"}
+      }
+    ],
+    "valid_actions": ["route_optimizer", "weather_validator"]
+  },
+  {
     "id": "critic_001",
     "type": "critic",
     "name": "Complete planning result",
@@ -235,5 +426,78 @@
       "failed_constraints": [],
       "reasons": {}
     }
+  },
+  {
+    "id": "critic_003",
+    "type": "critic",
+    "name": "Activities concentrated on one day",
+    "request": "Plan a 3-day trip to Kandy focused on culture and nature.",
+    "preferences": {
+      "destination": "Kandy",
+      "start_date": "2026-10-05",
+      "end_date": "2026-10-07",
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "scheduling_engine",
+        "result": {
+          "status": "ok",
+          "days": [
+            {
+              "date": "2026-10-05",
+              "items": [
+                {"name": "Temple of the Tooth", "category": "culture", "latitude": 7.29, "longitude": 80.63},
+                {"name": "Kandy National Museum", "category": "culture", "latitude": 7.29, "longitude": 80.63},
+                {"name": "Kandy Lake", "category": "nature", "latitude": 7.29, "longitude": 80.63}
+              ]
+            },
+            {"date": "2026-10-06", "items": []},
+            {"date": "2026-10-07", "items": []}
+          ],
+          "unscheduled": [],
+          "warnings": []
+        }
+      },
+      {"tool": "weather_validator", "result": {"status": "ok", "days": [], "warnings": []}},
+      {"tool": "constraint_validator", "result": {"status": "pass", "failed_constraints": [], "reasons": {}}}
+    ],
+    "tool_execution_order": ["scheduling_engine", "weather_validator", "constraint_validator"],
+    "expected_continue_planning": true,
+    "expected_status": null,
+    "constraint_result": {"status": "pass", "failed_constraints": [], "reasons": {}}
+  },
+  {
+    "id": "critic_004",
+    "type": "critic",
+    "name": "Activities mismatch requested interests",
+    "request": "Plan a 3-day trip to Galle focused on culture and nature.",
+    "preferences": {
+      "destination": "Galle",
+      "start_date": "2026-10-05",
+      "end_date": "2026-10-07",
+      "interests": ["culture", "nature"]
+    },
+    "tool_results": [
+      {
+        "tool": "scheduling_engine",
+        "result": {
+          "status": "ok",
+          "days": [
+            {"date": "2026-10-05", "items": [{"name": "Beach swimming", "category": "beach", "latitude": 6.03, "longitude": 80.22}]},
+            {"date": "2026-10-06", "items": [{"name": "Coastal snorkeling", "category": "beach", "latitude": 6.03, "longitude": 80.22}]},
+            {"date": "2026-10-07", "items": [{"name": "Beach relaxation", "category": "beach", "latitude": 6.03, "longitude": 80.22}]}
+          ],
+          "unscheduled": [],
+          "warnings": []
+        }
+      },
+      {"tool": "weather_validator", "result": {"status": "ok", "days": [], "warnings": []}},
+      {"tool": "constraint_validator", "result": {"status": "pass", "failed_constraints": [], "reasons": {}}}
+    ],
+    "tool_execution_order": ["scheduling_engine", "weather_validator", "constraint_validator"],
+    "expected_continue_planning": true,
+    "expected_status": null,
+    "constraint_result": {"status": "pass", "failed_constraints": [], "reasons": {}}
   }
 ]
