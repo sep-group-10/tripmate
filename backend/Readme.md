@@ -194,14 +194,17 @@ docker compose exec backend alembic downgrade <revision_id>
 
 # Database Seeding
 
-Seed scripts populate the database with initial reference data.
+Seed scripts populate the database with initial reference data. They are idempotent: re-running inserts missing rows and updates existing ones (destinations matched by name, places by destination + name, transport rates by type + region). Nothing is ever deleted; stale rows are deactivated instead.
 
 Run a seed script inside the running `backend` container:
 
 ```bash
-docker compose exec backend python -m app.core.seed
-docker compose exec backend python -m app.core.seed_tourism
+docker compose exec backend python -m app.core.seed          # everything, incl. demo users/feedback
+docker compose exec backend python -m app.core.seed_tourism  # destinations, transport rates, places
+docker compose exec backend python -m app.core.check_seed_data  # data-quality report (exit 1 if issues)
 ```
+
+Tourism data lives in `app/core/seed_data/`, one module per destination (`kandy.py`, `colombo.py`, ...). To add a destination, add a module defining `DESTINATION` (see `seed_data/__init__.py` for the shape) and, if its region has no rates yet, add them to `seed_data/transport_rates.py`. Event dates are given as `days_ahead` and resolved relative to the day the seed runs.
 
 The `backend` container already has `DATABASE_URL` configured, so seeding runs against the dockerized PostgreSQL database directly.
 
