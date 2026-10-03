@@ -586,6 +586,168 @@ def _removal_context(*, duplicate=False, invalid=False):
     return {"id": str(itinerary_id), "trip_id": str(uuid.uuid4()), "days": [day]}
 
 
+def _add_candidate(**overrides):
+    return {
+        "id": "candidate-kandy-view-point",
+        "category": "attraction",
+        "name": "Kandy View Point",
+        "duration_minutes": 60,
+        "opening_hours": {"everyday": "09:00-17:00"},
+        "latitude": 7.29,
+        "longitude": 80.63,
+        **overrides,
+    }
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Add Kandy View Point", "I want to visit Kandy View Point"],
+    ids=["explicit-add", "implicit-add"],
+)
+def test_add_edit_resolves_explicit_and_implicit_place_requests(monkeypatch, message):
+    context = _removal_context()
+    monkeypatch.setattr(
+        chat_router, "retrieve_candidates", lambda _db, _destination: [_add_candidate()]
+    )
+
+    class FakePlannerModel:
+        def invoke(self, prompt):
+            self.prompt = prompt
+            return PlannerDecision(
+                action="candidate_retriever",
+                edit_plan=ItineraryEditPlan(
+                    operation="add", target_item="Kandy View Point"
+                ),
+            )
+
+    fake_planner_model = FakePlannerModel()
+    monkeypatch.setattr(
+        planner_module,
+        "create_planner_model",
+        lambda _actions: fake_planner_model,
+    )
+    planner_session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy"},
+    )
+    planner_result = planner_module.planner_node(
+        {
+            "session": planner_session,
+            "current_itinerary": context,
+            "latest_user_message": message,
+            "last_failure": None,
+        }
+    )
+    assert message in fake_planner_model.prompt
+    assert (
+        planner_result["planner_decision"].edit_plan.target_item == "Kandy View Point"
+    )
+
+    itinerary, clarification = chat_router._add_itinerary_item(
+        None,
+        "Kandy",
+        context,
+        planner_result["planner_decision"].edit_plan,
+    )
+
+    assert clarification is None
+    assert [item.name for item in itinerary.days[0].items] == [
+        "Jaffna Fort",
+        "Museum",
+        "Kandy View Point",
+    ]
+    candidate = itinerary.days[0].items[2]
+    assert candidate.start_time == "11:30"
+    assert candidate.end_time == "12:30"
+
+
+def test_add_edit_places_item_on_specified_day(monkeypatch):
+    context = _removal_context()
+    context["days"].append(
+        {**context["days"][0], "day_number": 3, "date": "2026-10-03", "items": []}
+    )
+    monkeypatch.setattr(
+        chat_router, "retrieve_candidates", lambda _db, _destination: [_add_candidate()]
+    )
+
+    itinerary, message = chat_router._add_itinerary_item(
+        None,
+        "Kandy",
+        context,
+        ItineraryEditPlan(
+            operation="add", target_item="Kandy View Point", destination_day=3
+        ),
+    )
+
+    assert message is None
+    assert [item.name for item in itinerary.days[0].items] == ["Jaffna Fort", "Museum"]
+    assert [item.name for item in itinerary.days[1].items] == ["Kandy View Point"]
+
+
+def test_add_edit_unresolved_place_leaves_itinerary_unchanged(monkeypatch):
+    context = _removal_context()
+    original = context["days"][0]["items"].copy()
+    monkeypatch.setattr(
+        chat_router, "retrieve_candidates", lambda _db, _destination: []
+    )
+
+    itinerary, message = chat_router._add_itinerary_item(
+        None,
+        "Kandy",
+        context,
+        ItineraryEditPlan(operation="add", target_item="Unknown"),
+    )
+
+    assert itinerary is None
+    assert "unique match" in message
+    assert context["days"][0]["items"] == original
+
+
+def test_add_edit_overlapping_requested_slot_leaves_itinerary_unchanged(monkeypatch):
+    context = _removal_context()
+    original = context["days"][0]["items"].copy()
+    monkeypatch.setattr(
+        chat_router, "retrieve_candidates", lambda _db, _destination: [_add_candidate()]
+    )
+
+    itinerary, message = chat_router._add_itinerary_item(
+        None,
+        "Kandy",
+        context,
+        ItineraryEditPlan(
+            operation="add",
+            target_item="Kandy View Point",
+            destination_day=2,
+            destination_time="09:30",
+        ),
+    )
+
+    assert itinerary is None
+    assert "valid open time slot" in message
+    assert context["days"][0]["items"] == original
+
+
+def test_add_edit_preserves_existing_items(monkeypatch):
+    context = _removal_context()
+    existing = [item.copy() for item in context["days"][0]["items"]]
+    monkeypatch.setattr(
+        chat_router, "retrieve_candidates", lambda _db, _destination: [_add_candidate()]
+    )
+
+    itinerary, message = chat_router._add_itinerary_item(
+        None,
+        "Kandy",
+        context,
+        ItineraryEditPlan(operation="add", target_item="Kandy View Point"),
+    )
+
+    assert message is None
+    by_name = {item.name: item for item in itinerary.days[0].items}
+    assert by_name["Jaffna Fort"].start_time == "09:00"
+    assert by_name["Museum"].start_time == "10:30"
+    assert by_name["Jaffna Fort"].candidate_id == existing[0]["id"]
+
+
 def test_remove_edit_successfully_removes_requested_day_item():
     context = _removal_context()
     itinerary, target_id, message = chat_router._remove_itinerary_item(
@@ -610,6 +772,69 @@ def test_remove_edit_leaves_other_itinerary_items_unchanged():
     assert remaining.start_time == "10:30"
     assert remaining.end_time == "11:30"
     assert context["days"][0]["items"][1] == original
+
+
+def test_remove_edit_sorts_out_of_order_schedule_chronologically():
+    context = _removal_context()
+    items = context["days"][0]["items"]
+    items[0].update(title="Kandy Lake", start_time="11:00:00", end_time="12:30:00")
+    items[1].update(
+        title="Kandy Spice Garden", start_time="19:00:00", end_time="20:00:00"
+    )
+    items.extend(
+        [
+            {
+                "id": str(uuid.uuid4()),
+                "item_type": "attraction",
+                "title": "Temple of the Sacred Tooth Relic",
+                "start_time": "09:00:00",
+                "end_time": "11:00:00",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "item_type": "garden",
+                "title": "Royal Botanical Gardens",
+                "start_time": "13:30:00",
+                "end_time": "16:30:00",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "item_type": "restaurant",
+                "title": "Kandy Lake Seafood House",
+                "start_time": "12:30:00",
+                "end_time": "13:30:00",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "item_type": "attraction",
+                "title": "Bahirawakanda Temple",
+                "start_time": "16:30:00",
+                "end_time": "18:00:00",
+            },
+        ]
+    )
+
+    itinerary, target_id, message = chat_router._remove_itinerary_item(
+        context,
+        ItineraryEditPlan(operation="remove", target_item="Kandy Lake", source_day=2),
+    )
+
+    assert message is None
+    assert target_id == uuid.UUID(items[0]["id"])
+    remaining = itinerary.days[0].items
+    assert [item.name for item in remaining] == [
+        "Temple of the Sacred Tooth Relic",
+        "Kandy Lake Seafood House",
+        "Royal Botanical Gardens",
+        "Bahirawakanda Temple",
+        "Kandy Spice Garden",
+    ]
+    intervals = [
+        (time.fromisoformat(i.start_time), time.fromisoformat(i.end_time))
+        for i in remaining
+    ]
+    assert all(end > start for start, end in intervals)
+    assert all(left[1] <= right[0] for left, right in zip(intervals, intervals[1:]))
 
 
 def test_remove_edit_not_found_requests_clarification():
@@ -746,6 +971,279 @@ def test_remove_edit_returns_updated_itinerary_and_persistence_preserves_fields(
     assert revision.route_info == {"route": "stored"}
     assert revision.weather_info == {"forecast": "stored"}
     assert db_session.get(ItineraryDayItem, target.id) is not None
+
+
+def _add_persistence_source(db_session, user):
+    session = _planning_session(db_session, user)
+    source = Itinerary(
+        trip_id=session.trip_id,
+        total_estimated_cost=Decimal("24.50"),
+        route_info={"route": "stored"},
+        weather_info={"forecast": "stored"},
+    )
+    db_session.add(source)
+    db_session.flush()
+    day = ItineraryDay(
+        itinerary_id=source.id,
+        day_number=2,
+        date=date(2026, 10, 2),
+        title="Culture",
+        summary="Keep summary",
+    )
+    db_session.add(day)
+    db_session.flush()
+    items = [
+        ItineraryDayItem(
+            itinerary_day_id=day.id,
+            item_type="attraction",
+            title="Jaffna Fort",
+            description="Keep fort details",
+            start_time=time(9),
+            end_time=time(10),
+            location="Jaffna",
+            estimated_cost=Decimal("10.00"),
+            sort_order=0,
+        ),
+        ItineraryDayItem(
+            itinerary_day_id=day.id,
+            item_type="museum",
+            title="Museum",
+            description="Keep museum details",
+            start_time=time(10, 30),
+            end_time=time(11, 30),
+            location="Town",
+            estimated_cost=Decimal("4.50"),
+            sort_order=1,
+        ),
+    ]
+    db_session.add_all(items)
+    db_session.commit()
+    return session, source, day, items
+
+
+def test_add_edit_persists_new_item_and_preserves_existing_records(
+    client, db_session, existing_user, monkeypatch
+):
+    session, source, day, existing_items = _add_persistence_source(
+        db_session, existing_user
+    )
+    _mock_processor(monkeypatch, _complete_preferences())
+    final_session = create_agent_session(_complete_preferences())
+    final_session.status = AgentSessionStatus.COMPLETED
+    final_session.iteration_count = 1
+    decision = PlannerDecision(
+        action="candidate_retriever",
+        edit_plan=ItineraryEditPlan(operation="add", target_item="Kandy View Point"),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type(
+            "Graph",
+            (),
+            {
+                "invoke": lambda self, *args, **kwargs: {
+                    "session": final_session,
+                    "planner_decision": decision,
+                }
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "retrieve_candidates",
+        lambda _db, _destination: [
+            {
+                "id": "candidate-kandy-view-point",
+                "category": "attraction",
+                "name": "Kandy View Point",
+                "description": "A scenic overlook.",
+                "duration_minutes": 60,
+                "opening_hours": {"everyday": "09:00-17:00"},
+            }
+        ],
+    )
+
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "Add Kandy View Point to day 2."}
+    )
+
+    assert response.status_code == 200
+    response_items = response.json()["data"]["itinerary"]["days"][0]["items"]
+    assert [
+        (item["name"], item["start_time"], item["end_time"]) for item in response_items
+    ] == [
+        ("Jaffna Fort", "09:00", "10:00"),
+        ("Museum", "10:30", "11:30"),
+        ("Kandy View Point", "11:30", "12:30"),
+    ]
+
+    db_session.expire_all()
+    reloaded_source = db_session.get(Itinerary, source.id)
+    reloaded_day = (
+        db_session.query(ItineraryDay).filter_by(itinerary_id=source.id).one()
+    )
+    persisted_items = (
+        db_session.query(ItineraryDayItem)
+        .filter_by(itinerary_day_id=reloaded_day.id)
+        .order_by(ItineraryDayItem.sort_order)
+        .all()
+    )
+    assert reloaded_source.total_estimated_cost == Decimal("24.50")
+    assert reloaded_source.route_info == {"route": "stored"}
+    assert reloaded_source.weather_info == {"forecast": "stored"}
+    assert reloaded_day.summary == "Keep summary"
+    assert [item.id for item in persisted_items[:2]] == [
+        item.id for item in existing_items
+    ]
+    assert persisted_items[0].description == "Keep fort details"
+    assert persisted_items[0].location == "Jaffna"
+    assert persisted_items[0].estimated_cost == Decimal("10.00")
+    assert persisted_items[1].description == "Keep museum details"
+    assert persisted_items[1].location == "Town"
+    added = persisted_items[2]
+    assert added.id not in {item.id for item in existing_items}
+    assert added.title == "Kandy View Point"
+    assert added.item_type == "attraction"
+    assert (added.start_time, added.end_time) == (time(11, 30), time(12, 30))
+    assert added.location == "Kandy"
+    assert [item.sort_order for item in persisted_items] == [0, 1, 2]
+    assert db_session.query(Itinerary).filter_by(trip_id=session.trip_id).count() == 1
+
+    refreshed_context = chat_router._current_itinerary_context(
+        db_session, session.trip_id
+    )
+    assert refreshed_context["days"][0]["items"][-1]["title"] == "Kandy View Point"
+
+
+def test_unresolved_add_does_not_persist_an_item(
+    client, db_session, existing_user, monkeypatch
+):
+    session, source, day, existing_items = _add_persistence_source(
+        db_session, existing_user
+    )
+    _mock_processor(monkeypatch, _complete_preferences())
+    final_session = create_agent_session(_complete_preferences())
+    final_session.status = AgentSessionStatus.COMPLETED
+    final_session.iteration_count = 1
+    decision = PlannerDecision(
+        action="candidate_retriever",
+        edit_plan=ItineraryEditPlan(operation="add", target_item="Unknown Place"),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type(
+            "Graph",
+            (),
+            {
+                "invoke": lambda self, *args, **kwargs: {
+                    "session": final_session,
+                    "planner_decision": decision,
+                }
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        chat_router, "retrieve_candidates", lambda _db, _destination: []
+    )
+
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "Add Unknown Place"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["itinerary"] is None
+    db_session.expire_all()
+    reloaded_day = (
+        db_session.query(ItineraryDay).filter_by(itinerary_id=source.id).one()
+    )
+    persisted_items = (
+        db_session.query(ItineraryDayItem)
+        .filter_by(itinerary_day_id=reloaded_day.id)
+        .order_by(ItineraryDayItem.sort_order)
+        .all()
+    )
+    assert [item.id for item in persisted_items] == [item.id for item in existing_items]
+    assert [item.sort_order for item in persisted_items] == [0, 1]
+
+
+def test_persist_removed_chat_item_orders_survivors_chronologically(
+    db_session, existing_user
+):
+    session = _planning_session(db_session, existing_user)
+    source = Itinerary(
+        trip_id=session.trip_id,
+        total_estimated_cost=Decimal("32.00"),
+        route_info={"route": "stored"},
+        weather_info={"forecast": "stored"},
+    )
+    db_session.add(source)
+    db_session.flush()
+    day = ItineraryDay(
+        itinerary_id=source.id,
+        day_number=2,
+        date=date(2026, 10, 2),
+        title="Culture",
+        summary="Keep summary",
+    )
+    db_session.add(day)
+    db_session.flush()
+    specifications = [
+        ("Dinner", time(19), time(20), "Restaurant", 12),
+        ("Remove me", time(13, 30), time(16, 30), "Garden", 9),
+        ("Temple", time(9), time(11), "Jaffna", 5),
+        ("Lake", time(11), time(12, 30), "Kandy", 6),
+    ]
+    stored_items = [
+        ItineraryDayItem(
+            itinerary_day_id=day.id,
+            item_type="activity",
+            title=name,
+            description=f"{name} description",
+            start_time=start,
+            end_time=end,
+            location=location,
+            estimated_cost=Decimal("4.50"),
+            sort_order=index,
+        )
+        for index, (name, start, end, location, _) in enumerate(specifications)
+    ]
+    db_session.add_all(stored_items)
+    db_session.commit()
+
+    revision = chat_router.persist_removed_chat_item(
+        db_session, session.trip_id, source.id, stored_items[1].id
+    )
+    db_session.commit()
+
+    copied_day = (
+        db_session.query(ItineraryDay).filter_by(itinerary_id=revision.id).one()
+    )
+    copied_items = (
+        db_session.query(ItineraryDayItem)
+        .filter_by(itinerary_day_id=copied_day.id)
+        .order_by(ItineraryDayItem.sort_order)
+        .all()
+    )
+    assert [item.title for item in copied_items] == ["Temple", "Lake", "Dinner"]
+    assert [item.sort_order for item in copied_items] == [0, 1, 2]
+    assert [(item.start_time, item.end_time) for item in copied_items] == [
+        (time(9), time(11)),
+        (time(11), time(12, 30)),
+        (time(19), time(20)),
+    ]
+    assert [item.description for item in copied_items] == [
+        "Temple description",
+        "Lake description",
+        "Dinner description",
+    ]
+    assert [item.location for item in copied_items] == ["Jaffna", "Kandy", "Restaurant"]
+    assert all(item.estimated_cost == Decimal("4.50") for item in copied_items)
+    assert copied_day.summary == "Keep summary"
+    assert revision.total_estimated_cost == Decimal("32.00")
+    assert revision.route_info == {"route": "stored"}
+    assert revision.weather_info == {"forecast": "stored"}
 
 
 def test_another_user_cannot_access_chat_session(
@@ -1047,6 +1545,73 @@ def test_complete_single_message_runs_chat_api_through_real_planning_graph(
         ),
         ("assistant", body["assistant_message"]),
     ]
+
+
+def test_complete_preferences_pass_existing_itinerary_and_latest_message_to_graph(
+    client, db_session, existing_user, monkeypatch
+):
+    session = _planning_session(db_session, existing_user)
+    existing = Itinerary(
+        trip_id=session.trip_id,
+        total_estimated_cost=Decimal("25.00"),
+        route_info=None,
+        weather_info=None,
+    )
+    db_session.add(existing)
+    db_session.flush()
+    day = ItineraryDay(
+        itinerary_id=existing.id,
+        day_number=1,
+        date=date(2026, 10, 1),
+        title="Culture",
+        summary="Visit Kandy landmarks",
+    )
+    db_session.add(day)
+    db_session.flush()
+    item = ItineraryDayItem(
+        itinerary_day_id=day.id,
+        item_type="attraction",
+        title="Bahirawakanda Temple",
+        description="Visit the temple",
+        start_time=time(9),
+        end_time=time(10),
+        location="Kandy",
+        estimated_cost=Decimal("5.00"),
+        sort_order=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    _mock_real_preference_processor(monkeypatch, _complete_preferences())
+    graph_calls = []
+
+    class FakeGraph:
+        def invoke(self, state, context=None):
+            graph_calls.append(state)
+            return {
+                "session": AgentSession(
+                    goal="Update my trip itinerary",
+                    status=AgentSessionStatus.COMPLETED,
+                )
+            }
+
+    monkeypatch.setattr(chat_router, "planning_graph", FakeGraph())
+    monkeypatch.setattr(
+        chat_router,
+        "FinalResponseGenerator",
+        lambda: type("Generator", (), {"generate": lambda self, session: "Updated."})(),
+    )
+    message = "I don't want to visit Bahirawakanda Temple."
+
+    response = client.post(f"{CHAT_URL}/{session.id}", json={"message": message})
+
+    assert response.status_code == 200
+    assert len(graph_calls) == 1
+    assert graph_calls[0]["current_itinerary"]["id"] == str(existing.id)
+    assert graph_calls[0]["current_itinerary"]["days"][0]["items"][0]["title"] == (
+        "Bahirawakanda Temple"
+    )
+    assert graph_calls[0]["latest_user_message"] == message
 
 
 def test_chat_sessions_keep_conversation_history_isolated(

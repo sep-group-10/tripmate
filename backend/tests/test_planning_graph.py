@@ -1838,6 +1838,47 @@ def test_planner_returns_edit_plan_and_supplies_context(monkeypatch):
     assert "do not apply or persist" in model.prompt
 
 
+def test_planner_prompt_recognizes_add_requests(monkeypatch):
+    cases = [
+        ("Add Kandy View Point", '"Add Kandy View Point"'),
+        ("Add Kandy View Point to day 2", '"Add Kandy View Point to day 2"'),
+        ("I want to visit Kandy View Point", '"I want to visit Kandy View Point"'),
+    ]
+
+    for message, example in cases:
+
+        class FakeModel:
+            def invoke(self, prompt):
+                self.prompt = prompt
+                return PlannerDecision(action="candidate_retriever")
+
+        model = FakeModel()
+        monkeypatch.setattr(
+            planner, "create_planner_model", lambda _actions, model=model: model
+        )
+        session = AgentSession(
+            goal="Plan a trip to Kandy",
+            trip_requirements={"destination": "Kandy"},
+        )
+        planner.planner_node(
+            {
+                "session": session,
+                "current_itinerary": {"days": [{"day_number": 1, "items": []}]},
+                "latest_user_message": message,
+                "last_failure": None,
+            }
+        )
+
+        assert message in model.prompt
+        assert example in model.prompt
+        assert 'operation="add"' in model.prompt
+        assert "target_item" in model.prompt
+        assert "destination_day only when the user specifies a day" in model.prompt
+        assert "destination_time only when the user specifies a time" in model.prompt
+        assert "Do not invent unknown" in model.prompt
+        assert "do not apply or persist" in model.prompt
+
+
 def test_scheduling_engine_gets_canonical_date_objects(monkeypatch):
     from datetime import date
 
@@ -2125,3 +2166,43 @@ def test_critic_continuation_planner_increments_iteration_count(monkeypatch):
     assert result["planner_decision"].action == "candidate_retriever"
     assert session.iteration_count == 1
     assert "Current iteration:\n1" in prompts[0]
+
+
+def test_planner_prompt_supports_implicit_remove_requests(monkeypatch):
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy"},
+    )
+
+    class FakeModel:
+        def invoke(self, prompt):
+            self.prompt = prompt
+            return PlannerDecision(action="candidate_retriever")
+
+    model = FakeModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda _actions: model)
+
+    planner.planner_node(
+        {
+            "session": session,
+            "current_itinerary": {
+                "days": [
+                    {
+                        "day_number": 2,
+                        "items": [{"id": "item-1", "title": "Bahirawakanda Temple"}],
+                    }
+                ]
+            },
+            "latest_user_message": "I don't want to visit Bahirawakanda Temple.",
+            "last_failure": None,
+        }
+    )
+
+    assert "I don't want to visit X" in model.prompt
+    assert "REMOVE operation" in model.prompt
+    assert "first check whether the latest user message" in model.prompt
+    assert "before considering normal planning" in model.prompt
+    assert (
+        "only when the latest message does not request an itinerary edit"
+        in model.prompt
+    )

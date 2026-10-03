@@ -88,14 +88,21 @@ Current persisted itinerary (context for resolving references in the latest requ
 Latest user message:
 {state.get("latest_user_message")}
 
-Interpret the latest user message as a possible request to edit the current itinerary.
-Return edit_plan=null when it is ordinary initial trip planning or contains no
-itinerary edit. For a requested edit, return a structured edit_plan with operation,
+When a current itinerary exists, first check whether the latest user message
+requests an edit to that itinerary, before considering normal planning. Return
+edit_plan=null only when the latest message does not request an itinerary edit.
+For a requested edit, return a structured edit_plan with operation,
 target_item, source_day, destination_day, destination_time, replacement_item, and/or
-requested_change as applicable. Use the itinerary to resolve the target and day; use
-trip requirements as existing preferences and constraints. Preserve uncertainty by
-leaving unknown fields null. This plan is descriptive only: do not apply or persist
-any itinerary changes.
+requested_change as applicable. For removal requests, treat phrases such as
+"I don't want to visit X" as a REMOVE operation targeting X. Use the itinerary to
+resolve the target and day; use trip requirements as existing preferences and constraints.
+For ADD requests, recognize both explicit requests such as "Add Kandy View Point"
+and "Add Kandy View Point to day 2", and implicit requests such as
+"I want to visit Kandy View Point". Return operation="add" and set target_item
+to the requested place. Set destination_day only when the user specifies a day,
+and destination_time only when the user specifies a time. Do not invent unknown
+values; leave unspecified fields null.
+This plan is descriptive only: do not apply or persist any itinerary changes.
 
 Tool results collected so far:
 {result_summaries}

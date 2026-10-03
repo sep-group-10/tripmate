@@ -30,12 +30,16 @@ from app.services.chat_response_generator import ChatResponseGenerator
 from app.services.conversation_history import get_conversation, save_message
 from app.services.final_response_generator import FinalResponseGenerator
 from app.services.itinerary_service import (
+    persist_added_chat_item,
     persist_chat_itinerary,
     persist_removed_chat_item,
 )
 from app.services.langgraph.context import PlanningContext
 from app.services.langgraph.planning_graph import planning_graph
+from app.services.opening_hours import parse_opening_hours
 from app.services.preference_processor import PreferenceProcessor
+from app.services.tools.candidate_retriever import retrieve_candidates
+from app.services.tools.scheduling_config import DEFAULT_CONFIG
 from app.services.trip_service import apply_trip_preferences, create_draft_trip
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -67,6 +71,7 @@ def _remove_itinerary_item(
             None,
             f"I couldn't find '{target}' in that day. Which item did you mean?",
         )
+
     if len(matches) > 1:
         return (
             None,
@@ -122,6 +127,7 @@ def _remove_itinerary_item(
     try:
         for day in days:
             date.fromisoformat(day["date"])
+            day["items"].sort(key=lambda item: time.fromisoformat(item["start_time"]))
             previous_end = None
             for item in day["items"]:
                 start = time.fromisoformat(item["start_time"])
@@ -139,6 +145,188 @@ def _remove_itinerary_item(
             None,
             "I couldn't validate the updated schedule, so I left your itinerary unchanged.",
         )
+
+
+def _add_itinerary_item(
+    db: Session,
+    destination: str | None,
+    current_itinerary: dict,
+    edit_plan: ItineraryEditPlan,
+) -> tuple[ChatItinerary | None, str | None]:
+    """Resolve and place one candidate in the current in-memory itinerary."""
+    target = (edit_plan.target_item or "").strip()
+    if not target or not destination:
+        return (
+            None,
+            "I couldn't identify the place to add, so your itinerary is unchanged.",
+        )
+
+    def normalize(value):
+        return " ".join(str(value).casefold().split())
+
+    candidates = retrieve_candidates(db, destination)
+    matches = [
+        candidate
+        for candidate in candidates
+        if normalize(candidate.get("name") or candidate.get("title"))
+        == normalize(target)
+    ]
+    if len(matches) != 1:
+        return None, (
+            f"I couldn't find a unique match for '{target}', so your itinerary is unchanged."
+        )
+
+    candidate = matches[0]
+    duration = candidate.get("duration_minutes")
+    try:
+        duration = int(duration)
+        if duration <= 0:
+            raise ValueError
+        requested_time = (
+            time.fromisoformat(edit_plan.destination_time)
+            if edit_plan.destination_time
+            else None
+        )
+    except (TypeError, ValueError):
+        return (
+            None,
+            "I couldn't find a valid time slot, so your itinerary is unchanged.",
+        )
+
+    parsed_hours = parse_opening_hours(candidate.get("opening_hours"))
+    schedule_days = []
+    for day in current_itinerary.get("days", []):
+        if (
+            edit_plan.destination_day is not None
+            and day.get("day_number") != edit_plan.destination_day
+        ):
+            continue
+        try:
+            day_date = date.fromisoformat(day["date"])
+            occupied = sorted(
+                (
+                    (
+                        time.fromisoformat(item["start_time"]),
+                        time.fromisoformat(item["end_time"]),
+                    )
+                    for item in day.get("items", [])
+                ),
+                key=lambda interval: interval[0],
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+        schedule_days.append((day, day_date, occupied))
+
+    if edit_plan.destination_day is not None and not schedule_days:
+        return (
+            None,
+            f"I couldn't find day {edit_plan.destination_day}, so your itinerary is unchanged.",
+        )
+
+    window_start, window_end = DEFAULT_CONFIG.attraction_window
+    for day, day_date, occupied in schedule_days:
+        open_hours = parsed_hours.for_date(day_date)
+        starts = [requested_time] if requested_time else [window_start]
+        if requested_time is None:
+            cursor = window_start
+            for start, end in occupied:
+                if cursor < start:
+                    starts.append(cursor)
+                cursor = max(cursor, end)
+            if cursor < window_end:
+                starts.append(cursor)
+        for start in starts:
+            end_minutes = start.hour * 60 + start.minute + duration
+            if (
+                start < window_start
+                or end_minutes > window_end.hour * 60 + window_end.minute
+            ):
+                continue
+            end = time(end_minutes // 60, end_minutes % 60)
+            if not open_hours.contains(start, end):
+                continue
+            if any(
+                start < occupied_end and occupied_start < end
+                for occupied_start, occupied_end in occupied
+            ):
+                continue
+            days = []
+            for existing_day in current_itinerary.get("days", []):
+                items = [
+                    {
+                        "candidate_id": item.get("id")
+                        or item.get("candidate_id")
+                        or item.get("title")
+                        or item.get("name"),
+                        "category": item.get("item_type")
+                        or item.get("category")
+                        or "activity",
+                        "name": item.get("title") or item.get("name"),
+                        "start_time": time.fromisoformat(item["start_time"]).isoformat(
+                            timespec="minutes"
+                        ),
+                        "end_time": time.fromisoformat(item["end_time"]).isoformat(
+                            timespec="minutes"
+                        ),
+                        "latitude": item.get("latitude"),
+                        "longitude": item.get("longitude"),
+                        "duration_minutes": item.get("duration_minutes"),
+                        "opening_hours": item.get("opening_hours"),
+                    }
+                    for item in existing_day.get("items", [])
+                ]
+                if existing_day is day:
+                    items.append(
+                        {
+                            "candidate_id": str(
+                                candidate.get("id") or candidate.get("candidate_id")
+                            ),
+                            "category": candidate.get("category")
+                            or candidate.get("item_type")
+                            or "activity",
+                            "name": candidate.get("name") or candidate.get("title"),
+                            "start_time": start.isoformat(timespec="minutes"),
+                            "end_time": end.isoformat(timespec="minutes"),
+                            "latitude": candidate.get("latitude"),
+                            "longitude": candidate.get("longitude"),
+                            "duration_minutes": duration,
+                            "opening_hours": candidate.get("opening_hours"),
+                        }
+                    )
+                    items.sort(key=lambda item: time.fromisoformat(item["start_time"]))
+                days.append(
+                    {
+                        "day_number": existing_day["day_number"],
+                        "date": existing_day["date"],
+                        "day_type": existing_day.get("title")
+                        or existing_day.get("day_type")
+                        or "day_trip",
+                        "items": items,
+                        "hotel_id": existing_day.get("hotel_id"),
+                        "hotel_location": existing_day.get("hotel_location"),
+                        "warnings": existing_day.get("warnings", []),
+                    }
+                )
+            try:
+                return ChatItinerary(
+                    status="ok",
+                    days=days,
+                    hotel_by_destination=current_itinerary.get(
+                        "hotel_by_destination", {}
+                    ),
+                    unscheduled=current_itinerary.get("unscheduled", []),
+                    warnings=current_itinerary.get("warnings", []),
+                ), None
+            except Exception:
+                return (
+                    None,
+                    "I couldn't validate the updated schedule, so your itinerary is unchanged.",
+                )
+
+    return (
+        None,
+        "I couldn't find a valid open time slot, so your itinerary is unchanged.",
+    )
 
 
 def _current_itinerary_context(db: Session, trip_id: uuid.UUID | None) -> dict | None:
@@ -331,6 +519,56 @@ def _process_chat_message(
 
         planner_decision = planning_result.get("planner_decision")
         edit_plan = planner_decision.edit_plan if planner_decision else None
+        if edit_plan and edit_plan.operation == "add":
+            itinerary, clarification = _add_itinerary_item(
+                db,
+                preferences.destination,
+                current_itinerary or {"days": []},
+                edit_plan,
+            )
+            if itinerary is not None:
+                try:
+                    existing_item_ids = {
+                        existing.get("id")
+                        for current_day in (current_itinerary or {}).get("days", [])
+                        for existing in current_day.get("items", [])
+                    }
+                    added_item = next(
+                        item
+                        for day in itinerary.days
+                        for item in day.items
+                        if item.candidate_id not in existing_item_ids
+                    )
+                    if planning_session.trip_id is None or current_itinerary is None:
+                        raise ValueError("There is no persisted itinerary to update")
+                    added_day = next(
+                        day for day in itinerary.days if added_item in day.items
+                    )
+                    persist_added_chat_item(
+                        db,
+                        planning_session.trip_id,
+                        uuid.UUID(current_itinerary["id"]),
+                        added_day.day_number,
+                        added_item,
+                        preferences.destination,
+                    )
+                    db.commit()
+                except Exception:
+                    itinerary = None
+                    clarification = "I couldn't save the added item, so your itinerary is unchanged."
+            planning_session.status = "completed"
+            planning_session.iteration_count = final_agent_session.iteration_count
+            db.commit()
+            db.refresh(planning_session)
+            assistant_message = (
+                clarification or "Done — I added the item to your itinerary."
+            )
+            save_message(db, planning_session.id, "assistant", assistant_message)
+            return ChatResponse(
+                assistant_message=assistant_message,
+                session=PlanningSessionInfo.model_validate(planning_session),
+                itinerary=itinerary,
+            )
         if edit_plan and edit_plan.operation == "remove":
             edited_itinerary, target_item_id, clarification = _remove_itinerary_item(
                 current_itinerary or {"days": []}, edit_plan
