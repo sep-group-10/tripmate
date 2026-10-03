@@ -17,7 +17,9 @@ flutter pub get
 ## Backend Connection Setup
 
 Auth and profile talk to the real backend (`docker compose up` in `backend/`,
-then seed with `python -m app.core.seed`); chat and trips are still mock data.
+then seed with `python -m app.core.seed`); My trips is still mock data. AI chat
+talks to `POST /api/v1/chat` (needs `OPENROUTER_API_KEY` in `backend/.env`); run
+with `--dart-define=MOCK_CHAT=true` to use the in-app mock chat instead.
 Demo account: `tourist@demo.com` / `Demo1234`.
 
 The app reads the backend URL from the `API_BASE_URL` compile-time variable

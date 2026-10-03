@@ -221,7 +221,11 @@ class _ChatPageState extends State<ChatPage> {
       content = switch (tab) {
         'Summary' => SummaryTab(summary: plan.summary),
         'Map' => MapTab(days: plan.days),
-        'Itinerary' => ItineraryTab(days: plan.days),
+        'Itinerary' => ItineraryTab(
+          days: plan.days,
+          unscheduled: plan.unscheduled,
+          warnings: plan.warnings,
+        ),
         _ => BudgetTab(summary: plan.summary, budget: plan.budget),
       };
     }

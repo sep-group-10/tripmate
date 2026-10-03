@@ -23,12 +23,14 @@ class MockChatRepository implements ChatRepository {
       return ChatReply(
         assistantMessage: 'Your trip plan is ready.\nI\'ve put together a relaxed hill-country itinerary with food stops and short walks.',
         sessionId: id,
+        status: 'completed',
         plan: mockPlan,
       );
     }
     return ChatReply(
       assistantMessage: 'To help me plan your trip, could you tell me when you\'re travelling, how many people are going and what you enjoy?',
       sessionId: id,
+      status: 'pending',
     );
   }
 

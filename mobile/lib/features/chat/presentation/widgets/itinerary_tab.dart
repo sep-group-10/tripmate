@@ -7,14 +7,22 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/pill_tag.dart';
 import '../../../../data/models/itinerary_day.dart';
+import '../../../../core/widgets/mono_labels.dart';
 import '../../../../data/models/itinerary_item.dart';
+import '../../../../data/models/trip_plan.dart';
 import 'tab_empty_states.dart';
 
-(String, PillTone) _categoryTag(ItineraryItemType type) => switch (type) {
+(String, PillTone) _categoryTag(ItineraryItem item) => switch (item.type) {
   ItineraryItemType.attraction => ('Attraction', PillTone.info),
   ItineraryItemType.restaurant => ('Dining', PillTone.warn),
   ItineraryItemType.hotel => ('Stay', PillTone.outline),
   ItineraryItemType.localEvent => ('Event', PillTone.accent),
+  ItineraryItemType.other => (
+    item.rawCategory == null || item.rawCategory!.isEmpty
+        ? 'Stop'
+        : _humanize(item.rawCategory!),
+    PillTone.outline,
+  ),
 };
 
 String _humanize(String value) {
@@ -26,9 +34,16 @@ String _humanize(String value) {
 
 /// Mirrors web/src/components/chat/ItineraryTab.jsx.
 class ItineraryTab extends StatefulWidget {
-  const ItineraryTab({super.key, required this.days});
+  const ItineraryTab({
+    super.key,
+    required this.days,
+    this.unscheduled = const [],
+    this.warnings = const [],
+  });
 
   final List<ItineraryDay> days;
+  final List<UnscheduledItem> unscheduled;
+  final List<String> warnings;
 
   @override
   State<ItineraryTab> createState() => _ItineraryTabState();
@@ -155,7 +170,74 @@ class _ItineraryTabState extends State<ItineraryTab> {
           ),
           const SizedBox(height: 10),
         ],
+        if (widget.unscheduled.isNotEmpty)
+          _NoteBox(
+            title: 'Couldn\'t fit in',
+            children: [
+              for (final item in widget.unscheduled)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: item.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      if (item.reason != null && item.reason!.isNotEmpty)
+                        TextSpan(text: ' — ${item.reason}'),
+                    ],
+                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.muted700,
+                  ),
+                ),
+            ],
+          ),
+        if (widget.warnings.isNotEmpty)
+          _NoteBox(
+            title: 'Heads up',
+            children: [
+              for (final warning in widget.warnings)
+                Text(
+                  warning,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.warn,
+                  ),
+                ),
+            ],
+          ),
       ],
+    );
+  }
+}
+
+/// Inset box with a mono label and lines of text ("Couldn't fit in", "Heads up").
+class _NoteBox extends StatelessWidget {
+  const _NoteBox({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.inset,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(title),
+          for (final child in children)
+            Padding(padding: const EdgeInsets.only(top: 8), child: child),
+        ],
+      ),
     );
   }
 }
@@ -315,6 +397,17 @@ class _DaySection extends StatelessWidget {
                       item: items[i],
                       isLast: i == items.length - 1,
                     ),
+                  for (final warning in day.warnings)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 38, top: 8),
+                      child: Text(
+                        warning,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 12.5,
+                          color: AppColors.warn,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.only(left: 38),
@@ -363,7 +456,7 @@ class _TimelineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (label, tone) = _categoryTag(item.type);
+    final (label, tone) = _categoryTag(item);
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,

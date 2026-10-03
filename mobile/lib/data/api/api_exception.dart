@@ -22,6 +22,7 @@ class ApiException extends RepositoryException {
 
   static const networkErrorCode = 'NETWORK_ERROR';
   static const unknownErrorCode = 'UNKNOWN_ERROR';
+  static const timeoutErrorCode = 'REQUEST_TIMEOUT';
 
   /// Same text the web app shows when the request never reached the server.
   static const networkErrorMessage =
@@ -29,6 +30,12 @@ class ApiException extends RepositoryException {
 
   factory ApiException.network() =>
       const ApiException(code: networkErrorCode, message: networkErrorMessage);
+
+  /// The server did not answer in time.
+  factory ApiException.timeout() => const ApiException(
+    code: timeoutErrorCode,
+    message: 'The request timed out. Please try again.',
+  );
 
   /// Builds an exception from a decoded response body, falling back like the
   /// web helper when the body is not the structured envelope.

@@ -25,6 +25,7 @@ class TripItineraryPage extends StatelessWidget {
     ItineraryItemType.restaurant => 'restaurant',
     ItineraryItemType.hotel => 'hotel',
     ItineraryItemType.localEvent => 'local_event',
+    ItineraryItemType.other => 'other',
   };
 
   @override

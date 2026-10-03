@@ -9,6 +9,7 @@ class ItineraryDay {
     this.summary,
     this.dayType,
     this.distanceKm,
+    this.warnings = const [],
   });
 
   final int dayNumber;
@@ -20,4 +21,5 @@ class ItineraryDay {
   /// "arrival", "full" or "departure".
   final String? dayType;
   final double? distanceKm;
+  final List<String> warnings;
 }

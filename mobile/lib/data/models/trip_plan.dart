@@ -58,15 +58,27 @@ class TripBudget {
   final List<BudgetCategory> categories;
 }
 
+/// A stop the planner could not fit in, with its reason.
+class UnscheduledItem {
+  const UnscheduledItem({required this.name, this.reason});
+
+  final String name;
+  final String? reason;
+}
+
 /// What the Summary, Map, Itinerary and Budget tabs show once a plan exists.
 class TripPlan {
   const TripPlan({
     required this.days,
     required this.summary,
     required this.budget,
+    this.unscheduled = const [],
+    this.warnings = const [],
   });
 
   final List<ItineraryDay> days;
+  final List<UnscheduledItem> unscheduled;
+  final List<String> warnings;
   final TripSummary summary;
   final TripBudget budget;
 }

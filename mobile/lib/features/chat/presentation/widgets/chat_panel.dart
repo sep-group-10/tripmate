@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,11 +8,12 @@ import '../../../../core/widgets/mono_labels.dart';
 import '../../../../data/models/chat_reply.dart';
 import '../../../../data/models/trip_plan.dart';
 import '../../../../data/repositories/chat_repository.dart';
+import '../../chat_errors.dart';
 
 const _suggestions = ['Swap a day', 'Cut LKR 10,000', 'Add a tea estate visit'];
 
-const _plannerUnreachable =
-    'Sorry, I couldn\'t reach the planner. Please try again.';
+/// After this long without a reply, tell the user planning is still running.
+const _slowAfter = Duration(seconds: 20);
 
 const _welcome = ChatMessage(
   fromUser: false,
@@ -18,11 +21,19 @@ const _welcome = ChatMessage(
 );
 
 class _Bubble {
-  _Bubble({required this.message, this.isError = false, this.retryText});
+  _Bubble({
+    required this.message,
+    this.isError = false,
+    this.retryText,
+    this.caption,
+  });
 
   final ChatMessage message;
   final bool isError;
   final String? retryText;
+
+  /// Small status line under the bubble (the session's progress info).
+  final String? caption;
 }
 
 /// Mirrors web/src/components/chat/ChatPanel.jsx. [onPlan] is called whenever a
@@ -53,10 +64,13 @@ class _ChatPanelState extends State<ChatPanel> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   bool _thinking = false;
+  bool _slow = false;
   String? _sessionId;
+  Timer? _slowTimer;
 
   @override
   void dispose() {
+    _slowTimer?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -78,39 +92,74 @@ class _ChatPanelState extends State<ChatPanel> {
   /// Retry button. The caller has already put the user's message in the chat.
   Future<void> _deliver(String text) async {
     final chat = context.read<ChatRepository>();
-    setState(() => _thinking = true);
+    setState(() {
+      _thinking = true;
+      _slow = false;
+    });
+    _slowTimer?.cancel();
+    _slowTimer = Timer(_slowAfter, () {
+      if (mounted && _thinking) setState(() => _slow = true);
+    });
     _scrollToEnd();
     try {
       final reply = await chat.sendMessage(text, sessionId: _sessionId);
       if (!mounted) return;
       _sessionId ??= reply.sessionId;
-      // A clarifying question returns no plan; keep whatever was showing.
+      // A clarifying question or a failed plan returns no plan; keep whatever
+      // was showing.
       if (reply.plan != null) widget.onPlan(reply.plan!);
+      final failed = reply.status == 'failed';
       setState(() {
         _messages.add(
           _Bubble(
             message: ChatMessage(fromUser: false, text: reply.assistantMessage),
+            // The planner could not finish: shown as an error, but a plain
+            // resend would not help, so there is no Retry.
+            isError: failed,
+            caption: _progressCaption(reply),
           ),
         );
       });
-    } catch (_) {
+    } catch (err) {
       if (!mounted) return;
+      final failure = describeChatError(err);
+      if (failure.isAuth) {
+        // The session is gone; the API client already cleared it and the app
+        // is heading back to the login page.
+        return;
+      }
+      if (failure.resetSession) _sessionId = null;
       setState(() {
         _messages.add(
           _Bubble(
-            message: const ChatMessage(
-              fromUser: false,
-              text: _plannerUnreachable,
-            ),
+            message: ChatMessage(fromUser: false, text: failure.text),
             isError: true,
-            retryText: text,
+            // Only a retryable error offers Retry, which resends this text.
+            retryText: failure.retryable ? text : null,
           ),
         );
       });
     } finally {
-      if (mounted) setState(() => _thinking = false);
+      _slowTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _thinking = false;
+          _slow = false;
+        });
+      }
       _scrollToEnd();
     }
+  }
+
+  /// The session's progress message / percentage, when the backend sets them.
+  String? _progressCaption(ChatReply reply) {
+    final parts = [
+      if (reply.progressMessage != null && reply.progressMessage!.isNotEmpty)
+        reply.progressMessage!,
+      if (reply.progressPercent > 0 && reply.progressPercent < 100)
+        '${reply.progressPercent}%',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 
   void _send(String raw) {
@@ -159,23 +208,36 @@ class _ChatPanelState extends State<ChatPanel> {
                   const SizedBox(height: 18),
                 ],
                 if (_thinking)
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: AppColors.accent,
-                          shape: BoxShape.circle,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppColors.accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'TripMate is thinking…',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: AppColors.muted600,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'TripMate is thinking…',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.muted600,
+                      if (_slow)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6, left: 16),
+                          child: Text(
+                            'Planning a trip can take a minute or two. Still working on it…',
+                            style: theme.textTheme.bodySmall,
+                          ),
                         ),
-                      ),
                     ],
                   ),
               ],
@@ -363,6 +425,11 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+        if (bubble.caption != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(bubble.caption!, style: theme.textTheme.bodySmall),
+          ),
         if (bubble.retryText != null) ...[
           const SizedBox(height: 8),
           Opacity(

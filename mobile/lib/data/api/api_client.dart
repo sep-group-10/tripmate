@@ -54,8 +54,12 @@ class ApiClient {
 
   Future<dynamic> get(String path) => _request('GET', path);
 
-  Future<dynamic> post(String path, {Map<String, dynamic>? body}) =>
-      _request('POST', path, body: body);
+  /// [timeout] overrides the default for slow endpoints (AI planning).
+  Future<dynamic> post(
+    String path, {
+    Map<String, dynamic>? body,
+    Duration? timeout,
+  }) => _request('POST', path, body: body, timeout: timeout);
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body}) =>
       _request('PUT', path, body: body);
@@ -70,8 +74,9 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool retried = false,
+    Duration? timeout,
   }) async {
-    final response = await _send(method, path, body);
+    final response = await _send(method, path, body, timeout);
     final decoded = _decode(response);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -87,7 +92,13 @@ class ApiClient {
     if (response.statusCode == 401 && !isPublic) {
       if (error.code == 'TOKEN_EXPIRED' && !retried) {
         await _refreshSharing();
-        return _request(method, path, body: body, retried: true);
+        return _request(
+          method,
+          path,
+          body: body,
+          retried: true,
+          timeout: timeout,
+        );
       }
       if (error.code == 'TOKEN_EXPIRED' || error.code == 'UNAUTHORIZED') {
         await _expireSession();
@@ -100,6 +111,7 @@ class ApiClient {
     String method,
     String path,
     Map<String, dynamic>? body,
+    Duration? timeout,
   ) async {
     final headers = <String, String>{
       'Accept': 'application/json',
@@ -117,8 +129,10 @@ class ApiClient {
     try {
       final streamed = await _http
           .send(request)
-          .timeout(ApiConfig.requestTimeout);
+          .timeout(timeout ?? ApiConfig.requestTimeout);
       return await http.Response.fromStream(streamed);
+    } on TimeoutException {
+      throw ApiException.timeout();
     } on Exception {
       // Socket errors, timeouts, DNS failures: the server was not reached.
       throw ApiException.network();
