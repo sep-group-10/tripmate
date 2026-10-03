@@ -1,7 +1,9 @@
 import inspect
 
+import pytest
+
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
-from app.schemas.planning import CriticDecision, PlannerDecision
+from app.schemas.planning import CriticDecision, ItineraryEditPlan, PlannerDecision
 from app.services.langgraph import critic, planner
 from app.services.langgraph.planning_graph import (
     planning_graph,
@@ -645,9 +647,14 @@ def test_planner_decision_schema_is_compact_and_action_is_constrained():
     from pydantic import ValidationError
 
     decision = PlannerDecision(action="candidate_retriever")
-
-    assert decision.model_dump() == {"action": "candidate_retriever"}
-    assert set(PlannerDecision.model_json_schema()["properties"]) == {"action"}
+    assert decision.model_dump() == {
+        "action": "candidate_retriever",
+        "edit_plan": None,
+    }
+    assert set(PlannerDecision.model_json_schema()["properties"]) == {
+        "action",
+        "edit_plan",
+    }
     with pytest.raises(ValidationError):
         PlannerDecision(action="not_a_registered_tool")
 
@@ -1750,6 +1757,164 @@ def test_planner_structured_schema_restricts_action_enum(monkeypatch):
     json_schema = schema.model_json_schema()
     action_ref = json_schema["properties"]["action"]["$ref"].rsplit("/", 1)[-1]
     assert json_schema["$defs"][action_ref]["enum"] == ["scoring_engine"]
+    edit_plan_ref = json_schema["properties"]["edit_plan"]["anyOf"][0]["$ref"].rsplit(
+        "/", 1
+    )[-1]
+    assert json_schema["$defs"][edit_plan_ref]["properties"]["operation"]["enum"] == [
+        "remove",
+        "add",
+        "replace",
+        "move",
+        "change",
+    ]
+
+
+def test_itinerary_edit_plan_covers_supported_operations():
+    examples = [
+        {"operation": "remove", "target_item": "Jaffna Fort", "source_day": 2},
+        {"operation": "add", "target_item": "Nallur Temple", "destination_day": 1},
+        {
+            "operation": "replace",
+            "target_item": "Jaffna Fort",
+            "replacement_item": "another attraction",
+        },
+        {
+            "operation": "move",
+            "target_item": "Nallur Temple",
+            "source_day": 1,
+            "destination_day": 2,
+        },
+        {
+            "operation": "change",
+            "target_item": "morning activity",
+            "source_day": 1,
+            "requested_change": "something cheaper",
+        },
+    ]
+
+    plans = [ItineraryEditPlan.model_validate(example) for example in examples]
+
+    assert [plan.operation for plan in plans] == [
+        "remove",
+        "add",
+        "replace",
+        "move",
+        "change",
+    ]
+
+
+def test_planner_returns_edit_plan_and_supplies_context(monkeypatch):
+    itinerary = {
+        "days": [{"day_number": 2, "items": [{"id": "item-2", "title": "Jaffna Fort"}]}]
+    }
+    edit_plan = ItineraryEditPlan(
+        operation="remove", target_item="Jaffna Fort", source_day=2
+    )
+    session = AgentSession(
+        goal="Plan a trip to Jaffna",
+        trip_requirements={"destination": "Jaffna", "budget": 500},
+    )
+
+    class FakeModel:
+        def invoke(self, prompt):
+            self.prompt = prompt
+            return PlannerDecision(action="candidate_retriever", edit_plan=edit_plan)
+
+    model = FakeModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda _actions: model)
+
+    result = planner.planner_node(
+        {
+            "session": session,
+            "current_itinerary": itinerary,
+            "latest_user_message": "Remove Jaffna Fort from day 2.",
+            "last_failure": None,
+        }
+    )
+
+    assert result["planner_decision"].action == "candidate_retriever"
+    assert result["planner_decision"].edit_plan == edit_plan
+    assert "Remove Jaffna Fort from day 2." in model.prompt
+    assert "Jaffna Fort" in model.prompt
+    assert "'budget': 500" in model.prompt
+    assert "do not apply or persist" in model.prompt
+
+
+@pytest.mark.parametrize("operation", ["add", "remove", "replace", "move", "change"])
+def test_planning_graph_ends_after_any_edit_plan(monkeypatch, operation):
+    edit_plan = ItineraryEditPlan(
+        operation=operation,
+        target_item="Kandy View Point",
+        destination_day=2,
+        replacement_item="New attraction" if operation == "replace" else None,
+        requested_change="cheaper" if operation == "change" else None,
+    )
+
+    class FakeModel:
+        def invoke(self, _prompt):
+            return PlannerDecision(action="candidate_retriever", edit_plan=edit_plan)
+
+    monkeypatch.setattr(planner, "create_planner_model", lambda _actions: FakeModel())
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy"},
+    )
+
+    result = planning_graph.invoke(
+        {
+            "session": session,
+            "current_itinerary": {"days": [{"day_number": 2, "items": []}]},
+            "latest_user_message": "Add Kandy View Point to day 2.",
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    assert result["planner_decision"].edit_plan == edit_plan
+    assert session.tool_results == []
+
+
+def test_planner_prompt_recognizes_add_requests(monkeypatch):
+    cases = [
+        ("Add Kandy View Point", '"Add Kandy View Point"'),
+        ("Add Kandy View Point to day 2", '"Add Kandy View Point to day 2"'),
+        ("I want to visit Kandy View Point", '"I want to visit Kandy View Point"'),
+    ]
+
+    for message, example in cases:
+
+        class FakeModel:
+            def invoke(self, prompt):
+                self.prompt = prompt
+                return PlannerDecision(action="candidate_retriever")
+
+        model = FakeModel()
+        monkeypatch.setattr(
+            planner, "create_planner_model", lambda _actions, model=model: model
+        )
+        session = AgentSession(
+            goal="Plan a trip to Kandy",
+            trip_requirements={"destination": "Kandy"},
+        )
+        planner.planner_node(
+            {
+                "session": session,
+                "current_itinerary": {"days": [{"day_number": 1, "items": []}]},
+                "latest_user_message": message,
+                "last_failure": None,
+            }
+        )
+
+        assert message in model.prompt
+        assert example in model.prompt
+        assert 'operation="add"' in model.prompt
+        assert "target_item" in model.prompt
+        assert "destination_day only when the user specifies a day" in model.prompt
+        assert "destination_time only when the user specifies a time" in model.prompt
+        assert "Do not invent unknown" in model.prompt
+        assert "do not apply or persist" in model.prompt
 
 
 def test_scheduling_engine_gets_canonical_date_objects(monkeypatch):
@@ -2039,3 +2204,43 @@ def test_critic_continuation_planner_increments_iteration_count(monkeypatch):
     assert result["planner_decision"].action == "candidate_retriever"
     assert session.iteration_count == 1
     assert "Current iteration:\n1" in prompts[0]
+
+
+def test_planner_prompt_supports_implicit_remove_requests(monkeypatch):
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy"},
+    )
+
+    class FakeModel:
+        def invoke(self, prompt):
+            self.prompt = prompt
+            return PlannerDecision(action="candidate_retriever")
+
+    model = FakeModel()
+    monkeypatch.setattr(planner, "create_planner_model", lambda _actions: model)
+
+    planner.planner_node(
+        {
+            "session": session,
+            "current_itinerary": {
+                "days": [
+                    {
+                        "day_number": 2,
+                        "items": [{"id": "item-1", "title": "Bahirawakanda Temple"}],
+                    }
+                ]
+            },
+            "latest_user_message": "I don't want to visit Bahirawakanda Temple.",
+            "last_failure": None,
+        }
+    )
+
+    assert "I don't want to visit X" in model.prompt
+    assert "REMOVE operation" in model.prompt
+    assert "first check whether the latest user message" in model.prompt
+    assert "before considering normal planning" in model.prompt
+    assert (
+        "only when the latest message does not request an itinerary edit"
+        in model.prompt
+    )

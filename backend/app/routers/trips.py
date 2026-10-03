@@ -76,7 +76,16 @@ def get_my_trip_details(
         preferences.get("destination") if isinstance(preferences, dict) else None
     )
 
-    itinerary_record = db.query(Itinerary).filter(Itinerary.trip_id == trip.id).first()
+    itinerary_record = (
+        db.query(Itinerary)
+        .filter(Itinerary.trip_id == trip.id)
+        .order_by(
+            Itinerary.revision_number.desc().nullslast(),
+            Itinerary.created_at.desc(),
+            Itinerary.id.desc(),
+        )
+        .first()
+    )
     itinerary_details = None
     if itinerary_record is not None:
         day_records = (

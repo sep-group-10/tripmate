@@ -4,6 +4,26 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+class ItineraryEditPlan(BaseModel):
+    """A proposed itinerary edit; describing an edit never applies it."""
+
+    operation: Literal["remove", "add", "replace", "move", "change"]
+    target_item: str | None = Field(
+        default=None,
+        description="Name or persisted itinerary item ID of the item being edited.",
+    )
+    source_day: int | None = Field(default=None, ge=1)
+    destination_day: int | None = Field(default=None, ge=1)
+    destination_time: str | None = Field(
+        default=None, description="Requested local time or time of day."
+    )
+    replacement_item: str | None = None
+    requested_change: str | None = Field(
+        default=None,
+        description="Requested change or preference, such as a cheaper activity.",
+    )
+
+
 class PlannerDecision(BaseModel):
     action: Literal[
         "candidate_retriever",
@@ -14,6 +34,10 @@ class PlannerDecision(BaseModel):
         "cost_estimator",
         "constraint_validator",
     ]
+    edit_plan: ItineraryEditPlan | None = Field(
+        default=None,
+        description="Proposed edit for the current itinerary, or null when none.",
+    )
 
 
 class CriterionAssessment(BaseModel):
