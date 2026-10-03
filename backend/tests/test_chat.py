@@ -941,6 +941,9 @@ def test_remove_edit_returns_updated_itinerary_and_persistence_preserves_fields(
         f"{CHAT_URL}/{session.id}", json={"message": "Remove Jaffna Fort from day 2."}
     )
     assert response.status_code == 200
+    assert response.json()["data"]["assistant_message"] == (
+        "Done — I removed the item and updated your itinerary."
+    )
     assert [
         item["name"]
         for item in response.json()["data"]["itinerary"]["days"][0]["items"]
@@ -1114,6 +1117,68 @@ def test_add_edit_persists_new_item_and_preserves_existing_records(
         db_session, session.trip_id
     )
     assert refreshed_context["days"][0]["items"][-1]["title"] == "Kandy View Point"
+
+
+def test_remove_persistence_failure_returns_unchanged_itinerary(
+    client, db_session, existing_user, monkeypatch
+):
+    session, source, _day, existing_items = _add_persistence_source(
+        db_session, existing_user
+    )
+    _mock_processor(monkeypatch, _complete_preferences())
+    final_session = create_agent_session(_complete_preferences())
+    final_session.status = AgentSessionStatus.COMPLETED
+    final_session.iteration_count = 1
+    decision = PlannerDecision(
+        action="candidate_retriever",
+        edit_plan=ItineraryEditPlan(
+            operation="remove", target_item="Jaffna Fort", source_day=2
+        ),
+    )
+    monkeypatch.setattr(
+        chat_router,
+        "planning_graph",
+        type(
+            "Graph",
+            (),
+            {
+                "invoke": lambda self, *args, **kwargs: {
+                    "session": final_session,
+                    "planner_decision": decision,
+                }
+            },
+        )(),
+    )
+
+    def fail_remove_persistence(*_args, **_kwargs):
+        raise ValueError("Current itinerary changed before the edit was saved")
+
+    monkeypatch.setattr(
+        chat_router, "persist_removed_chat_item", fail_remove_persistence
+    )
+
+    response = client.post(
+        f"{CHAT_URL}/{session.id}", json={"message": "Remove Jaffna Fort from day 2."}
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert "couldn't apply" in body["assistant_message"]
+    assert "unchanged" in body["assistant_message"]
+    assert [item["name"] for item in body["itinerary"]["days"][0]["items"]] == [
+        "Jaffna Fort",
+        "Museum",
+    ]
+    db_session.expire_all()
+    assert db_session.query(Itinerary).filter_by(trip_id=session.trip_id).count() == 1
+    persisted_items = (
+        db_session.query(ItineraryDayItem)
+        .filter_by(itinerary_day_id=existing_items[0].itinerary_day_id)
+        .order_by(ItineraryDayItem.sort_order)
+        .all()
+    )
+    assert [item.id for item in persisted_items] == [item.id for item in existing_items]
+    assert [item.title for item in persisted_items] == ["Jaffna Fort", "Museum"]
 
 
 def test_unresolved_add_does_not_persist_an_item(

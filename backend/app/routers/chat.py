@@ -336,7 +336,11 @@ def _current_itinerary_context(db: Session, trip_id: uuid.UUID | None) -> dict |
     itinerary = (
         db.query(Itinerary)
         .filter(Itinerary.trip_id == trip_id)
-        .order_by(Itinerary.created_at.desc(), Itinerary.id.desc())
+        .order_by(
+            Itinerary.revision_number.desc().nullslast(),
+            Itinerary.created_at.desc(),
+            Itinerary.id.desc(),
+        )
         .first()
     )
     if itinerary is None:
@@ -393,6 +397,53 @@ def _current_itinerary_context(db: Session, trip_id: uuid.UUID | None) -> dict |
         "weather_info": itinerary.weather_info,
         "days": day_context,
     }
+
+
+def _current_itinerary_response(current_itinerary: dict | None) -> ChatItinerary | None:
+    """Convert persisted itinerary context to the chat response shape."""
+    if current_itinerary is None:
+        return None
+    days = []
+    try:
+        for day in current_itinerary.get("days", []):
+            items = [
+                {
+                    "candidate_id": item.get("id") or item.get("title"),
+                    "category": item.get("item_type") or "activity",
+                    "name": item.get("title"),
+                    "start_time": time.fromisoformat(item["start_time"]).isoformat(
+                        timespec="minutes"
+                    ),
+                    "end_time": time.fromisoformat(item["end_time"]).isoformat(
+                        timespec="minutes"
+                    ),
+                    "latitude": None,
+                    "longitude": None,
+                    "duration_minutes": None,
+                    "opening_hours": None,
+                }
+                for item in day.get("items", [])
+            ]
+            days.append(
+                {
+                    "day_number": day["day_number"],
+                    "date": day["date"],
+                    "day_type": day.get("title") or "day_trip",
+                    "items": items,
+                    "hotel_id": None,
+                    "hotel_location": None,
+                    "warnings": [],
+                }
+            )
+        return ChatItinerary(
+            status="ok",
+            days=days,
+            hotel_by_destination={},
+            unscheduled=[],
+            warnings=[],
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _to_langchain_messages(
@@ -577,11 +628,9 @@ def _process_chat_message(
                 assistant_message = clarification
                 itinerary = None
             else:
-                itinerary = edited_itinerary
-                assistant_message = (
-                    "Done — I removed the item and updated your itinerary."
-                )
-                if planning_session.trip_id is not None:
+                try:
+                    if planning_session.trip_id is None or current_itinerary is None:
+                        raise ValueError("There is no persisted itinerary to update")
                     persist_removed_chat_item(
                         db,
                         planning_session.trip_id,
@@ -589,6 +638,21 @@ def _process_chat_message(
                         target_item_id,
                     )
                     db.commit()
+                except Exception:
+                    current_itinerary = (
+                        _current_itinerary_context(db, planning_session.trip_id)
+                        or current_itinerary
+                    )
+                    itinerary = _current_itinerary_response(current_itinerary)
+                    assistant_message = (
+                        "I couldn't apply that removal because the itinerary could not "
+                        "be saved. Your itinerary is unchanged; please try again."
+                    )
+                else:
+                    itinerary = edited_itinerary
+                    assistant_message = (
+                        "Done — I removed the item and updated your itinerary."
+                    )
             planning_session.status = "completed"
             planning_session.iteration_count = final_agent_session.iteration_count
             db.commit()
@@ -598,6 +662,25 @@ def _process_chat_message(
                 assistant_message=assistant_message,
                 session=PlanningSessionInfo.model_validate(planning_session),
                 itinerary=itinerary,
+            )
+
+        if edit_plan:
+            assistant_message = (
+                f"I understood that you want to {edit_plan.operation} an itinerary item, "
+                "but I can currently only add or remove items. Please rephrase your "
+                "request as an add or remove, or tell me how you’d like to change the plan."
+            )
+            planning_session.status = "completed"
+            planning_session.iteration_count = final_agent_session.iteration_count
+            db.commit()
+            db.refresh(planning_session)
+            save_message(db, planning_session.id, "assistant", assistant_message)
+            return ChatResponse(
+                assistant_message=assistant_message,
+                session=PlanningSessionInfo.model_validate(planning_session),
+                itinerary=_current_itinerary_response(current_itinerary)
+                if current_itinerary
+                else None,
             )
 
         planning_session.status = final_agent_session.status.value

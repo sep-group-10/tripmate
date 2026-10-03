@@ -79,7 +79,11 @@ def get_my_trip_details(
     itinerary_record = (
         db.query(Itinerary)
         .filter(Itinerary.trip_id == trip.id)
-        .order_by(Itinerary.created_at.desc(), Itinerary.id.desc())
+        .order_by(
+            Itinerary.revision_number.desc().nullslast(),
+            Itinerary.created_at.desc(),
+            Itinerary.id.desc(),
+        )
         .first()
     )
     itinerary_details = None

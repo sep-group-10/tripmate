@@ -390,9 +390,7 @@ def create_planning_graph():
     graph_builder.add_conditional_edges(
         "planner",
         lambda state: "end"
-        if state.get("planner_decision")
-        and state["planner_decision"].edit_plan
-        and state["planner_decision"].edit_plan.operation == "remove"
+        if state.get("planner_decision") and state["planner_decision"].edit_plan
         else "tool_execution",
         {"end": END, "tool_execution": "tool_execution"},
     )

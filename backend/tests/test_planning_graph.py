@@ -1,5 +1,7 @@
 import inspect
 
+import pytest
+
 from app.schemas.agent_session import AgentSession, AgentSessionStatus
 from app.schemas.planning import CriticDecision, ItineraryEditPlan, PlannerDecision
 from app.services.langgraph import critic, planner
@@ -1836,6 +1838,42 @@ def test_planner_returns_edit_plan_and_supplies_context(monkeypatch):
     assert "Jaffna Fort" in model.prompt
     assert "'budget': 500" in model.prompt
     assert "do not apply or persist" in model.prompt
+
+
+@pytest.mark.parametrize("operation", ["add", "remove", "replace", "move", "change"])
+def test_planning_graph_ends_after_any_edit_plan(monkeypatch, operation):
+    edit_plan = ItineraryEditPlan(
+        operation=operation,
+        target_item="Kandy View Point",
+        destination_day=2,
+        replacement_item="New attraction" if operation == "replace" else None,
+        requested_change="cheaper" if operation == "change" else None,
+    )
+
+    class FakeModel:
+        def invoke(self, _prompt):
+            return PlannerDecision(action="candidate_retriever", edit_plan=edit_plan)
+
+    monkeypatch.setattr(planner, "create_planner_model", lambda _actions: FakeModel())
+    session = AgentSession(
+        goal="Plan a trip to Kandy",
+        trip_requirements={"destination": "Kandy"},
+    )
+
+    result = planning_graph.invoke(
+        {
+            "session": session,
+            "current_itinerary": {"days": [{"day_number": 2, "items": []}]},
+            "latest_user_message": "Add Kandy View Point to day 2.",
+            "planner_decision": None,
+            "critic_decision": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+        }
+    )
+
+    assert result["planner_decision"].edit_plan == edit_plan
+    assert session.tool_results == []
 
 
 def test_planner_prompt_recognizes_add_requests(monkeypatch):

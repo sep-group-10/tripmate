@@ -2,7 +2,15 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +19,11 @@ from app.core.base import Base
 
 class Itinerary(Base):
     __tablename__ = "itineraries"
+    __table_args__ = (
+        UniqueConstraint(
+            "trip_id", "revision_number", name="uq_itineraries_trip_revision_number"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -23,6 +36,9 @@ class Itinerary(Base):
         ForeignKey("trips.id"),
         nullable=False,
     )
+
+    # NULL is retained for legacy rows whose historical ordering is unknown.
+    revision_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -5,6 +5,7 @@ from datetime import date, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.itinerary import Itinerary
@@ -12,6 +13,29 @@ from app.models.itinerary_day import ItineraryDay
 from app.models.itinerary_day_item import ItineraryDayItem
 from app.models.trip import Trip
 from app.schemas.chat import ChatItinerary, ChatItineraryItem
+
+
+def _latest_itinerary(db: Session, trip_id: uuid.UUID) -> Itinerary | None:
+    """Prefer numbered revisions; retain timestamp/UUID fallback for legacy rows."""
+    return (
+        db.query(Itinerary)
+        .filter(Itinerary.trip_id == trip_id)
+        .order_by(
+            Itinerary.revision_number.desc().nullslast(),
+            Itinerary.created_at.desc(),
+            Itinerary.id.desc(),
+        )
+        .first()
+    )
+
+
+def _next_revision_number(db: Session, trip_id: uuid.UUID) -> int:
+    current = (
+        db.query(func.max(Itinerary.revision_number))
+        .filter(Itinerary.trip_id == trip_id)
+        .scalar()
+    )
+    return (current or 0) + 1
 
 
 def _estimated_cost(cost_estimate: dict[str, Any] | None) -> Decimal:
@@ -51,7 +75,13 @@ def persist_chat_itinerary(
     saves without adding another ORM savepoint to the caller's Session. The
     caller remains responsible for committing its surrounding transaction.
     """
-    trip = db.get(Trip, trip_id)
+    trip = (
+        db.query(Trip)
+        .filter(Trip.id == trip_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if trip is None:
         raise ValueError("Trip does not exist")
 
@@ -63,6 +93,7 @@ def persist_chat_itinerary(
     with db.connection().begin_nested():
         record = Itinerary(
             trip_id=trip_id,
+            revision_number=_next_revision_number(db, trip_id),
             total_estimated_cost=_estimated_cost(cost_estimate),
         )
         db.add(record)
@@ -103,16 +134,25 @@ def persist_removed_chat_item(
     target_item_id: uuid.UUID,
 ) -> Itinerary:
     """Persist a REMOVE revision while copying every unaffected stored field."""
-    source = db.get(Itinerary, source_itinerary_id)
-    trip = db.get(Trip, trip_id)
-    if source is None or source.trip_id != trip_id or trip is None:
-        raise ValueError("Current itinerary does not exist for this trip")
-    latest = (
-        db.query(Itinerary)
-        .filter(Itinerary.trip_id == trip_id)
-        .order_by(Itinerary.created_at.desc(), Itinerary.id.desc())
+    # Lock the trip to serialize revision writes, then lock the requested
+    # source row before checking whether it is still current.
+    trip = (
+        db.query(Trip)
+        .filter(Trip.id == trip_id)
+        .with_for_update()
+        .populate_existing()
         .first()
     )
+    source = (
+        db.query(Itinerary)
+        .filter(Itinerary.id == source_itinerary_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if source is None or source.trip_id != trip_id or trip is None:
+        raise ValueError("Current itinerary does not exist for this trip")
+    latest = _latest_itinerary(db, trip_id)
     if latest is None or latest.id != source_itinerary_id:
         raise ValueError("Current itinerary changed before the edit was saved")
 
@@ -125,6 +165,7 @@ def persist_removed_chat_item(
     with db.connection().begin_nested():
         revision = Itinerary(
             trip_id=trip_id,
+            revision_number=_next_revision_number(db, trip_id),
             total_estimated_cost=source.total_estimated_cost,
             route_info=source.route_info,
             weather_info=source.weather_info,
@@ -186,16 +227,17 @@ def persist_added_chat_item(
     destination: str | None = None,
 ) -> ItineraryDayItem:
     """Atomically add one item to the latest itinerary, preserving existing rows."""
-    source = db.get(Itinerary, source_itinerary_id)
-    trip = db.get(Trip, trip_id)
-    if source is None or source.trip_id != trip_id or trip is None:
-        raise ValueError("Current itinerary does not exist for this trip")
-    latest = (
-        db.query(Itinerary)
-        .filter(Itinerary.trip_id == trip_id)
-        .order_by(Itinerary.created_at.desc(), Itinerary.id.desc())
+    trip = (
+        db.query(Trip)
+        .filter(Trip.id == trip_id)
+        .with_for_update()
+        .populate_existing()
         .first()
     )
+    source = db.get(Itinerary, source_itinerary_id)
+    if source is None or source.trip_id != trip_id or trip is None:
+        raise ValueError("Current itinerary does not exist for this trip")
+    latest = _latest_itinerary(db, trip_id)
     if latest is None or latest.id != source_itinerary_id:
         raise ValueError("Current itinerary changed before the edit was saved")
 
