@@ -1,7 +1,10 @@
+"""Live, model-dependent evaluation of critic_node decisions only."""
+
 import json
 import os
 
 from app.schemas.agent_session import AgentSession
+from app.schemas.planning import CriticDecision
 from app.services.langgraph.critic import critic_node
 
 DATASET_PATH = os.path.join(
@@ -15,85 +18,139 @@ def load_dataset():
         return json.load(file)
 
 
-def run_critic_eval():
-    if not os.getenv("GOOGLE_API_KEY"):
-        print("GOOGLE_API_KEY is not configured.")
-        print("Critic evaluation skipped.")
-        return
+def build_critic_state(case):
+    """Build the same Critic node input used by the live evaluation."""
+    session = AgentSession(
+        goal=case["request"],
+        trip_requirements=case["preferences"],
+        tool_results=case["tool_results"],
+        tool_execution_order=case["tool_execution_order"],
+        constraint_result=case.get("constraint_result"),
+    )
 
-    dataset = load_dataset()
+    return {
+        "session": session,
+        "planner_decision": None,
+        "critic_decision": None,
+        "last_failure": None,
+        "consecutive_failures": 0,
+    }
 
-    critic_cases = [case for case in dataset if case["type"] == "critic"]
 
-    passed = 0
-    failed = 0
+def evaluate_case(case):
+    """Run one Critic case and compare only defined decision/status fields."""
+    state = build_critic_state(case)
+    result = critic_node(state)
+    decision = result.get("critic_decision") if isinstance(result, dict) else None
+    structurally_valid = isinstance(decision, CriticDecision)
 
-    print("=== Critic Evaluation ===")
-
-    for case in critic_cases:
-        session = AgentSession(
-            goal=case["request"],
-            trip_requirements=case["preferences"],
-            tool_results=case["tool_results"],
-            tool_execution_order=case["tool_execution_order"],
-            constraint_result=case.get("constraint_result"),
-        )
-
-        state = {
-            "session": session,
-            "planner_decision": None,
-            "critic_decision": None,
-            "last_failure": None,
-            "consecutive_failures": 0,
+    if not structurally_valid:
+        return {
+            "decision": None,
+            "status": None,
+            "structurally_valid": False,
+            "decision_match": False,
+            "status_match": False,
+            "combined_match": False,
+            "error": result.get("last_failure") if isinstance(result, dict) else None,
         }
 
+    actual_continue = decision.continue_planning
+    actual_status = decision.status
+    expected_continue = case["expected_continue_planning"]
+    expected_status = case["expected_status"]
+
+    # A null expected status means this is a continuing case and the Critic
+    # must leave status unset, as specified by the Critic prompt.
+    return {
+        "decision": actual_continue,
+        "status": actual_status,
+        "structurally_valid": True,
+        "decision_match": actual_continue == expected_continue,
+        "status_match": actual_status == expected_status,
+        "combined_match": (
+            actual_continue == expected_continue and actual_status == expected_status
+        ),
+        "error": None,
+    }
+
+
+def run_critic_eval():
+    print("=== Live Critic Evaluation (model-dependent) ===")
+    print("Measures critic_node() decisions only; does not evaluate graph routing.")
+
+    if not os.getenv("OPENROUTER_API_KEY"):
+        print("OPENROUTER_API_KEY is not configured.")
+        print("Live Critic evaluation skipped.")
+        return
+
+    critic_cases = [case for case in load_dataset() if case["type"] == "critic"]
+    decision_passes = 0
+    decision_failures = 0
+    status_passes = 0
+    status_failures = 0
+    combined_passes = 0
+    combined_failures = 0
+    structurally_valid_count = 0
+
+    for case in critic_cases:
         try:
-            result = critic_node(state)
+            result = evaluate_case(case)
+        except Exception as exc:
+            result = {
+                "decision": None,
+                "status": None,
+                "structurally_valid": False,
+                "decision_match": False,
+                "status_match": False,
+                "combined_match": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
 
-            decision = result["critic_decision"]
+        structurally_valid_count += int(result["structurally_valid"])
+        decision_passes += int(result["decision_match"])
+        status_passes += int(result["status_match"])
+        combined_passes += int(result["combined_match"])
 
-            actual_continue = decision.continue_planning
-            expected_continue = case["expected_continue_planning"]
+        if not result["decision_match"]:
+            decision_failures += 1
+        if not result["status_match"]:
+            status_failures += 1
+        if not result["combined_match"]:
+            combined_failures += 1
 
-            actual_status = decision.status
-            expected_status = case["expected_status"]
+        case_result = "PASS" if result["combined_match"] else "FAIL"
+        print(
+            f"{case_result} | {case['id']} | "
+            f"Structurally valid: {result['structurally_valid']} | "
+            f"Expected continue: {case['expected_continue_planning']} | "
+            f"Actual continue: {result['decision']} | "
+            f"Expected status: {case['expected_status']} | "
+            f"Actual status: {result['status']}"
+            + (f" | Error: {result['error']}" if result["error"] else "")
+        )
 
-            continue_matches = actual_continue == expected_continue
-
-            # Only compare status when the dataset specifies
-            # an expected terminal status.
-            status_matches = expected_status is None or actual_status == expected_status
-
-            if continue_matches and status_matches:
-                passed += 1
-                result_status = "PASS"
-            else:
-                failed += 1
-                result_status = "FAIL"
-
-            print(
-                f"{result_status} | "
-                f"{case['id']} | "
-                f"Expected continue: {expected_continue} | "
-                f"Actual continue: {actual_continue} | "
-                f"Expected status: {expected_status} | "
-                f"Actual status: {actual_status}"
-            )
-
-        except (ValueError, TypeError, RuntimeError) as exc:
-            failed += 1
-
-            print(f"FAIL | {case['id']} | Error: {exc}")
-
-    total = passed + failed
-    match_rate = (passed / total * 100) if total else 0
+    total_cases = len(critic_cases)
+    decision_cases = total_cases
+    status_cases = total_cases
+    decision_match_rate = (
+        decision_passes / decision_cases * 100 if decision_cases else 0
+    )
+    status_match_rate = status_passes / status_cases * 100 if status_cases else 0
+    overall_match_rate = combined_passes / total_cases * 100 if total_cases else 0
 
     print()
-    print("=== Evaluation Summary ===")
-    print(f"Total cases: {total}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
-    print(f"Decision match rate: {match_rate:.2f}%")
+    print("=== Live Evaluation Summary ===")
+    print(f"Total cases: {total_cases}")
+    print(f"Structurally valid decisions: {structurally_valid_count}/{total_cases}")
+    print(f"Decision cases: {decision_cases}")
+    print(f"Decision passes/failures: {decision_passes}/{decision_failures}")
+    print(f"Status cases: {status_cases}")
+    print(f"Status passes/failures: {status_passes}/{status_failures}")
+    print(f"Combined case passes/failures: {combined_passes}/{combined_failures}")
+    print(f"Decision match rate: {decision_match_rate:.2f}%")
+    print(f"Status match rate: {status_match_rate:.2f}%")
+    print(f"Overall case match rate: {overall_match_rate:.2f}%")
 
 
 if __name__ == "__main__":

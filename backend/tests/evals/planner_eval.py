@@ -16,8 +16,8 @@ def load_dataset():
 
 
 def run_planner_eval():
-    if not os.getenv("GOOGLE_API_KEY"):
-        print("GOOGLE_API_KEY is not configured.")
+    if not os.getenv("OPENROUTER_API_KEY"):
+        print("OPENROUTER_API_KEY is not configured.")
         print("Planner evaluation skipped.")
         return
 
@@ -27,6 +27,8 @@ def run_planner_eval():
 
     passed = 0
     failed = 0
+    exact_action_cases = 0
+    valid_action_set_cases = 0
 
     print("=== Planner Evaluation ===")
 
@@ -34,6 +36,7 @@ def run_planner_eval():
         session = AgentSession(
             goal=case["request"],
             trip_requirements=case["preferences"],
+            tool_results=case.get("tool_results", []),
         )
 
         state = {
@@ -50,9 +53,23 @@ def run_planner_eval():
             decision = result["planner_decision"]
 
             actual_action = decision.action
-            expected_action = case["expected_action"]
+            expected_action = case.get("expected_action")
+            valid_actions = case.get("valid_actions")
 
-            if actual_action == expected_action:
+            if expected_action is not None:
+                exact_action_cases += 1
+                is_valid = actual_action == expected_action
+                expectation = f"Expected: {expected_action}"
+            elif valid_actions is not None:
+                valid_action_set_cases += 1
+                is_valid = actual_action in valid_actions
+                expectation = f"Valid actions: {valid_actions}"
+            else:
+                raise ValueError(
+                    "Planner case requires expected_action or valid_actions"
+                )
+
+            if is_valid:
                 passed += 1
                 status = "PASS"
             else:
@@ -62,25 +79,30 @@ def run_planner_eval():
             print(
                 f"{status} | "
                 f"{case['id']} | "
-                f"Expected: {expected_action} | "
-                f"Actual: {actual_action}"
+                f"{expectation} | Actual: {actual_action}"
             )
 
         except (ValueError, TypeError, RuntimeError) as exc:
             failed += 1
 
-            print(f"FAIL | {case['id']} | Error: {exc}")
+            print(
+                f"FAIL | {case['id']} | "
+                f"Expected: {case.get('expected_action')} | "
+                f"Valid actions: {case.get('valid_actions')} | Error: {exc}"
+            )
 
     total = passed + failed
 
-    accuracy = (passed / total * 100) if total else 0
+    valid_decision_rate = (passed / total * 100) if total else 0
 
     print()
     print("=== Evaluation Summary ===")
     print(f"Total cases: {total}")
+    print(f"Exact-action cases: {exact_action_cases}")
+    print(f"Valid-action-set cases: {valid_action_set_cases}")
     print(f"Passed: {passed}")
     print(f"Failed: {failed}")
-    print(f"Action match rate: {accuracy:.2f}%")
+    print(f"Overall valid decision rate: {valid_decision_rate:.2f}%")
 
 
 if __name__ == "__main__":
