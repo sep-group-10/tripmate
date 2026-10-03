@@ -1,3 +1,5 @@
+import os
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -19,12 +21,27 @@ app = FastAPI(title="AI Tourism Planning System", version="1.0.0")
 
 app.state.limiter = limiter
 
+
+def _get_cors_allowed_origins() -> list[str]:
+    """Build the CORS allow-list from env vars.
+
+    CORS_ALLOWED_ORIGINS takes a comma-separated list of origins. When unset,
+    falls back to FRONTEND_BASE_URL, then to the local dev origins.
+    """
+    raw = os.getenv("CORS_ALLOWED_ORIGINS")
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    frontend_base_url = os.getenv("FRONTEND_BASE_URL")
+    if frontend_base_url:
+        return [frontend_base_url]
+
+    return ["http://localhost:3000", "http://localhost:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ],
+    allow_origins=_get_cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
