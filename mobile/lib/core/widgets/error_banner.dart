@@ -6,10 +6,18 @@ enum BannerTone { danger, success }
 
 /// `rounded-lg bg-danger-100 px-3 py-2.5 text-sm text-danger` banner.
 class MessageBanner extends StatelessWidget {
-  const MessageBanner(this.text, {super.key, this.tone = BannerTone.danger});
+  const MessageBanner(
+    this.text, {
+    super.key,
+    this.tone = BannerTone.danger,
+    this.action,
+  });
 
   final String text;
   final BannerTone tone;
+
+  /// Optional extra line under the message (e.g. a resend link).
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -21,12 +29,18 @@ class MessageBanner extends StatelessWidget {
         color: danger ? AppColors.danger100 : AppColors.success100,
         borderRadius: BorderRadius.circular(AppRadii.input),
       ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontSize: 14,
-          color: danger ? AppColors.danger : AppColors.success,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontSize: 14,
+              color: danger ? AppColors.danger : AppColors.success,
+            ),
+          ),
+          if (action != null) ...[const SizedBox(height: 8), action!],
+        ],
       ),
     );
   }

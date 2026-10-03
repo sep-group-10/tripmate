@@ -8,6 +8,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/auth_scaffold.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/form_input.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../data/repositories/auth_repository.dart';
 
 /// Mirrors web/src/pages/LoginPage.jsx (without the Google button, which is a
@@ -25,6 +26,8 @@ class _LoginPageState extends State<LoginPage> {
   final _password = TextEditingController();
   bool _submitting = false;
   String? _error;
+  String _unverifiedEmail = '';
+  String _resendStatus = 'idle'; // idle | sending | sent
 
   @override
   void dispose() {
@@ -46,17 +49,38 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (mounted) context.go('/chat');
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-          _error = '$e';
-        });
-      }
+      // Login never shows field-specific errors: the backend answers
+      // wrong email and wrong password the same way on purpose.
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = '$e';
+        if (e is ApiException && e.code == 'EMAIL_NOT_VERIFIED') {
+          _unverifiedEmail = _email.text.trim();
+        }
+      });
     }
   }
 
+  Future<void> _resendVerification() async {
+    setState(() => _resendStatus = 'sending');
+    try {
+      await context.read<AuthRepository>().resendVerification(_unverifiedEmail);
+    } catch (_) {
+      // The endpoint never reveals failure details either way; treat it as
+      // success from the UI's perspective, like the web.
+    }
+    if (mounted) setState(() => _resendStatus = 'sent');
+  }
+
   void _clearError(String _) {
-    if (_error != null) setState(() => _error = null);
+    if (_error != null) {
+      setState(() {
+        _error = null;
+        _unverifiedEmail = '';
+        _resendStatus = 'idle';
+      });
+    }
   }
 
   @override
@@ -74,7 +98,24 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 22),
             if (_error != null) ...[
-              MessageBanner(_error!),
+              MessageBanner(
+                _error!,
+                action: _unverifiedEmail.isEmpty
+                    ? null
+                    : _resendStatus == 'sent'
+                    ? const Text(
+                        'A new verification email is on its way.',
+                        style: TextStyle(color: AppColors.success),
+                      )
+                    : AccentLink(
+                        _resendStatus == 'sending'
+                            ? 'Sending…'
+                            : 'Resend verification email',
+                        onTap: _resendStatus == 'sending'
+                            ? () {}
+                            : _resendVerification,
+                      ),
+              ),
               const SizedBox(height: 22),
             ],
             FormInput(

@@ -31,7 +31,12 @@ GoRouter buildRouter(AuthRepository auth) {
     // Like web's ProtectedRoute: signed-out users are sent to /login.
     redirect: (context, state) async {
       if (publicPaths.contains(state.matchedLocation)) return null;
-      return await auth.currentUser() == null ? '/login' : null;
+      try {
+        return await auth.currentUser() == null ? '/login' : null;
+      } catch (_) {
+        // The session could not be checked (e.g. backend unreachable).
+        return '/login';
+      }
     },
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),

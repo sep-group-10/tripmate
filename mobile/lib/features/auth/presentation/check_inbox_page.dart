@@ -22,17 +22,28 @@ class CheckInboxPage extends StatefulWidget {
 class _CheckInboxPageState extends State<CheckInboxPage> {
   bool _sending = false;
   bool _sent = false;
+  String? _error;
 
   Future<void> _resend() async {
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
     try {
       await context.read<AuthRepository>().resendVerification(widget.email);
-    } catch (_) {}
-    if (mounted) {
-      setState(() {
-        _sending = false;
-        _sent = true;
-      });
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _sent = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _error = '$e';
+        });
+      }
     }
   }
 
@@ -83,6 +94,10 @@ class _CheckInboxPageState extends State<CheckInboxPage> {
               'A new verification email is on its way.',
               tone: BannerTone.success,
             ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            MessageBanner(_error!),
           ],
           const SizedBox(height: 16),
           AppButton(

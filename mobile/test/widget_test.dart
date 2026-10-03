@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/app.dart';
+import 'package:mobile/data/repositories/mock/mock_auth_repository.dart';
+
+/// Offline app: mock auth/profile, so no backend is needed.
+Widget _app() {
+  final mock = MockAuthRepository();
+  return TripMateApp(
+    useWebFonts: false,
+    authRepository: mock,
+    profileRepository: mock,
+  );
+}
 
 /// The async route redirect and the mock delays run on timers, so let fake
 /// time pass before settling frames.
@@ -19,7 +30,7 @@ void _tallPhone(WidgetTester tester) {
 
 Future<void> _logIn(WidgetTester tester) async {
   _tallPhone(tester);
-  await tester.pumpWidget(const TripMateApp(useWebFonts: false));
+  await tester.pumpWidget(_app());
   await _settle(tester);
   expect(find.text('Welcome back'), findsOneWidget);
 
@@ -31,7 +42,7 @@ Future<void> _logIn(WidgetTester tester) async {
 
 void main() {
   testWidgets('signed-out users land on the login page', (tester) async {
-    await tester.pumpWidget(const TripMateApp(useWebFonts: false));
+    await tester.pumpWidget(_app());
     await _settle(tester);
     expect(find.text('Welcome back'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);

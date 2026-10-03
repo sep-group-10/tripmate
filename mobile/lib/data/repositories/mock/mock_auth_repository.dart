@@ -1,12 +1,15 @@
 import 'dart:convert';
 
+import '../../api/api_exception.dart';
 import '../../mock/mock_delay.dart';
 import '../../mock/mock_trips.dart';
-import '../../models/chat_reply.dart';
 import '../../models/user.dart';
 import '../auth_repository.dart';
+import '../profile_repository.dart';
 
-class MockAuthRepository implements AuthRepository {
+/// In-memory auth and profile for tests and offline UI work. One instance can
+/// be passed as both the [AuthRepository] and the [ProfileRepository].
+class MockAuthRepository implements AuthRepository, ProfileRepository {
   final Map<String, String> _passwords = {
     MockAccount.user.email: MockAccount.password,
   };
@@ -15,9 +18,17 @@ class MockAuthRepository implements AuthRepository {
 
   User get _signedIn {
     final user = _current;
-    if (user == null) throw const RepositoryException('Not signed in');
+    if (user == null) {
+      throw const ApiException(
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      );
+    }
     return user;
   }
+
+  @override
+  Stream<void> get sessionExpired => const Stream.empty();
 
   @override
   Future<User?> currentUser() async {
@@ -30,7 +41,10 @@ class MockAuthRepository implements AuthRepository {
     await mockDelay(600);
     final key = email.trim().toLowerCase();
     if (_passwords[key] != password) {
-      throw const RepositoryException('Invalid email or password');
+      throw const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password',
+      );
     }
     return _current = _users[key]!;
   }
@@ -44,7 +58,10 @@ class MockAuthRepository implements AuthRepository {
     await mockDelay(600);
     final key = email.trim().toLowerCase();
     if (_users.containsKey(key)) {
-      throw const RepositoryException('Email is already registered');
+      throw const ApiException(
+        code: 'EMAIL_ALREADY_EXISTS',
+        message: 'Email is already registered',
+      );
     }
     _passwords[key] = password;
     _users[key] = User(
@@ -64,6 +81,12 @@ class MockAuthRepository implements AuthRepository {
   Future<void> signOut() async {
     await mockDelay(200);
     _current = null;
+  }
+
+  @override
+  Future<User> getProfile() async {
+    await mockDelay(200);
+    return _signedIn;
   }
 
   @override
@@ -96,7 +119,10 @@ class MockAuthRepository implements AuthRepository {
     await mockDelay(500);
     final email = _signedIn.email;
     if (_passwords[email] != currentPassword) {
-      throw const RepositoryException('Current password is incorrect');
+      throw const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        message: 'Current password is incorrect',
+      );
     }
     _passwords[email] = newPassword;
   }
@@ -106,11 +132,15 @@ class MockAuthRepository implements AuthRepository {
     await mockDelay(500);
     final user = _signedIn;
     return const JsonEncoder.withIndent('  ').convert({
-      'full_name': user.name,
-      'email': user.email,
-      'typical_budget_range': user.budgetStyle,
-      'preferred_pace': user.pace,
-      'interests': user.interests,
+      'profile': {
+        'full_name': user.name,
+        'email': user.email,
+        'typical_budget_range': user.budgetStyle,
+        'preferred_pace': user.pace,
+        'interests': user.interests,
+      },
+      'trips': <Object>[],
+      'feedback': <Object>[],
     });
   }
 
@@ -119,7 +149,10 @@ class MockAuthRepository implements AuthRepository {
     await mockDelay(500);
     final email = _signedIn.email;
     if (_passwords[email] != password) {
-      throw const RepositoryException('Password is incorrect');
+      throw const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        message: 'Current password is incorrect',
+      );
     }
     _passwords.remove(email);
     _users.remove(email);

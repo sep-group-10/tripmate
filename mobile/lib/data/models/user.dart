@@ -22,6 +22,21 @@ class User {
   final List<String> interests;
   final String? avatarUrl;
 
+  /// Maps a backend `UserResponse` (`GET /api/v1/users/me`). Missing
+  /// preferences fall back to the same defaults the web profile shows.
+  factory User.fromJson(Map<String, dynamic> json) => User(
+    id: json['id'] as String,
+    name: json['full_name'] as String,
+    email: json['email'] as String,
+    budgetStyle:
+        (json['typical_budget_range'] as String?)?.nonEmpty ?? 'Moderate',
+    pace: (json['preferred_pace'] as String?)?.nonEmpty ?? 'Relaxed',
+    interests:
+        (json['interests'] as List?)?.cast<String>() ??
+        const ['Culture', 'Nature', 'Food'],
+    avatarUrl: json['profile_picture_url'] as String?,
+  );
+
   User copyWith({
     String? name,
     String? budgetStyle,
@@ -43,4 +58,8 @@ class User {
     if (words.isEmpty) return '?';
     return words.take(2).map((w) => w[0]).join().toUpperCase();
   }
+}
+
+extension on String {
+  String? get nonEmpty => isEmpty ? null : this;
 }

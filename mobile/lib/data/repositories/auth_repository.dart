@@ -1,8 +1,10 @@
 import '../models/user.dart';
 
-/// Methods throw [RepositoryException] with a message safe to show.
+/// Account session. Methods throw [ApiException] (a [RepositoryException])
+/// carrying the backend's error code, message and field details.
 abstract class AuthRepository {
-  /// The signed-in user, or null when signed out.
+  /// The signed-in user (restoring the session from stored tokens on first
+  /// use), or null when signed out.
   Future<User?> currentUser();
 
   Future<User> signIn({required String email, required String password});
@@ -17,23 +19,17 @@ abstract class AuthRepository {
 
   Future<void> requestPasswordReset(String email);
 
+  /// Revokes the session on the server (best effort) and clears local tokens.
   Future<void> signOut();
-
-  Future<User> updateName(String fullName);
-
-  Future<User> updatePreferences({
-    required String budgetStyle,
-    required String pace,
-    required List<String> interests,
-  });
 
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
   });
 
-  /// JSON text of everything held about the account.
-  Future<String> exportData();
-
   Future<void> deleteAccount({required String password});
+
+  /// Fires when the session expired and could not be refreshed, so the UI
+  /// should return to the login page.
+  Stream<void> get sessionExpired;
 }

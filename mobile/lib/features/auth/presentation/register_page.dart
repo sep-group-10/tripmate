@@ -8,6 +8,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/auth_scaffold.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/form_input.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../data/repositories/auth_repository.dart';
 
 /// Mirrors web/src/pages/RegisterPage.jsx.
@@ -26,6 +27,11 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _submitting = false;
   String? _error;
 
+  // Server-side field errors from a VALIDATION_ERROR's details.
+  String? _fullNameError;
+  String? _emailError;
+  String? _passwordError;
+
   @override
   void dispose() {
     _fullName.dispose();
@@ -39,6 +45,7 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() {
       _submitting = true;
       _error = null;
+      _fullNameError = _emailError = _passwordError = null;
     });
     final email = _email.text.trim();
     try {
@@ -49,12 +56,22 @@ class _RegisterPageState extends State<RegisterPage> {
       );
       if (mounted) context.go('/check-inbox', extra: email);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        if (e is ApiException &&
+            e.code == 'VALIDATION_ERROR' &&
+            e.details.isNotEmpty) {
+          // Map the backend's field names to this form's fields.
+          _fullNameError = e.detailFor('full_name');
+          _emailError = e.detailFor('email');
+          _passwordError = e.detailFor('password');
+        } else {
+          // EMAIL_ALREADY_EXISTS and anything else (network error,
+          // unexpected server error) with the backend's own message.
           _error = '$e';
-        });
-      }
+        }
+      });
     }
   }
 
@@ -86,6 +103,7 @@ class _RegisterPageState extends State<RegisterPage> {
               hint: 'Alex Jordan',
               autofillHints: const [AutofillHints.name],
               validator: validateFullName,
+              errorText: _fullNameError,
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 14),
@@ -96,6 +114,7 @@ class _RegisterPageState extends State<RegisterPage> {
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
               validator: validateEmail,
+              errorText: _emailError,
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 14),
@@ -106,6 +125,7 @@ class _RegisterPageState extends State<RegisterPage> {
               obscure: true,
               autofillHints: const [AutofillHints.newPassword],
               validator: validatePassword,
+              errorText: _passwordError,
               onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 22),

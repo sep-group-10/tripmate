@@ -11,8 +11,10 @@ import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/form_input.dart';
 import '../../../core/widgets/mono_labels.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../data/api/api_exception.dart';
 import '../../../data/models/user.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/profile_repository.dart';
 
 const _budgetOptions = ['Budget', 'Moderate', 'Luxury'];
 const _paceOptions = ['Relaxed', 'Balanced', 'Packed'];
@@ -45,6 +47,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _savingProfile = false;
   bool _savedProfile = false;
   String? _saveError;
+  String? _fullNameError;
 
   final _passwordKey = GlobalKey<FormState>();
   final _currentPassword = TextEditingController();
@@ -92,12 +95,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _load() async {
     try {
-      final user = await context.read<AuthRepository>().currentUser();
+      final user = await context.read<ProfileRepository>().getProfile();
       if (!mounted) return;
-      if (user == null) {
-        context.go('/login');
-        return;
-      }
       setState(() {
         _apply(user);
         _loading = false;
@@ -124,9 +123,10 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() {
       _savingProfile = true;
       _saveError = null;
+      _fullNameError = null;
     });
     try {
-      final user = await context.read<AuthRepository>().updateName(
+      final user = await context.read<ProfileRepository>().updateName(
         _fullName.text,
       );
       if (!mounted) return;
@@ -136,12 +136,18 @@ class _ProfilePageState extends State<ProfilePage> {
       });
       _flash((v) => _savedProfile = v);
     } catch (e) {
-      if (mounted) {
-        setState(() {
+      if (!mounted) return;
+      setState(() {
+        _savingProfile = false;
+        if (e is ApiException &&
+            e.code == 'VALIDATION_ERROR' &&
+            e.details.isNotEmpty) {
+          _fullNameError = e.detailFor('full_name');
+          _saveError = _fullNameError == null ? '$e' : null;
+        } else {
           _saveError = '$e';
-          _savingProfile = false;
-        });
-      }
+        }
+      });
     }
   }
 
@@ -172,12 +178,19 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() => _savingPassword = false);
       _flash((v) => _savedPassword = v);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _currentPasswordError = '$e';
-          _savingPassword = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _savingPassword = false;
+        if (e is ApiException && e.code == 'INVALID_CREDENTIALS') {
+          _currentPasswordError = e.message;
+        } else if (e is ApiException &&
+            e.code == 'VALIDATION_ERROR' &&
+            e.details.isNotEmpty) {
+          _newPasswordError = e.detailFor('new_password') ?? e.message;
+        } else {
+          _newPasswordError = '$e';
+        }
+      });
     }
   }
 
@@ -189,7 +202,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _prefsError = null;
     });
     try {
-      final user = await context.read<AuthRepository>().updatePreferences(
+      final user = await context.read<ProfileRepository>().updatePreferences(
         budgetStyle: _budget,
         pace: _pace,
         interests: _interests,
@@ -216,7 +229,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _exportError = null;
     });
     try {
-      final json = await context.read<AuthRepository>().exportData();
+      final json = await context.read<ProfileRepository>().exportData();
       if (!mounted) return;
       setState(() => _exporting = false);
       await showDialog<void>(
@@ -324,6 +337,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       label: 'Full name',
                       controller: _fullName,
                       validator: validateFullName,
+                      errorText: _fullNameError,
                     ),
                     const SizedBox(height: 16),
                     FormInput(
