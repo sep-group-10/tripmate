@@ -387,7 +387,13 @@ def create_planning_graph():
     graph_builder.add_node("critic", critic_node)
 
     graph_builder.add_edge(START, "planner")
-    graph_builder.add_edge("planner", "tool_execution")
+    graph_builder.add_conditional_edges(
+        "planner",
+        lambda state: "end"
+        if state.get("planner_decision") and state["planner_decision"].edit_plan
+        else "tool_execution",
+        {"end": END, "tool_execution": "tool_execution"},
+    )
     graph_builder.add_edge("critic_continuation_planner", "tool_execution")
     graph_builder.add_edge("tool_execution", "planning_state_validation")
     graph_builder.add_conditional_edges(

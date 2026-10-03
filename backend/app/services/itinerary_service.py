@@ -5,13 +5,37 @@ from datetime import date, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.itinerary import Itinerary
 from app.models.itinerary_day import ItineraryDay
 from app.models.itinerary_day_item import ItineraryDayItem
 from app.models.trip import Trip
-from app.schemas.chat import ChatItinerary
+from app.schemas.chat import ChatItinerary, ChatItineraryItem
+
+
+def _latest_itinerary(db: Session, trip_id: uuid.UUID) -> Itinerary | None:
+    """Prefer numbered revisions; retain timestamp/UUID fallback for legacy rows."""
+    return (
+        db.query(Itinerary)
+        .filter(Itinerary.trip_id == trip_id)
+        .order_by(
+            Itinerary.revision_number.desc().nullslast(),
+            Itinerary.created_at.desc(),
+            Itinerary.id.desc(),
+        )
+        .first()
+    )
+
+
+def _next_revision_number(db: Session, trip_id: uuid.UUID) -> int:
+    current = (
+        db.query(func.max(Itinerary.revision_number))
+        .filter(Itinerary.trip_id == trip_id)
+        .scalar()
+    )
+    return (current or 0) + 1
 
 
 def _estimated_cost(cost_estimate: dict[str, Any] | None) -> Decimal:
@@ -51,7 +75,13 @@ def persist_chat_itinerary(
     saves without adding another ORM savepoint to the caller's Session. The
     caller remains responsible for committing its surrounding transaction.
     """
-    trip = db.get(Trip, trip_id)
+    trip = (
+        db.query(Trip)
+        .filter(Trip.id == trip_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if trip is None:
         raise ValueError("Trip does not exist")
 
@@ -63,6 +93,7 @@ def persist_chat_itinerary(
     with db.connection().begin_nested():
         record = Itinerary(
             trip_id=trip_id,
+            revision_number=_next_revision_number(db, trip_id),
             total_estimated_cost=_estimated_cost(cost_estimate),
         )
         db.add(record)
@@ -94,3 +125,193 @@ def persist_chat_itinerary(
         db.flush()
 
     return record
+
+
+def persist_removed_chat_item(
+    db: Session,
+    trip_id: uuid.UUID,
+    source_itinerary_id: uuid.UUID,
+    target_item_id: uuid.UUID,
+) -> Itinerary:
+    """Persist a REMOVE revision while copying every unaffected stored field."""
+    # Lock the trip to serialize revision writes, then lock the requested
+    # source row before checking whether it is still current.
+    trip = (
+        db.query(Trip)
+        .filter(Trip.id == trip_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    source = (
+        db.query(Itinerary)
+        .filter(Itinerary.id == source_itinerary_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if source is None or source.trip_id != trip_id or trip is None:
+        raise ValueError("Current itinerary does not exist for this trip")
+    latest = _latest_itinerary(db, trip_id)
+    if latest is None or latest.id != source_itinerary_id:
+        raise ValueError("Current itinerary changed before the edit was saved")
+
+    source_days = (
+        db.query(ItineraryDay)
+        .filter(ItineraryDay.itinerary_id == source.id)
+        .order_by(ItineraryDay.day_number, ItineraryDay.id)
+        .all()
+    )
+    with db.connection().begin_nested():
+        revision = Itinerary(
+            trip_id=trip_id,
+            revision_number=_next_revision_number(db, trip_id),
+            total_estimated_cost=source.total_estimated_cost,
+            route_info=source.route_info,
+            weather_info=source.weather_info,
+        )
+        db.add(revision)
+        db.flush()
+        found_target = False
+        for source_day in source_days:
+            day = ItineraryDay(
+                itinerary_id=revision.id,
+                day_number=source_day.day_number,
+                date=source_day.date,
+                title=source_day.title,
+                summary=source_day.summary,
+            )
+            db.add(day)
+            db.flush()
+            source_items = (
+                db.query(ItineraryDayItem)
+                .filter(ItineraryDayItem.itinerary_day_id == source_day.id)
+                .order_by(ItineraryDayItem.sort_order, ItineraryDayItem.id)
+                .all()
+            )
+            next_order = 0
+            for item in sorted(
+                source_items,
+                key=lambda item: item.start_time or time.min,
+            ):
+                if item.id == target_item_id:
+                    found_target = True
+                    continue
+                db.add(
+                    ItineraryDayItem(
+                        itinerary_day_id=day.id,
+                        item_type=item.item_type,
+                        title=item.title,
+                        description=item.description,
+                        start_time=item.start_time,
+                        end_time=item.end_time,
+                        location=item.location,
+                        estimated_cost=item.estimated_cost,
+                        sort_order=next_order,
+                    )
+                )
+                next_order += 1
+        if not found_target:
+            raise ValueError("Target item is not in the current itinerary")
+        trip.status = "generated"
+        db.flush()
+    return revision
+
+
+def persist_added_chat_item(
+    db: Session,
+    trip_id: uuid.UUID,
+    source_itinerary_id: uuid.UUID,
+    day_number: int,
+    item: ChatItineraryItem,
+    destination: str | None = None,
+) -> ItineraryDayItem:
+    """Atomically add one item to the latest itinerary, preserving existing rows."""
+    trip = (
+        db.query(Trip)
+        .filter(Trip.id == trip_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    source = db.get(Itinerary, source_itinerary_id)
+    if source is None or source.trip_id != trip_id or trip is None:
+        raise ValueError("Current itinerary does not exist for this trip")
+    latest = _latest_itinerary(db, trip_id)
+    if latest is None or latest.id != source_itinerary_id:
+        raise ValueError("Current itinerary changed before the edit was saved")
+
+    day = (
+        db.query(ItineraryDay)
+        .filter(
+            ItineraryDay.itinerary_id == source.id,
+            ItineraryDay.day_number == day_number,
+        )
+        .first()
+    )
+    if day is None:
+        raise ValueError("Target itinerary day does not exist")
+
+    start_time = time.fromisoformat(item.start_time)
+    end_time = time.fromisoformat(item.end_time)
+    if end_time <= start_time:
+        raise ValueError("Added itinerary item has an invalid time range")
+    if (
+        item.duration_minutes is not None
+        and (end_time.hour * 60 + end_time.minute)
+        - (start_time.hour * 60 + start_time.minute)
+        != item.duration_minutes
+    ):
+        raise ValueError("Added itinerary item duration does not match its time range")
+
+    day_items = (
+        db.query(ItineraryDayItem)
+        .filter(ItineraryDayItem.itinerary_day_id == day.id)
+        .all()
+    )
+    intervals = [
+        (existing.start_time, existing.end_time)
+        for existing in day_items
+        if existing.start_time is not None and existing.end_time is not None
+    ]
+    intervals.append((start_time, end_time))
+    intervals.sort(key=lambda interval: (interval[0], interval[1]))
+    if any(
+        end <= start or (previous_end is not None and start < previous_end)
+        for previous_end, (start, end) in _with_previous_end(intervals)
+    ):
+        raise ValueError("Added itinerary item overlaps an existing item")
+    if len(intervals) != len(day_items) + 1:
+        raise ValueError("Existing itinerary item is missing a valid time range")
+
+    added = ItineraryDayItem(
+        itinerary_day_id=day.id,
+        item_type=item.category,
+        title=item.name,
+        start_time=start_time,
+        end_time=end_time,
+        location=destination,
+        sort_order=0,
+    )
+    ordered_items = sorted(
+        [*day_items, added],
+        key=lambda existing: (
+            existing.start_time or time.min,
+            existing.end_time or time.max,
+        ),
+    )
+    with db.connection().begin_nested():
+        db.add(added)
+        for sort_order, existing in enumerate(ordered_items):
+            existing.sort_order = sort_order
+        db.flush()
+        trip.status = "generated"
+        db.flush()
+    return added
+
+
+def _with_previous_end(intervals: list[tuple[time, time]]):
+    previous_end = None
+    for interval in intervals:
+        yield previous_end, interval
+        previous_end = interval[1]
