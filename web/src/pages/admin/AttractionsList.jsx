@@ -23,6 +23,7 @@ function AttractionsList() {
     updateAttraction,
     deleteAttraction,
     addAttractionPhoto,
+    deleteAttractionPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -286,6 +287,11 @@ function AttractionsList() {
           onUploadPhoto={
             editingRecord
               ? (file) => addAttractionPhoto(editingRecord.id, file)
+              : undefined
+          }
+          onDeletePhoto={
+            editingRecord
+              ? (photoUrl) => deleteAttractionPhoto(editingRecord.id, photoUrl)
               : undefined
           }
           submitting={formSubmitting}

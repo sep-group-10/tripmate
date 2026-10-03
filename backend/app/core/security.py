@@ -16,6 +16,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS = 24
 PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 15
+ADMIN_INVITE_TOKEN_EXPIRE_HOURS = 48
 
 ACCESS_TOKEN_COOKIE_NAME = "access_token"
 REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
@@ -96,6 +97,18 @@ def generate_password_reset_token() -> tuple[str, datetime]:
     stored directly like the verification token, not hashed."""
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    return secrets.token_urlsafe(32), expires_at
+
+
+def generate_admin_invite_token() -> tuple[str, datetime]:
+    """Create a random admin-invite token. Returns (token, expires_at) -
+    stored directly like the verification token, not hashed. Reuses the
+    User model's password_reset_token/reset_token_expiry columns, so the
+    invited admin sets their password through the existing
+    reset-password flow."""
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=ADMIN_INVITE_TOKEN_EXPIRE_HOURS
     )
     return secrets.token_urlsafe(32), expires_at
 

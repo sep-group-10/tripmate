@@ -4,22 +4,28 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import extract, func
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, aliased
 
 from app.core.database import get_db
-from app.core.dependencies import require_role
+from app.core.dependencies import get_current_user, require_role
 from app.core.errors import ApiError, ErrorCode
 from app.core.roles import Role
+from app.core.security import generate_admin_invite_token
 from app.models.activity_log import ActivityLog
 from app.models.destination import Destination
 from app.models.feedback import Feedback
 from app.models.trip import Trip
 from app.models.user import User
+from app.routers.auth import _frontend_base_url
 from app.schemas.admin import (
     ActivityEntry,
+    AdminCreateData,
+    AdminCreateRequest,
     AdminStats,
+    AdminStatusUpdate,
+    FeedbackResolveRequest,
     FeedbackResponse,
-    FeedbackStatusUpdate,
     MonthPoint,
     TripsGrowthData,
     UserListData,
@@ -27,6 +33,8 @@ from app.schemas.admin import (
 )
 from app.schemas.common import ApiResponse
 from app.services.activity_log import log_activity
+from app.services.email import send_email
+from app.services.email_templates import admin_invite_email
 
 
 def _add_months(base: date, months: int) -> date:
@@ -162,16 +170,40 @@ def list_admin_users(
     }
 
 
+def _feedback_response(
+    feedback: Feedback, author_name: str, resolver_name: str | None
+) -> FeedbackResponse:
+    return FeedbackResponse(
+        id=feedback.id,
+        user_id=feedback.user_id,
+        user_name=author_name,
+        rating=feedback.rating,
+        comment=feedback.comment,
+        status=feedback.status,
+        resolution_outcome=feedback.resolution_outcome,
+        resolution_note=feedback.resolution_note,
+        resolved_by_name=resolver_name,
+        resolved_at=feedback.resolved_at,
+        created_at=feedback.created_at,
+    )
+
+
 @router.get("/feedback", response_model=ApiResponse[list[FeedbackResponse]])
 def list_admin_feedback(
     status_filter: str | None = Query(default=None, alias="status"),
     q: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Feedback list for the Feedback admin page. Joined against User for
-    the reviewer's display name - Feedback itself has no destination link,
+    """Feedback list for the Feedback admin page. Joined against User
+    twice - once for the reviewer's display name, once for whoever
+    resolved it (if anyone) - Feedback itself has no destination link,
     so that field is intentionally absent from the response."""
-    query = db.query(Feedback, User.full_name).join(User, Feedback.user_id == User.id)
+    Resolver = aliased(User)
+    query = (
+        db.query(Feedback, User.full_name, Resolver.full_name)
+        .join(User, Feedback.user_id == User.id)
+        .outerjoin(Resolver, Feedback.resolved_by == Resolver.id)
+    )
 
     if status_filter:
         query = query.filter(Feedback.status == status_filter)
@@ -184,37 +216,41 @@ def list_admin_feedback(
 
     return ApiResponse(
         data=[
-            FeedbackResponse(
-                id=feedback.id,
-                user_id=feedback.user_id,
-                user_name=full_name,
-                rating=feedback.rating,
-                comment=feedback.comment,
-                status=feedback.status,
-                created_at=feedback.created_at,
-            )
-            for feedback, full_name in rows
+            _feedback_response(feedback, author_name, resolver_name)
+            for feedback, author_name, resolver_name in rows
         ]
     )
 
 
-@router.patch("/feedback/{feedback_id}", response_model=ApiResponse[FeedbackResponse])
-def update_feedback_status(
-    feedback_id: uuid.UUID,
-    payload: FeedbackStatusUpdate,
-    db: Session = Depends(get_db),
-):
-    feedback = (
-        db.query(Feedback, User.full_name)
-        .join(User, Feedback.user_id == User.id)
-        .filter(Feedback.id == feedback_id)
-        .first()
-    )
+def _get_feedback_or_404(db: Session, feedback_id: uuid.UUID) -> Feedback:
+    feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
     if feedback is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Feedback not found")
+    return feedback
 
-    entry, full_name = feedback
-    entry.status = payload.status
+
+@router.patch(
+    "/feedback/{feedback_id}/resolve", response_model=ApiResponse[FeedbackResponse]
+)
+def resolve_feedback(
+    feedback_id: uuid.UUID,
+    payload: FeedbackResolveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark a feedback entry resolved with a saved outcome label - a
+    plain record of how it was handled, with no side effects on any
+    other data (no restaurant/attraction record is touched). Available
+    to Admin and Super Admin alike, since Admin is who actually manages
+    the tourism data most feedback is about."""
+    entry = _get_feedback_or_404(db, feedback_id)
+    author = db.query(User.full_name).filter(User.id == entry.user_id).scalar()
+
+    entry.status = "resolved"
+    entry.resolution_outcome = payload.outcome
+    entry.resolution_note = payload.note
+    entry.resolved_by = current_user.id
+    entry.resolved_at = datetime.now(timezone.utc)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -222,18 +258,199 @@ def update_feedback_status(
     log_activity(
         db,
         "Feedback",
-        f"Feedback marked {entry.status}",
-        f"{full_name} · {entry.rating} stars",
+        f"Feedback resolved: {entry.resolution_outcome}",
+        f"{author} · {entry.rating} stars",
     )
 
+    return ApiResponse(data=_feedback_response(entry, author, current_user.full_name))
+
+
+@router.patch(
+    "/feedback/{feedback_id}/reopen", response_model=ApiResponse[FeedbackResponse]
+)
+def reopen_feedback(
+    feedback_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Undo a resolution, putting the entry back in the pending queue."""
+    entry = _get_feedback_or_404(db, feedback_id)
+    author = db.query(User.full_name).filter(User.id == entry.user_id).scalar()
+
+    entry.status = "pending"
+    entry.resolution_outcome = None
+    entry.resolution_note = None
+    entry.resolved_by = None
+    entry.resolved_at = None
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    log_activity(
+        db, "Feedback", "Feedback reopened", f"{author} · {entry.rating} stars"
+    )
+
+    return ApiResponse(data=_feedback_response(entry, author, None))
+
+
+@router.delete(
+    "/feedback/{feedback_id}",
+    response_model=ApiResponse[dict],
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def delete_feedback(
+    feedback_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Permanently remove a feedback entry. Super-admin-only - deleting
+    loses data, so it needs the higher role, unlike resolving it."""
+    entry = _get_feedback_or_404(db, feedback_id)
+    author = db.query(User.full_name).filter(User.id == entry.user_id).scalar()
+
+    db.delete(entry)
+    db.commit()
+
+    log_activity(db, "Feedback", "Feedback deleted", f"{author} · {entry.rating} stars")
+
+    return ApiResponse(data={})
+
+
+@router.get(
+    "/admins",
+    response_model=UserListResponse,
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def list_admins(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=50),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Paginated list of admin/super-admin accounts, for the super
+    admin's "Manage admins" page. Super-admin-only."""
+    query = db.query(User).filter(
+        User.role.in_([Role.ADMIN.value, Role.SUPER_ADMIN.value])
+    )
+
+    if q:
+        like = f"%{q}%"
+        query = query.filter(User.full_name.ilike(like) | User.email.ilike(like))
+
+    total = query.count()
+    total_pages = math.ceil(total / limit) if total else 0
+
+    admins = (
+        query.order_by(User.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "success": True,
+        "data": UserListData(
+            items=admins,
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+        ),
+    }
+
+
+@router.post(
+    "/admins",
+    response_model=ApiResponse[AdminCreateData],
+    status_code=201,
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def create_admin(
+    payload: AdminCreateRequest,
+    db: Session = Depends(get_db),
+):
+    """Create a new ADMIN account with no password set. The system has
+    exactly one super admin, so this never creates one. Emails the new
+    admin an invite link to set their password through the existing
+    reset-password flow. Super-admin-only."""
+    existing_user = db.query(User).filter(User.email == payload.email).first()
+    if existing_user is not None:
+        raise ApiError(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered")
+
+    user = User(
+        full_name=payload.full_name,
+        email=payload.email,
+        role=Role.ADMIN.value,
+        is_active=True,
+        is_email_verified=True,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(
+            ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered"
+        ) from exc
+    db.refresh(user)
+
+    token, expires_at = generate_admin_invite_token()
+    user.password_reset_token = token
+    user.reset_token_expiry = expires_at
+    db.add(user)
+    db.commit()
+
+    link = f"{_frontend_base_url()}/reset-password?token={token}"
+    subject, body = admin_invite_email(link)
+    send_email(user.email, subject, body)
+
+    log_activity(db, "Admin", f"{user.full_name} added as {user.role}", user.email)
+
     return ApiResponse(
-        data=FeedbackResponse(
-            id=entry.id,
-            user_id=entry.user_id,
-            user_name=full_name,
-            rating=entry.rating,
-            comment=entry.comment,
-            status=entry.status,
-            created_at=entry.created_at,
+        data=AdminCreateData(
+            email=user.email,
+            message="Admin account created. An invite email has been sent.",
         )
     )
+
+
+@router.patch(
+    "/admins/{admin_id}/status",
+    response_model=ApiResponse[dict],
+    dependencies=[Depends(require_role(Role.SUPER_ADMIN))],
+)
+def update_admin_status(
+    admin_id: uuid.UUID,
+    payload: AdminStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Activate or deactivate an admin account. A super admin cannot act
+    on their own account (lockout risk) or on another super admin's -
+    only ADMIN-role accounts can be deactivated this way."""
+    target = (
+        db.query(User)
+        .filter(
+            User.id == admin_id,
+            User.role.in_([Role.ADMIN.value, Role.SUPER_ADMIN.value]),
+        )
+        .first()
+    )
+    if target is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Admin not found")
+
+    if target.id == current_user.id:
+        raise ApiError(
+            ErrorCode.FORBIDDEN, "You cannot change your own account's status"
+        )
+    if target.role == Role.SUPER_ADMIN.value:
+        raise ApiError(
+            ErrorCode.FORBIDDEN, "Super admin accounts cannot be changed this way"
+        )
+
+    target.is_active = payload.is_active
+    db.add(target)
+    db.commit()
+
+    action = "activated" if payload.is_active else "deactivated"
+    log_activity(db, "Admin", f"{target.full_name} {action}", target.email)
+
+    return ApiResponse(data={})

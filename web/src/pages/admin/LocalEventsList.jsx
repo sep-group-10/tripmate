@@ -23,6 +23,7 @@ function LocalEventsList() {
     updateLocalEvent,
     deleteLocalEvent,
     addLocalEventPhoto,
+    deleteLocalEventPhoto,
   } = useTourismData();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -279,6 +280,11 @@ function LocalEventsList() {
           onUploadPhoto={
             editingRecord
               ? (file) => addLocalEventPhoto(editingRecord.id, file)
+              : undefined
+          }
+          onDeletePhoto={
+            editingRecord
+              ? (photoUrl) => deleteLocalEventPhoto(editingRecord.id, photoUrl)
               : undefined
           }
           submitting={formSubmitting}

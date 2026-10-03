@@ -121,6 +121,39 @@ def admin_client(client, db_session):
 
 
 @pytest.fixture
+def superadmin_client(client, db_session):
+    """FastAPI test client authenticated as a Super Admin user."""
+
+    superadmin = User(
+        full_name="Tourism Test Super Admin",
+        email="tourism-superadmin@example.com",
+        password_hash=hash_password("superadminpassword123"),
+        role="SUPER_ADMIN",
+        is_email_verified=True,
+    )
+
+    db_session.add(superadmin)
+    db_session.commit()
+    db_session.refresh(superadmin)
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": superadmin.email,
+            "password": "superadminpassword123",
+        },
+    )
+
+    assert response.status_code == 200
+
+    token = response.json()["data"]["access_token"]
+
+    client.headers.update({"Authorization": f"Bearer {token}"})
+
+    return client
+
+
+@pytest.fixture
 def existing_user(db_session):
     """A single pre-created user for tests that need a real account."""
     user = User(

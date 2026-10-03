@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import uuid
+from urllib.parse import urlsplit
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -83,3 +84,53 @@ def upload_image(file: UploadFile, key_prefix: str) -> str:
         ) from None
 
     return f"https://{cloudfront_domain}/{key}"
+
+
+def delete_image(url: str, key_prefix: str) -> None:
+    """Delete one image only when its URL belongs to this app's CDN and
+    the requested entity's upload directory."""
+    bucket = os.getenv("AWS_S3_BUCKET")
+    region = os.getenv("AWS_S3_REGION")
+    cloudfront_domain = os.getenv("AWS_CLOUDFRONT_DOMAIN")
+    if not bucket or not region or not cloudfront_domain:
+        logger.error("S3/CloudFront environment variables are not configured")
+        raise ApiError(
+            ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE,
+            "Image storage is not available right now",
+        )
+
+    parsed = urlsplit(url)
+    expected_domain = (
+        cloudfront_domain.removeprefix("https://").removeprefix("http://").rstrip("/")
+    )
+    expected_prefix = f"/{key_prefix}/"
+    filename = (
+        parsed.path[len(expected_prefix) :]
+        if parsed.path.startswith(expected_prefix)
+        else ""
+    )
+    try:
+        uuid.UUID(filename.removesuffix(".jpg"))
+    except (ValueError, AttributeError):
+        filename = ""
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != expected_domain
+        or parsed.query
+        or parsed.fragment
+        or not filename.endswith(".jpg")
+        or "/" in filename
+    ):
+        raise ApiError(ErrorCode.VALIDATION_ERROR, "Invalid photo URL")
+
+    client = boto3.client("s3", region_name=region)
+    try:
+        client.delete_object(Bucket=bucket, Key=f"{key_prefix}/{filename}")
+    except (BotoCoreError, ClientError):
+        logger.exception(
+            "Failed to delete image from S3: key=%s/%s", key_prefix, filename
+        )
+        raise ApiError(
+            ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE,
+            "Image storage is not available right now",
+        ) from None

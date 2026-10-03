@@ -34,6 +34,8 @@
 | 10 | Assign/change user roles | Denied | Denied | Allowed |
 | 11 | View analytics/reports | Denied | Denied | Allowed |
 | 12 | Export data/reports | Denied | Denied | Allowed |
+| 13 | View/resolve feedback | Denied | Allowed | Allowed |
+| 14 | Delete feedback | Denied | Denied | Allowed |
 
 ---
 
@@ -41,4 +43,5 @@
 
 - Every protected endpoint must check the caller's role against this table before executing the action.
 - Row 10 (assign roles) is Super Admin only. If Admin could assign roles, an Admin account could escalate itself or anyone else to Super Admin — a security hole.
-- Admin has no read access to trips, feedback, or users (rows 3, 5, 6, 9) — this is intentional, not an oversight. Admin's scope is strictly tourism data.
+- Admin has no read access to trips or users (rows 3, 6, 9) — this is intentional, not an oversight. Admin's scope is strictly tourism data, plus resolving feedback (row 13): most feedback reports a tourism-data problem (e.g. a restaurant's listed hours), so Admin is who actually fixes it. Routing every report through Super Admin first would be slow.
+- Row 14 (delete feedback) is Super Admin only. Deleting loses data permanently, so it needs the higher role; resolving (row 13) does not delete anything and is reversible (an entry can be reopened), so it doesn't need the same bar.
