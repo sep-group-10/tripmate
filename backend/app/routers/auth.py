@@ -16,6 +16,7 @@ from app.core.rate_limit import limiter
 from app.core.security import (
     ACCESS_TOKEN_COOKIE_NAME,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    COOKIE_SAMESITE,
     COOKIE_SECURE,
     JWT_ALGORITHM,
     JWT_SECRET_KEY,
@@ -62,7 +63,7 @@ def _issue_access_token_cookie(response: Response, access_token: str) -> None:
         value=access_token,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
@@ -75,7 +76,7 @@ def _issue_refresh_token_cookie(response: Response, refresh_token: str) -> None:
         value=refresh_token,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,  # 7 days in seconds
     )
 
@@ -426,13 +427,13 @@ def logout(
         key=ACCESS_TOKEN_COOKIE_NAME,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE_NAME,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
     return ApiResponse(data={})
 
@@ -555,12 +556,12 @@ def delete_account(
         key=ACCESS_TOKEN_COOKIE_NAME,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE_NAME,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
     return ApiResponse(data={})

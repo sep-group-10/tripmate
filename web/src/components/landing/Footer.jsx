@@ -33,7 +33,7 @@ function Footer() {
               Sign up
             </Link>
             <a
-              href="https://github.com/tripmate"
+              href="https://github.com/sep-group-10/tripmate"
               className="flex items-center gap-1.5 text-muted-700"
             >
               <GitFork size={16} aria-hidden="true" />
@@ -41,9 +41,18 @@ function Footer() {
             </a>
           </div>
         </div>
-        <div className="flex flex-wrap justify-between gap-4 border-t border-divider pt-5 text-sm text-muted-600">
-          <span>University project, University of Moratuwa</span>
-          <span className="num">© 2026 TripMate</span>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-divider pt-5 text-sm text-muted-600">
+          <span>
+            © <span className="num">2026</span> TripMate. All rights reserved.
+          </span>
+          <div className="flex flex-wrap items-center gap-6">
+            <Link to="/terms" className="text-muted-600">
+              Terms of Service
+            </Link>
+            <Link to="/privacy" className="text-muted-600">
+              Privacy Policy
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
