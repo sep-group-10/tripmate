@@ -306,6 +306,7 @@ function ProfilePage() {
                 src={profilePictureUrl}
                 alt=""
                 className="h-[60px] w-[60px] flex-none rounded-pill object-cover"
+                loading="lazy"
               />
             ) : (
               <span className="flex h-[60px] w-[60px] flex-none items-center justify-center rounded-pill bg-accent-100 text-xl font-semibold tracking-wide text-accent-700">
