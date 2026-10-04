@@ -3,7 +3,7 @@ set -euo pipefail
 
 SSM_PATH="/tripmate/prod/"
 REGION="ap-south-1"
-OUT_FILE=".env.production"
+OUT_FILE="/opt/tripmate/.env.production"
 
 TMP_FILE="$(mktemp)"
 trap 'rm -f "$TMP_FILE"' EXIT
