@@ -153,7 +153,7 @@ switch_traffic() {
     cp "$CURRENT_TAG_FILE" "$PREVIOUS_TAG_FILE"
   fi
 
-  "$SWITCH_BACKEND_SCRIPT" "$TARGET_PORT"
+  sudo "$SWITCH_BACKEND_SCRIPT" "$TARGET_PORT"
 
   echo "$NEW_TAG" > "$CURRENT_TAG_FILE"
 }
