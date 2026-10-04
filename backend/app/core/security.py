@@ -23,6 +23,11 @@ REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
 # Secure cookies are only sent over HTTPS. Local dev runs on plain HTTP,
 # so the Secure flag is only forced on outside of development.
 COOKIE_SECURE = os.getenv("ENVIRONMENT", "development") != "development"
+# SameSite=Lax cookies are withheld on cross-site requests, which breaks
+# the production deployment (frontend and backend on different domains).
+# SameSite=None fixes that but requires Secure=True, which COOKIE_SECURE
+# already guarantees outside of local dev.
+COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
 
 
 def validate_password_strength(password: str) -> None:
