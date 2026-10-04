@@ -11,8 +11,8 @@ function EntityPhotoCarousel({ photoUrls, name }) {
 
   if (photos.length === 0) {
     return (
-      <div className="-mx-5 -mt-5 flex aspect-video items-center justify-center rounded-t-lg bg-muted-200">
-        <ImageOff size={24} aria-hidden="true" className="text-muted-400" />
+      <div className="-mx-5 -mt-5 flex aspect-video items-center justify-center rounded-t-lg border-b border-border bg-muted-300">
+        <ImageOff size={24} aria-hidden="true" className="text-muted-500" />
       </div>
     );
   }
@@ -28,6 +28,7 @@ function EntityPhotoCarousel({ photoUrls, name }) {
         src={photos[index]}
         alt={name ? `${name} photo ${index + 1}` : ""}
         className="h-full w-full object-cover"
+        loading="lazy"
       />
 
       {photos.length > 1 && (

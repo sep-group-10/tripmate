@@ -263,6 +263,7 @@ function EntityFormModal({
                       src={url}
                       alt=""
                       className="aspect-square w-full rounded-lg object-cover"
+                      loading="lazy"
                     />
                     {onDeletePhoto && (
                       <button

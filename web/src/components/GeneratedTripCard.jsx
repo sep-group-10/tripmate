@@ -81,6 +81,7 @@ function GeneratedTripCard({
             src={trip.coverImageUrl}
             alt=""
             className="h-full w-full object-cover"
+            loading="lazy"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[repeating-linear-gradient(135deg,var(--color-bg)_0_7px,rgba(23,25,26,0.05)_7px_8px)] font-mono text-caption tracking-wider text-muted-500 uppercase">

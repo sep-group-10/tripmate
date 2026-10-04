@@ -17,7 +17,9 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     api
-      .get("/api/v1/users/me")
+      // _skipRefresh: a 401 here just means "not logged in" - the normal
+      // case for a fresh visitor - so skip the interceptor's refresh-retry.
+      .get("/api/v1/users/me", { _skipRefresh: true })
       .then((response) => {
         if (cancelled) return;
         const me = response.data.data;

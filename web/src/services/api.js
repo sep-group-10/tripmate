@@ -39,8 +39,18 @@ api.interceptors.response.use(
     const isPublicAuthCall = PUBLIC_AUTH_PATHS.includes(error.config?.url);
     // True once this request was already retried, so it can't loop forever.
     const alreadyRetried = error.config?._retry;
+    // Set only on AuthContext's mount-time session probe - a 401 there is
+    // the normal outcome for a logged-out visitor, not an expired session,
+    // so it shouldn't trigger a refresh attempt. ProfilePage's /users/me
+    // calls don't set this and still refresh-and-retry as before.
+    const isSessionProbe = error.config?._skipRefresh;
 
-    if (isUnauthorized && !isPublicAuthCall && !alreadyRetried) {
+    if (
+      isUnauthorized &&
+      !isPublicAuthCall &&
+      !isSessionProbe &&
+      !alreadyRetried
+    ) {
       try {
         await refreshAccessToken();
         error.config._retry = true;
