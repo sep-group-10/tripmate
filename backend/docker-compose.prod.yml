@@ -1,0 +1,15 @@
+# Production: API only. The database is Amazon RDS, not a local container
+# (DATABASE_URL in .env.production points at the RDS endpoint). The image is
+# built in GitHub Actions and pushed to GHCR, not built on this server.
+#
+# This file is for the stable, single-copy setup (first-time run, or a
+# plain restart). Blue-green deploys use scripts/deploy.sh instead, which
+# runs two copies of this same image directly with `docker run`.
+services:
+  backend:
+    image: ghcr.io/sep-group-10/tripmate-backend:latest
+    env_file:
+      - .env.production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
