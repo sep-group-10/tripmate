@@ -7,6 +7,8 @@ import CheckInboxPage from "../pages/CheckInboxPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
+import TermsPage from "../pages/TermsPage";
+import PrivacyPage from "../pages/PrivacyPage";
 import ProfilePage from "../pages/ProfilePage";
 import TripPlanChatPage from "../pages/TripPlanChatPage";
 import MyTripsPage from "../pages/MyTripsPage";
@@ -39,6 +41,8 @@ function AppRoutes() {
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route
         element={
           <ProtectedRoute>

@@ -193,13 +193,13 @@ function RegisterPage() {
               </button>
               <p className="m-0 text-helper leading-relaxed text-muted-600">
                 By creating an account you agree to our{" "}
-                <a href="#terms" className="text-accent-700">
+                <Link to="/terms" className="text-accent-700">
                   Terms of Service
-                </a>{" "}
+                </Link>{" "}
                 and{" "}
-                <a href="#privacy" className="text-accent-700">
+                <Link to="/privacy" className="text-accent-700">
                   Privacy Policy
-                </a>
+                </Link>
                 .
               </p>
             </div>
