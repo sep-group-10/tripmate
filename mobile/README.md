@@ -16,15 +16,23 @@ flutter pub get
 
 ## Backend Connection Setup
 
+Auth and profile talk to the real backend (`docker compose up` in `backend/`,
+then seed with `python -m app.core.seed`); My trips is still mock data. AI chat
+talks to `POST /api/v1/chat` (needs `OPENROUTER_API_KEY` in `backend/.env`); run
+with `--dart-define=MOCK_CHAT=true` to use the in-app mock chat instead.
+Demo account: `tourist@demo.com` / `Demo1234`.
+
 The app reads the backend URL from the `API_BASE_URL` compile-time variable
-(see [lib/utils/constants.dart](lib/utils/constants.dart)), defaulting to
-`http://localhost:8000`. To reach a backend running on your development
-machine from a physical Android device, use one of the two methods below.
+(see [lib/data/api/api_config.dart](lib/data/api/api_config.dart)), defaulting
+to `http://10.0.2.2:8000`, which is how the **Android emulator** reaches the
+backend on your machine. Plain HTTP is allowed in debug builds only. For a
+physical device use one of the methods below (with `adb reverse` pass
+`--dart-define=API_BASE_URL=http://localhost:8000`).
 
 ### Method 1: ADB Reverse Port Forwarding (USB)
 
 Forwards the device's `localhost:8000` to your machine's `localhost:8000`,
-so the app can use the default `localhost` URL unchanged.
+so the app can use `http://localhost:8000`.
 
 ```bash
 adb devices                     # confirm device is connected
@@ -32,10 +40,10 @@ adb reverse tcp:8000 tcp:8000   # create the tunnel
 adb reverse --list              # verify
 ```
 
-Run the backend normally (`uvicorn main:app --port 8000`) and launch the app:
+Run the backend and launch the app:
 
 ```bash
-flutter run
+flutter run --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
 Remove the tunnel when done:
@@ -44,7 +52,7 @@ Remove the tunnel when done:
 adb reverse --remove tcp:8000
 ```
 
-**Pros:** no IP/firewall/Wi-Fi dependency, works with the default `localhost` URL, doesn't expose the backend on the network.
+**Pros:** no IP/firewall/Wi-Fi dependency, doesn't expose the backend on the network.
 
 ### Method 2: Direct LAN IP
 
