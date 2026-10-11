@@ -193,12 +193,6 @@ function GeneratedTripCard({
               {actionPending ? "Unsaving…" : "Unsave"}
             </button>
           )}
-          <button
-            type="button"
-            className="ml-auto rounded-pill px-3.5 py-1.5 text-xs font-medium text-muted-700 hover:bg-bg"
-          >
-            Share
-          </button>
         </div>
       </div>
     </article>
