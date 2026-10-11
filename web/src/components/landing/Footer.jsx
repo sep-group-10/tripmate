@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { MapPin, GitFork } from "lucide-react";
+import { GitFork } from "lucide-react";
+import Logo from "../Logo";
 
 function Footer() {
   return (
@@ -8,12 +9,7 @@ function Footer() {
         <div className="flex flex-wrap justify-between gap-8">
           <div className="flex flex-col gap-2.5">
             <span className="flex items-center gap-2.5">
-              <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-                <MapPin size={15} aria-hidden="true" />
-              </span>
-              <span className="font-heading text-lg font-semibold">
-                TripMate
-              </span>
+              <Logo />
             </span>
             <span className="text-sm text-muted-600">
               AI trip planning for Sri Lanka

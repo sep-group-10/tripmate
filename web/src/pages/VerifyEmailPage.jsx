@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CircleCheck, CircleX, MapPin } from "lucide-react";
+import { CircleCheck, CircleX } from "lucide-react";
 import FormInput from "../components/FormInput";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
+import Logo from "../components/Logo";
 
 function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
@@ -59,12 +60,7 @@ function VerifyEmailPage() {
     <div className="font-body flex min-h-screen items-center justify-center bg-bg px-6 py-12 text-ink">
       <div className="flex w-full max-w-auth-card flex-col items-stretch gap-6">
         <div className="flex items-center justify-center gap-2.5">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-lg font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo />
         </div>
 
         <section className="flex flex-col items-center gap-4 rounded-card bg-surface p-8 text-center shadow-card">
