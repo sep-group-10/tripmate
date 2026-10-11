@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import Logo from "./Logo";
 
 /** Shared chrome for standalone legal/policy pages (Terms, Privacy) -
  * same header/back-link shell, just the prose body differs per page. */
@@ -8,12 +9,7 @@ function LegalPageLayout({ title, lastUpdated, children }) {
     <div className="font-body min-h-screen bg-bg px-6 py-12 text-ink">
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-lg font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo />
         </div>
 
         <section className="flex flex-col gap-6 rounded-card bg-surface p-8 shadow-card">

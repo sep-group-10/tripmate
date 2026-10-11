@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { MapPin } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { SUPER_ADMIN_ROLES } from "../../constants/roles";
+import Logo from "../../components/Logo";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", end: true },
@@ -45,12 +45,7 @@ function AdminLayout() {
     <div className="font-body grid min-h-screen grid-cols-[232px_minmax(0,1fr)] bg-bg text-ink">
       <aside className="sticky top-0 flex h-screen flex-col gap-6 p-4">
         <div className="flex items-center gap-2.5 px-2">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-md font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo textClassName="text-md" />
           <span className="ml-auto rounded-badge bg-muted-300 px-2 py-[3px] font-mono text-badge font-medium tracking-wider text-muted-700 uppercase">
             Admin
           </span>

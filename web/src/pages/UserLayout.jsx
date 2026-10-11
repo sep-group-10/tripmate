@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { MapPin } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { ADMIN_ROLES } from "../constants/roles";
+import Logo from "../components/Logo";
 
 const NAV_ITEMS = [
   { to: "/chat", label: "Chat" },
@@ -36,12 +36,7 @@ function UserLayout() {
     <div className="font-body grid h-screen grid-cols-[232px_minmax(0,1fr)] bg-bg text-ink">
       <aside className="flex h-screen flex-col gap-6 p-4">
         <div className="flex items-center gap-2.5 px-2">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-md font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo textClassName="text-md" />
         </div>
 
         <nav className="flex flex-col gap-0.5">

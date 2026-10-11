@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import Logo from "../Logo";
 
 const NAV_LINKS = [
   { label: "How it works", href: "#how" },
@@ -17,12 +18,7 @@ function Nav() {
           href="#top"
           className="flex items-center gap-2.5 text-ink no-underline"
         >
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-lg font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo />
         </a>
 
         <div className="hidden items-center gap-0.5 md:flex">

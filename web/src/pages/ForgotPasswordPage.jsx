@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin } from "lucide-react";
 import FormInput from "../components/FormInput";
 import { validateEmail } from "../utils/validation";
 import api from "../services/api";
+import Logo from "../components/Logo";
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -33,12 +33,7 @@ function ForgotPasswordPage() {
     <div className="font-body flex min-h-screen items-center justify-center bg-bg px-6 py-12 text-ink">
       <div className="flex w-full max-w-auth-card flex-col items-stretch gap-6">
         <div className="flex items-center justify-center gap-2.5">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-lg font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo />
         </div>
 
         <section className="flex flex-col gap-[22px] rounded-card bg-surface p-8 shadow-card">

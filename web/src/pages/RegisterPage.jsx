@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, MapPin } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import FormInput from "../components/FormInput";
 import { useFormValidation, hasErrors } from "../hooks/useFormValidation";
 import { registerValidators } from "../utils/validation";
@@ -8,6 +8,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useGoogleSignIn } from "../hooks/useGoogleSignIn";
 import api from "../services/api";
 import { parseApiError } from "../utils/apiError";
+import Logo from "../components/Logo";
 
 const initialFormData = { fullName: "", email: "", password: "" };
 
@@ -83,12 +84,7 @@ function RegisterPage() {
     <div className="font-body flex min-h-screen items-center justify-center bg-bg px-6 py-12 text-ink">
       <div className="flex w-full max-w-auth-card flex-col items-stretch gap-6">
         <div className="flex items-center justify-center gap-2.5">
-          <span className="flex h-logo w-logo items-center justify-center rounded-lg bg-accent text-white">
-            <MapPin size={15} aria-hidden="true" />
-          </span>
-          <span className="font-heading text-lg font-semibold tracking-tight">
-            TripMate
-          </span>
+          <Logo />
         </div>
 
         <section className="flex flex-col gap-[22px] rounded-card bg-surface p-8 shadow-card">
