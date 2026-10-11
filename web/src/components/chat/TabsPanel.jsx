@@ -8,7 +8,7 @@ import SummaryTab from "./SummaryTab";
 import { TAB_EMPTY_STATES } from "./tabEmptyStates";
 
 // Tab order. The active tab always starts as Summary.
-const TABS = ["Summary", "Map", "Itinerary"];
+const TABS = ["Map", "Itinerary"];
 
 // `itinerary` is the ChatItinerary from the latest plan (null before one exists).
 // Itinerary and Map render it. Summary and Budget have no backend data yet (the
